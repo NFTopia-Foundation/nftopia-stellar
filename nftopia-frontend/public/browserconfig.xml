@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<browserconfig>
+    <msapplication>
+        <tile>
+            <square70x70logo src="/nftopia-03.png"/>
+            <square150x150logo src="/nftopia-03.png"/>
+            <square310x310logo src="/nftopia-03.png"/>
+            <TileColor>#181359</TileColor>
+        </tile>
+    </msapplication>
+</browserconfig>

@@ -1,0 +1,49 @@
+{
+  "name": "NFTopia - NFT Marketplace",
+  "short_name": "NFTopia",
+  "description": "Discover, collect, and trade unique NFTs on the most innovative blockchain marketplace",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#181359",
+  "theme_color": "#181359",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "en",
+  "categories": ["marketplace", "blockchain", "nft", "crypto"],
+  "icons": [
+    {
+      "src": "/nftopia-03.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/nftopia-03.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/nftopia-03.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Explore NFTs",
+      "short_name": "Explore",
+      "description": "Browse the latest NFT collections",
+      "url": "/explore",
+      "icons": [{ "src": "/nftopia-03.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "My Collection",
+      "short_name": "Collection",
+      "description": "View your NFT collection",
+      "url": "/profile",
+      "icons": [{ "src": "/nftopia-03.png", "sizes": "96x96" }]
+    }
+  ]
+}
