@@ -1,0 +1,307 @@
+{
+  "navigation": {
+    "explore": "Explorer",
+    "marketplace": "Marché",
+    "artists": "Artistes",
+    "vault": "Coffre-fort",
+    "dashboard": "Tableau de bord",
+    "search": "Rechercher",
+    "register": "S'inscrire",
+    "connectWallet": "Connecter le portefeuille",
+    "language": "Langue"
+  },
+  "auth": {
+    "signIn": "Se connecter",
+    "signUp": "S'inscrire",
+    "signOut": "Se déconnecter",
+    "email": "Email",
+    "password": "Mot de passe",
+    "confirmPassword": "Confirmer le mot de passe",
+    "forgotPassword": "Mot de passe oublié ?",
+    "rememberMe": "Se souvenir de moi",
+    "alreadyHaveAccount": "Vous avez déjà un compte ?",
+    "dontHaveAccount": "Vous n'avez pas de compte ?",
+    "createAccount": "Créer un compte",
+    "login": "Connexion",
+    "username": "Nom d'utilisateur"
+  },
+  "homepage": {
+    "hero": {
+      "title": "Gestion de Stockage NFT Décentralisé",
+      "titlePart1": "Décentralisé",
+      "titlePart2": "Stockage NFT",
+      "titlePart3": "Gestion",
+      "subtitle": "Stockez, gérez et présentez en toute sécurité vos actifs numériques uniques sur la blockchain Starknet avec une sécurité inégalée et une véritable propriété.",
+      "cta": "Commencer à créer",
+      "learnMore": "Explorer les NFTs"
+    },
+    "popularThisWeek": {
+      "title": "Populaire cette semaine",
+      "message": "Découvrez les chefs-d'œuvre numériques les plus convoités qui façonnent l'avenir de l'art"
+    },
+    "features": {
+      "title": "Pourquoi choisir NFTopia",
+      "secure": "Sécurisé",
+      "secureDesc": "Construit sur Starknet pour une sécurité maximale",
+      "fast": "Rapide",
+      "fastDesc": "Transactions ultra-rapides",
+      "affordable": "Abordable",
+      "affordableDesc": "Frais de gaz et coûts réduits",
+      "onChain": "Sur la chaîne",
+      "starknet": "Starknet",
+      "ecosystem": "Écosystème",
+      "storage": "Stockage"
+    }
+  },
+  "marketplace": {
+    "title": "Marché NFT",
+    "filters": {
+      "all": "Tout",
+      "art": "Art",
+      "music": "Musique",
+      "gaming": "Jeux",
+      "collectibles": "Collections",
+      "price": "Prix",
+      "sortBy": "Trier par",
+      "newest": "Plus récent",
+      "oldest": "Plus ancien",
+      "priceLowToHigh": "Prix : Croissant",
+      "priceHighToLow": "Prix : Décroissant"
+    },
+    "nft": {
+      "buyNow": "Acheter maintenant",
+      "placeBid": "Placer une enchère",
+      "currentBid": "Enchère actuelle",
+      "endingIn": "Se termine dans",
+      "createdBy": "Créé par",
+      "ownedBy": "Possédé par",
+      "viewDetails": "Voir les détails"
+    }
+  },
+  "profile": {
+    "title": "Profil",
+    "editProfile": "Modifier le profil",
+    "myCollections": "Mes collections",
+    "myNFTs": "Mes NFTs",
+    "favorites": "Favoris",
+    "activity": "Activité",
+    "settings": "Paramètres"
+  },
+  "creator": {
+    "dashboard": "Tableau de bord créateur",
+    "createNFT": "Créer un NFT",
+    "myCreations": "Mes créations",
+    "analytics": "Analyses",
+    "earnings": "Revenus",
+    "upload": "Télécharger",
+    "title": "Titre",
+    "description": "Description",
+    "price": "Prix",
+    "category": "Catégorie",
+    "royalties": "Revenus",
+    "mint": "Minter le NFT"
+  },
+  "common": {
+    "loading": "Chargement...",
+    "error": "Erreur",
+    "success": "Succès",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "view": "Voir",
+    "close": "Fermer",
+    "confirm": "Confirmer",
+    "back": "Retour",
+    "next": "Suivant",
+    "previous": "Précédent",
+    "submit": "Soumettre",
+    "reset": "Réinitialiser",
+    "copy": "Copier",
+    "copied": "Copié !",
+    "share": "Partager",
+    "like": "Aimer",
+    "unlike": "Ne plus aimer",
+    "follow": "Suivre",
+    "unfollow": "Ne plus suivre",
+    "report": "Signaler",
+    "block": "Bloquer",
+    "unblock": "Débloquer"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "markAllRead": "Marquer tout comme lu",
+    "noNotifications": "Aucune notification",
+    "newBid": "Nouvelle enchère sur votre NFT",
+    "bidAccepted": "Votre enchère a été acceptée",
+    "nftSold": "Votre NFT a été vendu",
+    "newFollower": "Nouveau suiveur",
+    "newLike": "Nouveau like sur votre NFT"
+  },
+  "errors": {
+    "general": "Quelque chose s'est mal passé",
+    "network": "Erreur réseau",
+    "notFound": "Page non trouvée",
+    "unauthorized": "Non autorisé",
+    "forbidden": "Interdit",
+    "serverError": "Erreur serveur",
+    "walletConnection": "Échec de la connexion du portefeuille",
+    "transactionFailed": "Transaction échouée",
+    "insufficientFunds": "Fonds insuffisants"
+  },
+  "seo": {
+    "title": "NFTopia - Découvrez, Collectez et Échangez de l'Art Numérique Unique",
+    "description": "Le marché NFT principal sur Starknet. Découvrez, collectez et échangez de l'art numérique unique avec des transactions sécurisées, rapides et abordables.",
+    "keywords": "NFT, art numérique, blockchain, Starknet, marché, collections"
+  },
+  "footer": {
+    "description": "Découvrez, collectez et échangez des actifs numériques uniques sur le marché NFT le plus avancé.",
+    "quickLinks": "Liens rapides",
+    "sitemap": "Plan du site",
+    "privacyPolicy": "Politique de confidentialité",
+    "termsOfService": "Conditions d'utilisation",
+    "support": "Support",
+    "contactUs": "Nous contacter",
+    "officialShop": "Boutique officielle",
+    "helpCenter": "Centre d'aide",
+    "connect": "Se connecter",
+    "copyright": "© {YEAR} NFTopia, Inc. Tous droits réservés."
+  },
+  "liveAuctions": {
+    "title": "Enchères en direct",
+    "exploreMore": "EXPLORER PLUS",
+    "currentBid": "Enchère actuelle",
+    "bid": "ENCHÉRIR",
+    "previousPage": "Page précédente",
+    "nextPage": "Page suivante",
+    "goToPage": "Aller à la page {page}"
+  },
+  "todaysPicks": {
+    "title": "Sélections du jour",
+    "category": "Catégorie",
+    "priceRange": "Fourchette de prix",
+    "saleType": "Type de vente",
+    "blockchain": "Blockchain",
+    "sortBy": "Trier par : Récemment ajouté",
+    "comingSoon": "Bientôt disponible",
+    "onSale": "En vente",
+    "placeBid": "Placer une enchère",
+    "viewHistory": "Voir l'historique",
+    "loadMore": "Charger plus"
+  },
+  "topSellers": {
+    "title": "Meilleurs vendeurs",
+    "scrollLeft": "Défiler vers la gauche",
+    "scrollRight": "Défiler vers la droite"
+  },
+  "exploreCategories": {
+    "title": "Explorer les œuvres d'art",
+    "categories": {
+      "abstract": "Abstrait",
+      "3d": "Art 3D",
+      "modern": "Art moderne",
+      "game": "Jeu",
+      "graffiti": "Graffiti",
+      "watercolor": "Aquarelle"
+    }
+  },
+  "popularCollection": {
+    "title": "Collection populaire",
+    "exploreMore": "EXPLORER PLUS"
+  },
+  "notFound": {
+    "title": "Oups !",
+    "message": "Nous ne trouvons pas la page que vous recherchez.",
+    "errorCode": "Code d'erreur : 404",
+    "backToHome": "Retour à l'accueil"
+  },
+  "connectWallet": {
+    "connect": "Connecter le portefeuille",
+    "connected": "Connecté",
+    "disconnect": "Déconnecter"
+  },
+    "register": {
+      "title": "Créer un compte",
+      "walletAddress": "Adresse du portefeuille",
+      "userName": "Nom d'utilisateur (optionnel)",
+      "alreadyHave": "Vous avez déjà un compte ?",
+      "signIn": "Se connecter",
+      "starknetSecure": "100% sécurisé par Starknet",
+      "inputPlaceholderOne": "Connectez votre portefeuille pour voir l'adresse",
+      "inputPlaceholderTwo": "collectionneurcool123",
+      "connecting": "Connexion en cours...",
+      "walletConnected": "✓ Portefeuille connecté",
+      "connectWallet": "Connecter le portefeuille",
+      "creatingAccount": "Création du compte en cours...",
+      "completeRegistration": "Finaliser l'inscription"
+    },
+    "login": {
+      "walletAddress": "Adresse du portefeuille",
+      "connectWallet": "Connecter le portefeuille Starknet",
+      "getNonce": "Obtenir un nonce",
+      "dontHave": "Vous n'avez pas de compte ?",
+      "registerWith": "S'inscrire avec Starknet",
+      "signingIn": "Connexion en cours...",
+      "signAndLogin": "Signer et se connecter",
+      "inputPlaceholder": "Connectez votre portefeuille pour afficher l'adresse"
+    },
+  "creatorDashboard": {
+    "totalNFTs": "Total NFTs",
+    "sales7d": "Ventes (7j)",
+    "royalties": "Revenus",
+    "followers": "Abonnés",
+    "recentActivity": "Activité récente",
+    "viewAll": "Voir tout",
+    "quickActions": "Actions rapides",
+    "mintNewNFT": "Minter un nouveau NFT",
+    "singleOrBatch": "Téléchargement unique ou par lot",
+    "goToMint": "Aller au mint"
+  },
+  "mintNFT": {
+    "title": "Minter un NFT",
+    "collection": "Collection",
+    "description": "Description",
+    "price": "Prix",
+    "currency": "Devise",
+    "nftImage": "Image NFT",
+    "dragDropText": "Glissez et déposez l'image NFT ici",
+    "selected": "Sélectionné",
+    "minting": "Mint en cours...",
+    "mintNFT": "Minter le NFT",
+    "errors": {
+      "userNotAuthenticated": "Utilisateur non authentifié",
+      "uploadImage": "Veuillez télécharger une image",
+      "selectCollection": "Veuillez sélectionner une collection",
+      "mintingFailed": "Échec du mint",
+      "errorMinting": "Erreur lors du mint du NFT"
+    }
+  },
+  "createCollection": {
+    "title": "Créer votre collection",
+    "subtitle": "Présentez vos NFTs dans une belle collection",
+    "collectionDetails": "Détails de la collection",
+    "collectionName": "Nom de la collection",
+    "collectionNamePlaceholder": "Entrez le nom de la collection",
+    "description": "Description",
+    "descriptionPlaceholder": "Décrivez votre collection...",
+    "uploadBannerImage": "Télécharger l'image de bannière",
+    "createCollection": "Créer la collection",
+    "creating": "Création...",
+    "collectionCreated": "Collection créée !",
+    "collectionCreatedMessage": "Votre collection a été créée avec succès. Redirection vers les collections...",
+    "needHelp": "Besoin d'aide ? Consultez notre",
+    "collectionGuide": "guide de création de collection",
+    "characters": "caractères",
+    "errors": {
+      "nameRequired": "Le nom de la collection est requis",
+      "nameMinLength": "Le nom de la collection doit contenir au moins 3 caractères",
+      "nameMaxLength": "Le nom de la collection doit contenir moins de 50 caractères",
+      "descriptionRequired": "La description est requise",
+      "descriptionMinLength": "La description doit contenir au moins 10 caractères",
+      "descriptionMaxLength": "La description doit contenir moins de 500 caractères",
+      "waitForUpload": "Veuillez attendre que le téléchargement de l'image soit terminé",
+      "failedToCreate": "Échec de la création de la collection"
+    },
+    "success": "Collection créée avec succès !"
+  }
+}

@@ -1,0 +1,307 @@
+{
+  "navigation": {
+    "explore": "Explore",
+    "marketplace": "Marketplace",
+    "artists": "Artists",
+    "vault": "Vault",
+    "dashboard": "Dashboard",
+    "search": "Search",
+    "register": "Register",
+    "connectWallet": "Connect Wallet",
+    "language": "Language"
+  },
+  "auth": {
+    "signIn": "Sign In",
+    "signUp": "Sign Up",
+    "signOut": "Sign Out",
+    "email": "Email",
+    "password": "Password",
+    "confirmPassword": "Confirm Password",
+    "forgotPassword": "Forgot Password?",
+    "rememberMe": "Remember Me",
+    "alreadyHaveAccount": "Already have an account?",
+    "dontHaveAccount": "Don't have an account?",
+    "createAccount": "Create Account",
+    "login": "Login",
+    "username": "Username"
+  },
+  "homepage": {
+    "hero": {
+      "title": "Decentralized NFT Storage Management",
+      "titlePart1": "Decentralized",
+      "titlePart2": "NFT Storage",
+      "titlePart3": "Management",
+      "subtitle": "Securely store, manage, and showcase your unique digital assets on Starknet blockchain with unparalleled security and true ownership.",
+      "cta": "Start Creating",
+      "learnMore": "Explore NFTs"
+    },
+    "popularThisWeek": {
+      "title": "Popular this week",
+      "message": "Explore the most coveted digital masterpieces shaping the future of art"
+    },
+    "features": {
+      "title": "Why Choose NFTopia",
+      "secure": "Secure",
+      "secureDesc": "Built on Starknet for maximum security",
+      "fast": "Fast",
+      "fastDesc": "Lightning-fast transactions",
+      "affordable": "Affordable",
+      "affordableDesc": "Low gas fees and costs",
+      "onChain": "On-Chain",
+      "starknet": "Starknet",
+      "ecosystem": "Ecosystem",
+      "storage": "Storage"
+    }
+  },
+  "marketplace": {
+    "title": "NFT Marketplace",
+    "filters": {
+      "all": "All",
+      "art": "Art",
+      "music": "Music",
+      "gaming": "Gaming",
+      "collectibles": "Collectibles",
+      "price": "Price",
+      "sortBy": "Sort By",
+      "newest": "Newest",
+      "oldest": "Oldest",
+      "priceLowToHigh": "Price: Low to High",
+      "priceHighToLow": "Price: High to Low"
+    },
+    "nft": {
+      "buyNow": "Buy Now",
+      "placeBid": "Place Bid",
+      "currentBid": "Current Bid",
+      "endingIn": "Ending in",
+      "createdBy": "Created by",
+      "ownedBy": "Owned by",
+      "viewDetails": "View Details"
+    }
+  },
+  "profile": {
+    "title": "Profile",
+    "editProfile": "Edit Profile",
+    "myCollections": "My Collections",
+    "myNFTs": "My NFTs",
+    "favorites": "Favorites",
+    "activity": "Activity",
+    "settings": "Settings"
+  },
+  "creator": {
+    "dashboard": "Creator Dashboard",
+    "createNFT": "Create NFT",
+    "myCreations": "My Creations",
+    "analytics": "Analytics",
+    "earnings": "Earnings",
+    "upload": "Upload",
+    "title": "Title",
+    "description": "Description",
+    "price": "Price",
+    "category": "Category",
+    "royalties": "Royalties",
+    "mint": "Mint NFT"
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "view": "View",
+    "close": "Close",
+    "confirm": "Confirm",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "submit": "Submit",
+    "reset": "Reset",
+    "copy": "Copy",
+    "copied": "Copied!",
+    "share": "Share",
+    "like": "Like",
+    "unlike": "Unlike",
+    "follow": "Follow",
+    "unfollow": "Unfollow",
+    "report": "Report",
+    "block": "Block",
+    "unblock": "Unblock"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "markAllRead": "Mark all as read",
+    "noNotifications": "No notifications",
+    "newBid": "New bid on your NFT",
+    "bidAccepted": "Your bid was accepted",
+    "nftSold": "Your NFT was sold",
+    "newFollower": "New follower",
+    "newLike": "New like on your NFT"
+  },
+  "errors": {
+    "general": "Something went wrong",
+    "network": "Network error",
+    "notFound": "Page not found",
+    "unauthorized": "Unauthorized",
+    "forbidden": "Forbidden",
+    "serverError": "Server error",
+    "walletConnection": "Failed to connect wallet",
+    "transactionFailed": "Transaction failed",
+    "insufficientFunds": "Insufficient funds"
+  },
+  "seo": {
+    "title": "NFTopia - Discover, Collect & Trade Unique Digital Art",
+    "description": "The premier NFT marketplace on Starknet. Discover, collect, and trade unique digital art with secure, fast, and affordable transactions.",
+    "keywords": "NFT, digital art, blockchain, Starknet, marketplace, collectibles"
+  },
+  "footer": {
+    "description": "Discover, collect, and trade unique digital assets on the most advanced NFT marketplace.",
+    "quickLinks": "Quick Links",
+    "sitemap": "Sitemap",
+    "privacyPolicy": "Privacy Policy",
+    "termsOfService": "Terms of Service",
+    "support": "Support",
+    "contactUs": "Contact Us",
+    "officialShop": "Official Shop",
+    "helpCenter": "Help Center",
+    "connect": "Connect",
+    "copyright": "© {YEAR} NFTopia, Inc. All rights reserved."
+  },
+  "liveAuctions": {
+    "title": "Live Auctions",
+    "exploreMore": "EXPLORE MORE",
+    "currentBid": "Current Bid",
+    "bid": "BID",
+    "previousPage": "Previous page",
+    "nextPage": "Next page",
+    "goToPage": "Go to page {page}"
+  },
+  "todaysPicks": {
+    "title": "Today's Picks",
+    "category": "Category",
+    "priceRange": "Price range",
+    "saleType": "Sale type",
+    "blockchain": "Blockchain",
+    "sortBy": "Sort By: Recently Added",
+    "comingSoon": "Coming Soon",
+    "onSale": "On Sale",
+    "placeBid": "Place Bid",
+    "viewHistory": "View History",
+    "loadMore": "Load More"
+  },
+  "topSellers": {
+    "title": "Top Sellers",
+    "scrollLeft": "Scroll left",
+    "scrollRight": "Scroll right"
+  },
+  "exploreCategories": {
+    "title": "Explore Artworks",
+    "categories": {
+      "abstract": "Abstract",
+      "3d": "3D Art",
+      "modern": "Modern Art",
+      "game": "Game",
+      "graffiti": "Graffiti",
+      "watercolor": "Watercolor"
+    }
+  },
+  "popularCollection": {
+    "title": "Popular Collection",
+    "exploreMore": "EXPLORE MORE"
+  },
+  "notFound": {
+    "title": "Oops!",
+    "message": "We can't seem to find the page you're looking for.",
+    "errorCode": "Error code: 404",
+    "backToHome": "Back to Homepage"
+  },
+  "connectWallet": {
+    "connect": "Connect Wallet",
+    "connected": "Connected",
+    "disconnect": "Disconnect"
+  },
+  "register": {
+    "title": "Create Account",
+    "walletAddress": "Wallet Address",
+    "userName": "Username (optional)",
+    "alreadyHave": "Already have an account?",
+    "signIn": "Sign in",
+    "starknetSecure": "100% Starknet Secure",
+    "inputPlaceholderOne": "Connect your wallet to see address",
+    "inputPlaceholderTwo": "coolcollector123",
+    "connecting": "Connecting...",
+    "walletConnected": "✓ Wallet Connected",
+    "connectWallet": "Connect Wallet",
+    "creatingAccount": "Creating Account...",
+    "completeRegistration": "Complete Registration"
+  },
+  "login": {
+    "walletAddress": "Wallet Address",
+    "connectWallet": "Connect Starknet Wallet",
+    "getNonce": "Get Nonce",
+    "dontHave": "Don't have an account?",
+    "registerWith": "Register with Starknet",
+    "signingIn": "Signing in...",
+    "signAndLogin": "Sign & Login",
+    "inputPlaceholder": "Connect your wallet to display address"
+  },
+  "creatorDashboard": {
+    "totalNFTs": "Total NFTs",
+    "sales7d": "Sales (7d)",
+    "royalties": "Royalties",
+    "followers": "Followers",
+    "recentActivity": "Recent Activity",
+    "viewAll": "View All",
+    "quickActions": "Quick Actions",
+    "mintNewNFT": "Mint New NFT",
+    "singleOrBatch": "Single or batch upload",
+    "goToMint": "Go to Mint"
+  },
+  "mintNFT": {
+    "title": "Mint NFT",
+    "collection": "Collection",
+    "description": "Description",
+    "price": "Price",
+    "currency": "Currency",
+    "nftImage": "NFT Image",
+    "dragDropText": "Drag & drop NFT image here",
+    "selected": "Selected",
+    "minting": "Minting...",
+    "mintNFT": "Mint NFT",
+    "errors": {
+      "userNotAuthenticated": "User not authenticated",
+      "uploadImage": "Please upload an image",
+      "selectCollection": "Please select a collection",
+      "mintingFailed": "Minting failed",
+      "errorMinting": "Error minting NFT"
+    }
+  },
+  "createCollection": {
+    "title": "Create Your Collection",
+    "subtitle": "Showcase your NFTs in a beautiful collection",
+    "collectionDetails": "Collection Details",
+    "collectionName": "Collection Name",
+    "collectionNamePlaceholder": "Enter collection name",
+    "description": "Description",
+    "descriptionPlaceholder": "Describe your collection...",
+    "uploadBannerImage": "Upload Banner Image",
+    "createCollection": "Create Collection",
+    "creating": "Creating...",
+    "collectionCreated": "Collection Created!",
+    "collectionCreatedMessage": "Your collection has been successfully created. Redirecting to collections...",
+    "needHelp": "Need help? Check out our",
+    "collectionGuide": "collection creation guide",
+    "characters": "characters",
+    "errors": {
+      "nameRequired": "Collection name is required",
+      "nameMinLength": "Collection name must be at least 3 characters",
+      "nameMaxLength": "Collection name must be less than 50 characters",
+      "descriptionRequired": "Description is required",
+      "descriptionMinLength": "Description must be at least 10 characters",
+      "descriptionMaxLength": "Description must be less than 500 characters",
+      "waitForUpload": "Please wait for image upload to complete",
+      "failedToCreate": "Failed to create collection"
+    },
+    "success": "Collection created successfully!"
+  }
+}

@@ -1,0 +1,111 @@
+# =========================
+# Dependencies
+# =========================
+node_modules/
+
+# =========================
+# Logs
+# =========================
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# =========================
+# OS / Editor files
+# =========================
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# =========================
+# Environment files
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# Build outputs
+# =========================
+dist/
+build/
+
+# =========================
+# React Native
+# =========================
+.expo/
+.expo-shared/
+
+# =========================
+# Android
+# =========================
+android/.gradle/
+android/.idea/
+android/build/
+android/app/build/
+android/local.properties
+android/*.iml
+android/gradlew
+android/gradlew.bat
+
+# Keystore files
+*.keystore
+*.jks
+
+# =========================
+# iOS
+# =========================
+ios/build/
+ios/Pods/
+ios/Podfile.lock
+ios/*.xcworkspace
+ios/*.xcodeproj/project.xcworkspace/
+ios/.xcode.env.local
+ios/.DS_Store
+
+# =========================
+# Metro / React Native
+# =========================
+.metro-health-check*
+.metro-cache/
+.watchmanconfig
+
+# =========================
+# Jest
+# =========================
+coverage/
+
+# =========================
+# TypeScript
+# =========================
+*.tsbuildinfo
+
+# =========================
+# ESLint
+# =========================
+.eslintcache
+
+# =========================
+# Fastlane
+# =========================
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
+
+# =========================
+# Detox (E2E tests)
+# =========================
+detox-artifacts/
+
+# =========================
+# Temporary files
+# =========================
+tmp/
+temp/
+.cache/

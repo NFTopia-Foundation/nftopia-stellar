@@ -1,0 +1,129 @@
+/* @import "tailwindcss"; */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+
+
+@layer base {
+  :root {
+    /* Light mode - NFTOPIA Light Theme */
+    --background: 248 100% 98%; /* #F8FAFC */
+    --foreground: 222 84% 5%; /* #1E293B */
+    --card: 0 0% 100%; /* #FFFFFF */
+    --card-foreground: 222 84% 5%; /* #1E293B */
+    --popover: 0 0% 100%; /* #FFFFFF */
+    --popover-foreground: 222 84% 5%; /* #1E293B */
+    --primary: 217 91% 60%; /* #3A7BFA */
+    --primary-foreground: 0 0% 100%; /* #FFFFFF */
+    --secondary: 248 100% 98%; /* #F8FAFC */
+    --secondary-foreground: 215 25% 27%; /* #64748B */
+    --muted: 248 100% 98%; /* #F8FAFC */
+    --muted-foreground: 215 25% 27%; /* #64748B */
+    --accent: 217 91% 60%; /* #3A7BFA */
+    --accent-foreground: 0 0% 100%; /* #FFFFFF */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 214 32% 91%; /* #E2E8F0 */
+    --input: 248 100% 98%; /* #F8FAFC */
+    --ring: 217 91% 60%; /* #3A7BFA */
+    --chart-1: 217 91% 60%; /* #3A7BFA */
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+    --radius: 0.5rem;
+  }
+  .dark {
+    /* NFTOPIA Harmonized Color Scheme */
+    --background: 240 18% 12%; /* #1E1E2D */
+    --foreground: 0 0% 100%; /* #FFFFFF */
+    --card: 240 18% 15%; /* #25253D */
+    --card-foreground: 0 0% 100%; /* #FFFFFF */
+    --popover: 240 18% 15%; /* #25253D */
+    --popover-foreground: 0 0% 100%; /* #FFFFFF */
+    --primary: 217 91% 60%; /* #3A7BFA */
+    --primary-foreground: 0 0% 100%; /* #FFFFFF */
+    --secondary: 240 18% 15%; /* #25253D */
+    --secondary-foreground: 240 10% 75%; /* #A0A0C0 */
+    --muted: 240 18% 15%; /* #25253D */
+    --muted-foreground: 240 10% 75%; /* #A0A0C0 */
+    --accent: 217 91% 60%; /* #3A7BFA */
+    --accent-foreground: 0 0% 100%; /* #FFFFFF */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 217 91% 60%; /* #3A7BFA */
+    --input: 240 18% 15%; /* #25253D */
+    --ring: 217 91% 60%; /* #3A7BFA */
+    --chart-1: 217 91% 60%; /* #3A7BFA */
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+  }
+}
+
+
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    overflow-x: hidden;
+    margin: 0;
+    padding: 0;
+
+  }
+
+  html {
+    margin: 0;
+    padding: 0;
+  }
+
+/* Custom #181359 Color Scheme Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(24, 19, 89, 0.8); /* #181359 at 80% opacity */
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(110, 96, 245, 0.4); /* Lighter indigo variant */
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(130, 120, 255, 0.6); /* Brighter indigo on hover */
+}
+
+
+}
+
+
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  animation: marquee 20s linear infinite;
+}
+
+.animate-pause {
+  animation-play-state: paused;
+}
