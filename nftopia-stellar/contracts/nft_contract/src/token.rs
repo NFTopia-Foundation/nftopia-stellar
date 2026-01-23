@@ -107,48 +107,4 @@ impl RoyaltyInfo {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use soroban_sdk::{Env, symbol_short};
-
-    #[test]
-    fn test_royalty_calculation() {
-        let env = Env::default();
-        let recipient = Address::generate(&env);
-        let royalty_info = RoyaltyInfo::new(recipient.clone(), 500); // 5%
-
-        // Test 5% royalty on 1000 stroops
-        let sale_price = 1000i128;
-        let royalty = royalty_info.calculate_royalty(sale_price).unwrap();
-        assert_eq!(royalty, 50); // 5% of 1000 = 50
-
-        // Test 10% royalty on 10000 stroops
-        let royalty_info_10 = RoyaltyInfo::new(recipient.clone(), 1000); // 10%
-        let royalty_10 = royalty_info_10.calculate_royalty(10000i128).unwrap();
-        assert_eq!(royalty_10, 1000); // 10% of 10000 = 1000
-
-        // Test 0% royalty
-        let royalty_info_0 = RoyaltyInfo::new(recipient, 0);
-        let royalty_0 = royalty_info_0.calculate_royalty(1000i128).unwrap();
-        assert_eq!(royalty_0, 0);
-    }
-
-    #[test]
-    fn test_royalty_validation() {
-        let env = Env::default();
-        let recipient = Address::generate(&env);
-
-        // Valid royalty (5%)
-        let valid = RoyaltyInfo::new(recipient.clone(), 500);
-        assert!(valid.validate());
-
-        // Valid royalty (100%)
-        let valid_100 = RoyaltyInfo::new(recipient.clone(), 10000);
-        assert!(valid_100.validate());
-
-        // Invalid royalty (>100%)
-        let invalid = RoyaltyInfo::new(recipient, 10001);
-        assert!(!invalid.validate());
-    }
-}
+// Unit tests moved to test/unit_tests.rs

@@ -7,7 +7,7 @@ use nft_contract::token::RoyaltyInfo;
 #[test]
 fn test_royalty_calculation() {
     let env = Env::default();
-    let recipient = Address::generate(&env);
+        let recipient = Address::random(&env);
     let royalty_info = RoyaltyInfo::new(recipient.clone(), 500); // 5%
 
     // Test 5% royalty on 1000 stroops
@@ -29,7 +29,7 @@ fn test_royalty_calculation() {
 #[test]
 fn test_royalty_validation() {
     let env = Env::default();
-    let recipient = Address::generate(&env);
+        let recipient = Address::random(&env);
 
     // Valid royalty (5%)
     let valid = RoyaltyInfo::new(recipient.clone(), 500);
@@ -50,11 +50,11 @@ fn test_initialization() {
     let contract_id = env.register_contract(None, NftContract);
     let client = NftContractClient::new(&env, &contract_id);
 
-    let owner = Address::generate(&env);
+        let owner = Address::random(&env);
     let name = SorobanString::from_str(&env, "Test NFT");
     let symbol = SorobanString::from_str(&env, "TNFT");
     let base_uri = SorobanString::from_str(&env, "https://example.com/");
-    let default_royalty = RoyaltyInfo::new(Address::generate(&env), 500); // 5%
+        let default_royalty = RoyaltyInfo::new(Address::random(&env), 500); // 5%
 
     // Initialize the contract
     client.initialize(
@@ -81,15 +81,15 @@ fn test_mint() {
     let contract_id = env.register_contract(None, NftContract);
     let client = NftContractClient::new(&env, &contract_id);
 
-    let owner = Address::generate(&env);
-    let minter = Address::generate(&env);
-    let recipient = Address::generate(&env);
+        let owner = Address::random(&env);
+        let minter = Address::random(&env);
+        let recipient = Address::random(&env);
     
     // Initialize
     let name = SorobanString::from_str(&env, "Test NFT");
     let symbol = SorobanString::from_str(&env, "TNFT");
     let base_uri = SorobanString::from_str(&env, "https://example.com/");
-    let default_royalty = RoyaltyInfo::new(Address::generate(&env), 500);
+        let default_royalty = RoyaltyInfo::new(Address::random(&env), 500);
     
     client.initialize(
         &owner,
@@ -132,16 +132,16 @@ fn test_transfer() {
     let contract_id = env.register_contract(None, NftContract);
     let client = NftContractClient::new(&env, &contract_id);
 
-    let owner = Address::generate(&env);
-    let minter = Address::generate(&env);
-    let from = Address::generate(&env);
-    let to = Address::generate(&env);
+        let owner = Address::random(&env);
+        let minter = Address::random(&env);
+        let from = Address::random(&env);
+        let to = Address::random(&env);
     
     // Initialize
     let name = SorobanString::from_str(&env, "Test NFT");
     let symbol = SorobanString::from_str(&env, "TNFT");
     let base_uri = SorobanString::from_str(&env, "https://example.com/");
-    let default_royalty = RoyaltyInfo::new(Address::generate(&env), 500);
+        let default_royalty = RoyaltyInfo::new(Address::random(&env), 500);
     
     client.initialize(
         &owner,
@@ -186,16 +186,16 @@ fn test_approval() {
     let contract_id = env.register_contract(None, NftContract);
     let client = NftContractClient::new(&env, &contract_id);
 
-    let owner = Address::generate(&env);
-    let minter = Address::generate(&env);
-    let token_owner = Address::generate(&env);
-    let approved = Address::generate(&env);
+        let owner = Address::random(&env);
+        let minter = Address::random(&env);
+        let token_owner = Address::random(&env);
+        let approved = Address::random(&env);
     
     // Initialize
     let name = SorobanString::from_str(&env, "Test NFT");
     let symbol = SorobanString::from_str(&env, "TNFT");
     let base_uri = SorobanString::from_str(&env, "https://example.com/");
-    let default_royalty = RoyaltyInfo::new(Address::generate(&env), 500);
+        let default_royalty = RoyaltyInfo::new(Address::random(&env), 500);
     
     client.initialize(
         &owner,
@@ -234,10 +234,10 @@ fn test_royalty_info() {
     let contract_id = env.register_contract(None, NftContract);
     let client = NftContractClient::new(&env, &contract_id);
 
-    let owner = Address::generate(&env);
-    let minter = Address::generate(&env);
-    let recipient = Address::generate(&env);
-    let royalty_recipient = Address::generate(&env);
+        let owner = Address::random(&env);
+        let minter = Address::random(&env);
+        let recipient = Address::random(&env);
+        let royalty_recipient = Address::random(&env);
     
     // Initialize
     let name = SorobanString::from_str(&env, "Test NFT");

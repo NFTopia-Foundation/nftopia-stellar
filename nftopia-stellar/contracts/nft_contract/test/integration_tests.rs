@@ -10,11 +10,11 @@ fn test_full_workflow() {
     let contract_id = env.register_contract(None, NftContract);
     let client = NftContractClient::new(&env, &contract_id);
 
-    let owner = Address::generate(&env);
-    let minter = Address::generate(&env);
-    let user1 = Address::generate(&env);
-    let user2 = Address::generate(&env);
-    let royalty_recipient = Address::generate(&env);
+        let owner = Address::random(&env);
+        let minter = Address::random(&env);
+        let user1 = Address::random(&env);
+        let user2 = Address::random(&env);
+        let royalty_recipient = Address::random(&env);
     
     // Initialize contract
     let name = SorobanString::from_str(&env, "Test Collection");
@@ -69,7 +69,7 @@ fn test_full_workflow() {
     assert_eq!(client.owner_of(&token_id1), user2);
 
     // Test approval and transfer
-    let approved = Address::generate(&env);
+        let approved = Address::random(&env);
     client.approve(&approved, &token_id2);
     
     let approved_addr = client.get_approved(&token_id2);
@@ -93,7 +93,7 @@ fn test_batch_operations() {
     let minter = Address::generate(&env);
     let user1 = Address::generate(&env);
     let user2 = Address::generate(&env);
-    let user3 = Address::generate(&env);
+        let user3 = Address::random(&env);
     let royalty_recipient = Address::generate(&env);
     
     // Initialize
@@ -164,10 +164,10 @@ fn test_access_control() {
     let client = NftContractClient::new(&env, &contract_id);
 
     let owner = Address::generate(&env);
-    let admin = Address::generate(&env);
-    let minter = Address::generate(&env);
-    let burner = Address::generate(&env);
-    let unauthorized = Address::generate(&env);
+        let admin = Address::random(&env);
+        let minter = Address::random(&env);
+        let burner = Address::random(&env);
+        let unauthorized = Address::random(&env);
     let recipient = Address::generate(&env);
     let royalty_recipient = Address::generate(&env);
     
