@@ -36,7 +36,7 @@ jobs:
         curl -sSL https://github.com/stellar/soroban-cli/releases/download/v0.11.1/soroban-cli-0.11.1-x86_64-unknown-linux-gnu.tar.gz | sudo tar -xz -C /usr/local/bin
     
     - name: Cache cargo registry
-      uses: actions/cache@v3
+      uses: actions/cache@v5
       with:
         path: |
           ~/.cargo/registry
