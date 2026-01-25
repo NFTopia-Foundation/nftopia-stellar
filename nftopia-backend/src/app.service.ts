@@ -21,7 +21,6 @@ export class AppService {
   }> {
     const cacheKey = 'test-cache-key';
 
-    // Try to get value from cache
     const cachedValue = await this.cacheManager.get(cacheKey);
 
     if (cachedValue) {
