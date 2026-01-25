@@ -23,7 +23,7 @@ jobs:
         working-directory: ./nftopia-stellar
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v6
     
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
@@ -85,7 +85,7 @@ jobs:
         working-directory: ./nftopia-stellar
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v6
     
     - name: Install Rust and Soroban
       run: |
