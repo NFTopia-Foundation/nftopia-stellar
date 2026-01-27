@@ -1,6 +1,6 @@
-use soroban_sdk::{Address, Env};
-use crate::storage::Storage;
 use crate::error::ContractError;
+use crate::storage::Storage;
+use soroban_sdk::{Address, Env};
 
 pub struct AccessControl;
 
@@ -52,9 +52,8 @@ impl AccessControl {
 
     /// Check if contract is not paused
     pub fn require_not_paused(env: &Env) -> Result<(), ContractError> {
-        let config = Storage::get_config(env)
-            .ok_or(ContractError::ContractNotInitialized)?;
-        
+        let config = Storage::get_config(env).ok_or(ContractError::ContractNotInitialized)?;
+
         if config.is_paused {
             Err(ContractError::ContractPaused)
         } else {
@@ -68,8 +67,7 @@ impl AccessControl {
         caller: &Address,
         token_id: u64,
     ) -> Result<(), ContractError> {
-        let token = Storage::get_token(env, token_id)
-            .ok_or(ContractError::TokenNotFound)?;
+        let token = Storage::get_token(env, token_id).ok_or(ContractError::TokenNotFound)?;
 
         // Check if caller is owner
         if token.owner == *caller {
@@ -97,8 +95,7 @@ impl AccessControl {
         caller: &Address,
         token_id: u64,
     ) -> Result<(), ContractError> {
-        let token = Storage::get_token(env, token_id)
-            .ok_or(ContractError::TokenNotFound)?;
+        let token = Storage::get_token(env, token_id).ok_or(ContractError::TokenNotFound)?;
 
         if token.owner == *caller {
             Ok(())

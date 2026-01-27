@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, String as SorobanString, Vec, Map};
+use soroban_sdk::{Address, Map, String as SorobanString, Vec, contracttype};
 
 /// Token attribute for on-chain metadata
 #[contracttype]

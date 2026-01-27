@@ -1,8 +1,8 @@
-use soroban_sdk::{Address, Env, Bytes, Vec};
-use crate::storage::Storage;
 use crate::access_control::AccessControl;
 use crate::error::ContractError;
 use crate::events::Events;
+use crate::storage::Storage;
+use soroban_sdk::{Address, Bytes, Env, Vec};
 
 pub struct Transfer;
 
@@ -21,8 +21,7 @@ impl Transfer {
         AccessControl::require_not_paused(env)?;
 
         // Get token
-        let token = Storage::get_token(env, token_id)
-            .ok_or(ContractError::TokenNotFound)?;
+        let token = Storage::get_token(env, token_id).ok_or(ContractError::TokenNotFound)?;
 
         // Verify ownership
         if token.owner != *from {
@@ -68,8 +67,7 @@ impl Transfer {
         to: &Address,
         token_id: u64,
     ) -> Result<(), ContractError> {
-        let mut token = Storage::get_token(env, token_id)
-            .ok_or(ContractError::TokenNotFound)?;
+        let mut token = Storage::get_token(env, token_id).ok_or(ContractError::TokenNotFound)?;
 
         // Update balances
         Storage::decrement_balance(env, from);
@@ -77,7 +75,7 @@ impl Transfer {
 
         // Update token owner
         token.owner = to.clone();
-        
+
         // Clear approval
         token.approved = None;
         Storage::remove_approval(env, token_id);
@@ -124,8 +122,7 @@ impl Transfer {
         approved: &Address,
         token_id: u64,
     ) -> Result<(), ContractError> {
-        let token = Storage::get_token(env, token_id)
-            .ok_or(ContractError::TokenNotFound)?;
+        let token = Storage::get_token(env, token_id).ok_or(ContractError::TokenNotFound)?;
 
         // Caller must be owner or approved operator
         if token.owner != *caller {
@@ -141,7 +138,7 @@ impl Transfer {
 
         // Set approval
         Storage::set_approval(env, token_id, approved);
-        
+
         let mut updated_token = token.clone();
         updated_token.approved = Some(approved.clone());
         Storage::set_token(env, token_id, &updated_token);
@@ -175,18 +172,13 @@ impl Transfer {
 
     /// Get approved address for a token
     pub fn get_approved(env: &Env, token_id: u64) -> Result<Option<Address>, ContractError> {
-        let _token = Storage::get_token(env, token_id)
-            .ok_or(ContractError::TokenNotFound)?;
-        
+        let _token = Storage::get_token(env, token_id).ok_or(ContractError::TokenNotFound)?;
+
         Ok(Storage::get_approval(env, token_id))
     }
 
     /// Check if operator is approved for all tokens of owner
-    pub fn is_approved_for_all(
-        env: &Env,
-        owner: &Address,
-        operator: &Address,
-    ) -> bool {
+    pub fn is_approved_for_all(env: &Env, owner: &Address, operator: &Address) -> bool {
         Storage::is_operator_approved(env, owner, operator)
     }
 }

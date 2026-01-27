@@ -1,6 +1,6 @@
-use soroban_sdk::{contracttype, Address, String as SorobanString, Map, Vec, Env};
-use crate::token::{TokenData, RoyaltyInfo, TokenAttribute};
 use crate::error::ContractError;
+use crate::token::{RoyaltyInfo, TokenAttribute, TokenData};
+use soroban_sdk::{Address, Env, Map, String as SorobanString, Vec, contracttype};
 
 /// Collection configuration
 #[contracttype]
@@ -45,40 +45,40 @@ impl CollectionConfig {
 pub enum DataKey {
     // Collection configuration
     Config,
-    
+
     // Token data: Map<u64, TokenData>
     Token(u64),
-    
+
     // Owner balances: Map<Address, u64>
     Balance(Address),
-    
+
     // Token approvals: Map<u64, Address>
     Approval(u64),
-    
+
     // Operator approvals: Map<(Address, Address), bool>
     OperatorApproval(Address, Address),
-    
+
     // Total supply counter
     TotalSupply,
-    
+
     // Owner address
     Owner,
-    
+
     // Admin addresses: Vec<Address>
     Admins,
-    
+
     // Minter addresses: Vec<Address>
     Minters,
-    
+
     // Burner addresses: Vec<Address>
     Burners,
-    
+
     // Metadata updaters: Vec<Address>
     MetadataUpdaters,
-    
+
     // Initialized flag
     Initialized,
-    
+
     // Invoker address (temporary storage for current call)
     Invoker,
 }
@@ -101,7 +101,9 @@ impl Storage {
     }
 
     pub fn set_token(env: &Env, token_id: u64, token: &TokenData) {
-        env.storage().persistent().set(&DataKey::Token(token_id), token);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Token(token_id), token);
     }
 
     pub fn remove_token(env: &Env, token_id: u64) {
@@ -118,9 +120,13 @@ impl Storage {
 
     pub fn set_balance(env: &Env, owner: &Address, balance: u64) {
         if balance == 0 {
-            env.storage().persistent().remove(&DataKey::Balance(owner.clone()));
+            env.storage()
+                .persistent()
+                .remove(&DataKey::Balance(owner.clone()));
         } else {
-            env.storage().persistent().set(&DataKey::Balance(owner.clone()), &balance);
+            env.storage()
+                .persistent()
+                .set(&DataKey::Balance(owner.clone()), &balance);
         }
     }
 
@@ -142,11 +148,15 @@ impl Storage {
     }
 
     pub fn set_approval(env: &Env, token_id: u64, approved: &Address) {
-        env.storage().persistent().set(&DataKey::Approval(token_id), approved);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Approval(token_id), approved);
     }
 
     pub fn remove_approval(env: &Env, token_id: u64) {
-        env.storage().persistent().remove(&DataKey::Approval(token_id));
+        env.storage()
+            .persistent()
+            .remove(&DataKey::Approval(token_id));
     }
 
     // Operator approvals
@@ -159,9 +169,10 @@ impl Storage {
 
     pub fn set_operator_approval(env: &Env, owner: &Address, operator: &Address, approved: bool) {
         if approved {
-            env.storage()
-                .persistent()
-                .set(&DataKey::OperatorApproval(owner.clone(), operator.clone()), &true);
+            env.storage().persistent().set(
+                &DataKey::OperatorApproval(owner.clone(), operator.clone()),
+                &true,
+            );
         } else {
             env.storage()
                 .persistent()
@@ -178,7 +189,9 @@ impl Storage {
     }
 
     pub fn set_total_supply(env: &Env, supply: u64) {
-        env.storage().persistent().set(&DataKey::TotalSupply, &supply);
+        env.storage()
+            .persistent()
+            .set(&DataKey::TotalSupply, &supply);
     }
 
     pub fn increment_total_supply(env: &Env) -> u64 {

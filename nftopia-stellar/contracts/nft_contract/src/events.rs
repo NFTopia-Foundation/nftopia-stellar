@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, String as SorobanString, Vec, symbol_short};
+use soroban_sdk::{Address, String as SorobanString, Vec, contracttype, symbol_short};
 
 /// Event emitted when a token is transferred
 #[contracttype]
@@ -91,11 +91,7 @@ impl Events {
     pub fn emit_transfer(env: &soroban_sdk::Env, from: Address, to: Address, token_id: u64) {
         env.events().publish(
             (symbol_short!("transfer"),),
-            TransferEvent {
-                from,
-                to,
-                token_id,
-            },
+            TransferEvent { from, to, token_id },
         );
     }
 
@@ -145,10 +141,8 @@ impl Events {
     }
 
     pub fn emit_burn(env: &soroban_sdk::Env, from: Address, token_id: u64) {
-        env.events().publish(
-            (symbol_short!("burn"),),
-            BurnEvent { from, token_id },
-        );
+        env.events()
+            .publish((symbol_short!("burn"),), BurnEvent { from, token_id });
     }
 
     pub fn emit_metadata_update(
@@ -189,10 +183,8 @@ impl Events {
     }
 
     pub fn emit_pause(env: &soroban_sdk::Env, is_paused: bool) {
-        env.events().publish(
-            (symbol_short!("pause"),),
-            PauseEvent { is_paused },
-        );
+        env.events()
+            .publish((symbol_short!("pause"),), PauseEvent { is_paused });
     }
 
     pub fn emit_role_update(

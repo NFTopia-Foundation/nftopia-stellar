@@ -1,22 +1,22 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, Address, Bytes, Env, String as SorobanString, Vec};
-use crate::error::ContractError;
-use crate::storage::{Storage, CollectionConfig};
 use crate::access_control::AccessControl;
-use crate::token::{TokenData, RoyaltyInfo, TokenAttribute};
-use crate::transfer::Transfer;
+use crate::error::ContractError;
+use crate::events::Events;
 use crate::metadata::Metadata;
 use crate::royalty::Royalty;
-use crate::events::Events;
+use crate::storage::{CollectionConfig, Storage};
+use crate::token::{RoyaltyInfo, TokenAttribute, TokenData};
+use crate::transfer::Transfer;
 use crate::utils::Utils;
+use soroban_sdk::{Address, Bytes, Env, String as SorobanString, Vec, contract, contractimpl};
 
-mod error;
-mod token;
-mod storage;
 mod access_control;
+mod error;
 mod events;
 mod metadata;
 mod royalty;
+mod storage;
+mod token;
 mod transfer;
 mod utils;
 
@@ -103,8 +103,7 @@ impl NftContract {
         }
 
         // Check max supply
-        let config = Storage::get_config(&env)
-            .ok_or(ContractError::ContractNotInitialized)?;
+        let config = Storage::get_config(&env).ok_or(ContractError::ContractNotInitialized)?;
 
         if let Some(max) = config.max_supply {
             let current_supply = Storage::get_total_supply(&env);
@@ -183,9 +182,7 @@ impl NftContract {
             let to = recipients.get(i).unwrap();
             let metadata_uri = metadata_uris.get(i).unwrap();
             let attributes = attributes_list.get(i).unwrap();
-            let royalty_override = royalty_overrides
-                .as_ref()
-                .and_then(|o| o.get(i));
+            let royalty_override = royalty_overrides.as_ref().and_then(|o| o.get(i));
 
             let token_id = Self::mint(
                 env.clone(),
@@ -203,11 +200,7 @@ impl NftContract {
     }
 
     /// Burn (destroy) an NFT
-    pub fn burn(
-        env: Env,
-        token_id: u64,
-        confirm: bool,
-    ) -> Result<(), ContractError> {
+    pub fn burn(env: Env, token_id: u64, confirm: bool) -> Result<(), ContractError> {
         let caller = crate::utils::Utils::get_invoker(&env);
 
         if !confirm {
@@ -215,8 +208,7 @@ impl NftContract {
         }
 
         // Get token
-        let token = Storage::get_token(&env, token_id)
-            .ok_or(ContractError::TokenNotFound)?;
+        let token = Storage::get_token(&env, token_id).ok_or(ContractError::TokenNotFound)?;
 
         // Check permissions
         if token.owner != caller {
@@ -245,8 +237,7 @@ impl NftContract {
 
     /// Get owner of a token
     pub fn owner_of(env: Env, token_id: u64) -> Result<Address, ContractError> {
-        let token = Storage::get_token(&env, token_id)
-            .ok_or(ContractError::TokenNotFound)?;
+        let token = Storage::get_token(&env, token_id).ok_or(ContractError::TokenNotFound)?;
         Ok(token.owner)
     }
 
@@ -256,11 +247,7 @@ impl NftContract {
     }
 
     /// Approve an address to transfer a specific token
-    pub fn approve(
-        env: Env,
-        approved: Address,
-        token_id: u64,
-    ) -> Result<(), ContractError> {
+    pub fn approve(env: Env, approved: Address, token_id: u64) -> Result<(), ContractError> {
         let caller = crate::utils::Utils::get_invoker(&env);
         Transfer::approve(&env, &caller, &approved, token_id)
     }
@@ -281,11 +268,7 @@ impl NftContract {
     }
 
     /// Check if operator is approved for all tokens
-    pub fn is_approved_for_all(
-        env: Env,
-        owner: Address,
-        operator: Address,
-    ) -> bool {
+    pub fn is_approved_for_all(env: Env, owner: Address, operator: Address) -> bool {
         Transfer::is_approved_for_all(&env, &owner, &operator)
     }
 
@@ -348,10 +331,7 @@ impl NftContract {
     }
 
     /// Set base URI (admin only)
-    pub fn set_base_uri(
-        env: Env,
-        base_uri: SorobanString,
-    ) -> Result<(), ContractError> {
+    pub fn set_base_uri(env: Env, base_uri: SorobanString) -> Result<(), ContractError> {
         let caller = crate::utils::Utils::get_invoker(&env);
         Metadata::set_base_uri(&env, &caller, base_uri)
     }
@@ -398,15 +378,13 @@ impl NftContract {
 
     /// Get collection name
     pub fn name(env: Env) -> Result<SorobanString, ContractError> {
-        let config = Storage::get_config(&env)
-            .ok_or(ContractError::ContractNotInitialized)?;
+        let config = Storage::get_config(&env).ok_or(ContractError::ContractNotInitialized)?;
         Ok(config.name)
     }
 
     /// Get collection symbol
     pub fn symbol(env: Env) -> Result<SorobanString, ContractError> {
-        let config = Storage::get_config(&env)
-            .ok_or(ContractError::ContractNotInitialized)?;
+        let config = Storage::get_config(&env).ok_or(ContractError::ContractNotInitialized)?;
         Ok(config.symbol)
     }
 
@@ -417,8 +395,7 @@ impl NftContract {
 
     /// Get max supply
     pub fn max_supply(env: Env) -> Result<Option<u64>, ContractError> {
-        let config = Storage::get_config(&env)
-            .ok_or(ContractError::ContractNotInitialized)?;
+        let config = Storage::get_config(&env).ok_or(ContractError::ContractNotInitialized)?;
         Ok(config.max_supply)
     }
 
@@ -434,7 +411,12 @@ impl NftContract {
         let caller = crate::utils::Utils::get_invoker(&env);
         AccessControl::require_owner(&env, &caller)?;
         Storage::add_admin(&env, &admin);
-        Events::emit_role_update(&env, SorobanString::from_str(&env, "admin"), admin.clone(), true);
+        Events::emit_role_update(
+            &env,
+            SorobanString::from_str(&env, "admin"),
+            admin.clone(),
+            true,
+        );
         Ok(())
     }
 
@@ -443,7 +425,12 @@ impl NftContract {
         let caller = crate::utils::Utils::get_invoker(&env);
         AccessControl::require_owner(&env, &caller)?;
         Storage::remove_admin(&env, &admin);
-        Events::emit_role_update(&env, SorobanString::from_str(&env, "admin"), admin.clone(), false);
+        Events::emit_role_update(
+            &env,
+            SorobanString::from_str(&env, "admin"),
+            admin.clone(),
+            false,
+        );
         Ok(())
     }
 
@@ -452,7 +439,12 @@ impl NftContract {
         let caller = crate::utils::Utils::get_invoker(&env);
         AccessControl::require_admin(&env, &caller)?;
         Storage::add_minter(&env, &minter);
-        Events::emit_role_update(&env, SorobanString::from_str(&env, "minter"), minter.clone(), true);
+        Events::emit_role_update(
+            &env,
+            SorobanString::from_str(&env, "minter"),
+            minter.clone(),
+            true,
+        );
         Ok(())
     }
 
@@ -461,7 +453,12 @@ impl NftContract {
         let caller = crate::utils::Utils::get_invoker(&env);
         AccessControl::require_admin(&env, &caller)?;
         Storage::remove_minter(&env, &minter);
-        Events::emit_role_update(&env, SorobanString::from_str(&env, "minter"), minter.clone(), false);
+        Events::emit_role_update(
+            &env,
+            SorobanString::from_str(&env, "minter"),
+            minter.clone(),
+            false,
+        );
         Ok(())
     }
 
@@ -470,7 +467,12 @@ impl NftContract {
         let caller = crate::utils::Utils::get_invoker(&env);
         AccessControl::require_admin(&env, &caller)?;
         Storage::add_burner(&env, &burner);
-        Events::emit_role_update(&env, SorobanString::from_str(&env, "burner"), burner.clone(), true);
+        Events::emit_role_update(
+            &env,
+            SorobanString::from_str(&env, "burner"),
+            burner.clone(),
+            true,
+        );
         Ok(())
     }
 
@@ -478,8 +480,7 @@ impl NftContract {
     pub fn pause(env: Env) -> Result<(), ContractError> {
         let caller = crate::utils::Utils::get_invoker(&env);
         AccessControl::require_admin(&env, &caller)?;
-        let mut config = Storage::get_config(&env)
-            .ok_or(ContractError::ContractNotInitialized)?;
+        let mut config = Storage::get_config(&env).ok_or(ContractError::ContractNotInitialized)?;
         config.is_paused = true;
         Storage::set_config(&env, &config);
         Events::emit_pause(&env, true);
@@ -490,8 +491,7 @@ impl NftContract {
     pub fn unpause(env: Env) -> Result<(), ContractError> {
         let caller = crate::utils::Utils::get_invoker(&env);
         AccessControl::require_admin(&env, &caller)?;
-        let mut config = Storage::get_config(&env)
-            .ok_or(ContractError::ContractNotInitialized)?;
+        let mut config = Storage::get_config(&env).ok_or(ContractError::ContractNotInitialized)?;
         config.is_paused = false;
         Storage::set_config(&env, &config);
         Events::emit_pause(&env, false);

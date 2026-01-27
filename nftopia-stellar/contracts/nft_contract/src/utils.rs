@@ -1,17 +1,21 @@
-use soroban_sdk::{Env, Address, String as SorobanString};
+use soroban_sdk::{Address, Env, String as SorobanString};
 
 pub struct Utils;
 
 impl Utils {
     /// Get invoker address (TODO: update for Soroban SDK v23)
     pub fn get_invoker(env: &Env) -> Address {
-        env.storage().instance().get(&crate::storage::DataKey::Invoker)
+        env.storage()
+            .instance()
+            .get(&crate::storage::DataKey::Invoker)
             .unwrap_or_else(|| env.current_contract_address())
     }
-    
+
     /// Set invoker in temporary storage
     pub fn set_invoker(env: &Env, invoker: &Address) {
-        env.storage().instance().set(&crate::storage::DataKey::Invoker, invoker);
+        env.storage()
+            .instance()
+            .set(&crate::storage::DataKey::Invoker, invoker);
     }
 
     /// Get current ledger timestamp

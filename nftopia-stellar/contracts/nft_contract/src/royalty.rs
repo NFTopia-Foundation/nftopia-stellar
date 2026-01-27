@@ -1,9 +1,9 @@
-use soroban_sdk::{Address, Env};
-use crate::storage::Storage;
 use crate::access_control::AccessControl;
 use crate::error::ContractError;
-use crate::token::RoyaltyInfo;
 use crate::events::Events;
+use crate::storage::Storage;
+use crate::token::RoyaltyInfo;
+use soroban_sdk::{Address, Env};
 
 pub struct Royalty;
 
@@ -15,8 +15,7 @@ impl Royalty {
         token_id: u64,
         sale_price: i128,
     ) -> Result<(Address, i128), ContractError> {
-        let token = Storage::get_token(env, token_id)
-            .ok_or(ContractError::TokenNotFound)?;
+        let token = Storage::get_token(env, token_id).ok_or(ContractError::TokenNotFound)?;
 
         let royalty_info = RoyaltyInfo {
             recipient: token.royalty_recipient.clone(),
@@ -46,8 +45,7 @@ impl Royalty {
             return Err(ContractError::InvalidRoyaltyPercentage);
         }
 
-        let mut config = Storage::get_config(env)
-            .ok_or(ContractError::ContractNotInitialized)?;
+        let mut config = Storage::get_config(env).ok_or(ContractError::ContractNotInitialized)?;
 
         config.royalty_default = royalty_info.clone();
         Storage::set_config(env, &config);
@@ -65,8 +63,7 @@ impl Royalty {
         recipient: Address,
         percentage: u32,
     ) -> Result<(), ContractError> {
-        let token = Storage::get_token(env, token_id)
-            .ok_or(ContractError::TokenNotFound)?;
+        let token = Storage::get_token(env, token_id).ok_or(ContractError::TokenNotFound)?;
 
         // Check permissions
         if token.owner != *caller && !Storage::is_admin(env, caller) {
@@ -91,8 +88,7 @@ impl Royalty {
 
     /// Get default royalty info
     pub fn get_default_royalty(env: &Env) -> Result<RoyaltyInfo, ContractError> {
-        let config = Storage::get_config(env)
-            .ok_or(ContractError::ContractNotInitialized)?;
+        let config = Storage::get_config(env).ok_or(ContractError::ContractNotInitialized)?;
         Ok(config.royalty_default)
     }
 }

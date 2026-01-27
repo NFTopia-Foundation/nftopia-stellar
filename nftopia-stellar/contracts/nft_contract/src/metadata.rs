@@ -1,20 +1,18 @@
-use soroban_sdk::{Address, Env, String as SorobanString};
-use crate::storage::Storage;
 use crate::access_control::AccessControl;
 use crate::error::ContractError;
 use crate::events::Events;
+use crate::storage::Storage;
 use crate::utils::Utils;
+use soroban_sdk::{Address, Env, String as SorobanString};
 
 pub struct Metadata;
 
 impl Metadata {
     /// Get token URI (full URI including base URI if applicable)
     pub fn get_token_uri(env: &Env, token_id: u64) -> Result<SorobanString, ContractError> {
-        let token = Storage::get_token(env, token_id)
-            .ok_or(ContractError::TokenNotFound)?;
+        let token = Storage::get_token(env, token_id).ok_or(ContractError::TokenNotFound)?;
 
-        let config = Storage::get_config(env)
-            .ok_or(ContractError::ContractNotInitialized)?;
+        let config = Storage::get_config(env).ok_or(ContractError::ContractNotInitialized)?;
 
         if config.base_uri.len() == 0 {
             return Ok(token.metadata_uri);
@@ -24,9 +22,11 @@ impl Metadata {
     }
 
     /// Get token metadata (on-chain data)
-    pub fn get_token_metadata(env: &Env, token_id: u64) -> Result<crate::token::TokenData, ContractError> {
-        Storage::get_token(env, token_id)
-            .ok_or(ContractError::TokenNotFound)
+    pub fn get_token_metadata(
+        env: &Env,
+        token_id: u64,
+    ) -> Result<crate::token::TokenData, ContractError> {
+        Storage::get_token(env, token_id).ok_or(ContractError::TokenNotFound)
     }
 
     /// Set token URI (owner or metadata updater only)
@@ -37,9 +37,8 @@ impl Metadata {
         metadata_uri: SorobanString,
     ) -> Result<(), ContractError> {
         // Check if metadata is frozen
-        let config = Storage::get_config(env)
-            .ok_or(ContractError::ContractNotInitialized)?;
-        
+        let config = Storage::get_config(env).ok_or(ContractError::ContractNotInitialized)?;
+
         if config.metadata_is_frozen {
             return Err(ContractError::MetadataFrozen);
         }
@@ -50,8 +49,7 @@ impl Metadata {
         }
 
         // Check permissions
-        let token = Storage::get_token(env, token_id)
-            .ok_or(ContractError::TokenNotFound)?;
+        let token = Storage::get_token(env, token_id).ok_or(ContractError::TokenNotFound)?;
 
         if token.owner == *caller {
         } else if !Storage::is_metadata_updater(env, caller) {
@@ -77,8 +75,7 @@ impl Metadata {
     ) -> Result<(), ContractError> {
         AccessControl::require_admin(env, caller)?;
 
-        let mut config = Storage::get_config(env)
-            .ok_or(ContractError::ContractNotInitialized)?;
+        let mut config = Storage::get_config(env).ok_or(ContractError::ContractNotInitialized)?;
 
         if config.metadata_is_frozen {
             return Err(ContractError::MetadataFrozen);
@@ -96,8 +93,7 @@ impl Metadata {
     pub fn freeze_metadata(env: &Env, caller: &Address) -> Result<(), ContractError> {
         AccessControl::require_admin(env, caller)?;
 
-        let mut config = Storage::get_config(env)
-            .ok_or(ContractError::ContractNotInitialized)?;
+        let mut config = Storage::get_config(env).ok_or(ContractError::ContractNotInitialized)?;
 
         config.metadata_is_frozen = true;
         Storage::set_config(env, &config);
@@ -107,8 +103,7 @@ impl Metadata {
 
     /// Check if metadata is frozen
     pub fn is_metadata_frozen(env: &Env) -> Result<bool, ContractError> {
-        let config = Storage::get_config(env)
-            .ok_or(ContractError::ContractNotInitialized)?;
+        let config = Storage::get_config(env).ok_or(ContractError::ContractNotInitialized)?;
         Ok(config.metadata_is_frozen)
     }
 }
