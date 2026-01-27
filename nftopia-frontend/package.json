@@ -32,7 +32,7 @@
     "clsx": "^2.1.1",
     "encoding": "^0.1.13",
     "eslint": "8.49.0",
-    "eslint-config-next": "13.5.1",
+    "eslint-config-next": "15.5.10",
     "firebase": "^11.9.1",
     "framer-motion": "^12.5.0",
     "get-starknet": "^3.3.3",
