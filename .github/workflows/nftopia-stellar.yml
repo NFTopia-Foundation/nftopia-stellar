@@ -1,105 +1,60 @@
-name: NFTopia Stellar Soroban CI
+name: NFTopia Stellar CI
 
 on:
   push:
     paths:
       - 'nftopia-stellar/**'
-    branches: [main, develop]
   pull_request:
     paths:
       - 'nftopia-stellar/**'
-    branches: [main, develop]
-  workflow_dispatch:
-
-env:
-  RUST_VERSION: 'stable'
-  CARGO_TERM_COLOR: always
 
 jobs:
-  check:
+  build-and-test:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./nftopia-stellar
-
+        working-directory: nftopia-stellar
+    
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        toolchain: stable
-        components: rustfmt, clippy
-    
-    - name: Install Soroban CLI
-      run: |
-        curl -sSL https://github.com/stellar/soroban-cli/releases/download/v0.11.1/soroban-cli-0.11.1-x86_64-unknown-linux-gnu.tar.gz | sudo tar -xz -C /usr/local/bin
-    
-    - name: Cache cargo registry
-      uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          ./nftopia-stellar/target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('./nftopia-stellar/Cargo.lock') }}
-    
-    - name: Check formatting
-      run: cargo fmt -- --check
-    
-    - name: Run clippy
-      run: cargo clippy -- -D warnings
-    
-    - name: Build
-      run: cargo build --release
-    
-    - name: Run tests
-      run: cargo test --release
-    
-    - name: Build contracts
-      run: |
-        # Assuming your contracts are in subdirectories
-        find . -name "Cargo.toml" -type f | while read file; do
-          dir=$(dirname "$file")
-          if grep -q "\[lib\]" "$file" && grep -q "crate-type = \[" "$file" && grep -q "cdylib" "$(grep -A2 "crate-type = \[" "$file")"; then
-            echo "Building contract in $dir"
-            cd "$dir" && cargo build --target wasm32-unknown-unknown --release && cd -
+      - uses: actions/checkout@v4
+      
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
+      
+      - name: Verify Rust project
+        run: |
+          if [ ! -f "Cargo.toml" ]; then
+            echo "❌ ERROR: No Cargo.toml file found"
+            exit 1
           fi
-        done
-    
-    - name: Optimize WASM
-      run: |
-        # Install soroban contract optimizor if needed
-        cargo install --locked --version 0.11.1 soroban-cli
-        find ./target/wasm32-unknown-unknown/release -name "*.wasm" -type f | while read wasm; do
-          echo "Optimizing $wasm"
-          soroban contract optimize --wasm "$wasm" --wasm-out "${wasm%.wasm}_optimized.wasm"
-        done
-
-  deploy-testnet:
-    needs: check
-    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./nftopia-stellar
-
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: Install Rust and Soroban
-      run: |
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-        source $HOME/.cargo/env
-        cargo install --locked --version 0.11.1 soroban-cli
-    
-    - name: Deploy to Futurenet/Testnet
-      env:
-        SOROBAN_NETWORK_PASSPHRASE: "Test SDF Future Network ; October 2022"
-        SOROBAN_RPC_URL: "https://rpc-futurenet.stellar.org:443"
-        SOROBAN_SECRET_KEY: ${{ secrets.STELLAR_SECRET_KEY }}
-      run: |
-        # Example deployment script
-        # You'll need to customize this based on your contract structure
-        echo "Deploying contracts to Futurenet"
-        # Add your deployment commands here
+          echo "✅ Rust project verified"
+      
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      
+      - name: Check formatting
+        run: cargo fmt -- --check
+      
+      - name: Run clippy
+        run: cargo clippy -- -D warnings
+      
+      - name: Check build
+        run: cargo check --verbose
+        continue-on-error: false
+      
+      - name: Run tests
+        run: cargo test --verbose
+      
+      - name: Build WASM contracts
+        run: cargo build --target wasm32-unknown-unknown --release
