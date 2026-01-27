@@ -1,7 +1,9 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, UseGuards, Request } from '@nestjs/common';
 import { AppService } from './app.service';
+import { JwtAuthGuard } from './auth/jwt-auth.guard';
 
-@Controller()
+
+@Controller('users') 
 export class AppController {
   constructor(private readonly appService: AppService) {}
 
@@ -10,8 +12,22 @@ export class AppController {
     return this.appService.getHello();
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Get('/profile')
+  getProfile(@Request() req) {
+    return {
+      message: 'This is a protected resource',
+      user: req.user,
+    };
+  }
+
   @Get('/health')
-  getHealth(): { status: string; timestamp: string } {
+  getHealth() {
     return this.appService.getHealth();
   }
+
+  
 }
+
+
+ 
