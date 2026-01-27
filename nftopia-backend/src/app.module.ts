@@ -6,12 +6,14 @@ import { AppService } from './app.service';
 
 @Module({
   imports: [
-    {
-      ...ThrottlerModule.forRoot({
-        ttl: 60,
-        limit: 10,
-      }),
-    },
+    ThrottlerModule.forRoot({
+      throttlers: [
+        {
+          ttl: 60,
+          limit: 10,
+        },
+      ],
+    }),
   ],
   controllers: [AppController],
   providers: [
