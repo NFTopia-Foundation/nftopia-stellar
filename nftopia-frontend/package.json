@@ -52,7 +52,7 @@
     "starknet": "^6.24.1",
     "starknetkit": "^2.10.4",
     "tailwind-merge": "^3.0.2",
-    "tailwindcss": "3.3.3",
+    "tailwindcss": "4.1.18",
     "tailwindcss-animate": "^1.0.7",
     "use-sound": "^5.0.0",
     "utf-8-validate": "^6.0.5",
