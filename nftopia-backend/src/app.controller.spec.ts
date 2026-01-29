@@ -13,9 +13,12 @@ describe('AppController', () => {
 
     appController = app.get<AppController>(AppController);
   });
-  it('should return health status', () => {
-    const result = appController.getHealth();
-    expect(result.status).toBe('OK');
-    expect(result.timestamp).toBeDefined();
+
+  describe('health', () => {
+    it('should return health status', () => {
+      const result = appController.getHealth();
+      expect(result.status).toBe('OK');
+      expect(typeof result.timestamp).toBe('string');
+    });
   });
 });
