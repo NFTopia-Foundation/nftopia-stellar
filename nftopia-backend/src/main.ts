@@ -1,13 +1,16 @@
 import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
+import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  
-  
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+
+  // Use Pino logger
+  app.useLogger(app.get(Logger));
+
   // Enable CORS to allow requests from frontend
   app.enableCors({
     origin: process.env.CORS_ORIGIN || 'http://localhost:3001',
@@ -32,6 +35,8 @@ async function bootstrap() {
   
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
-  console.log(`Application is running on: http://localhost:${port}/api/v1`);
+
+  const logger = app.get(Logger);
+  logger.log(`Application is running on: http://localhost:${port}/api/v1`);
 }
 bootstrap();
