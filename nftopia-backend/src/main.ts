@@ -1,6 +1,9 @@
+import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
+import { ValidationPipe } from '@nestjs/common';
+import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
@@ -14,9 +17,22 @@ async function bootstrap() {
     credentials: true,
   });
 
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,        // Elimina propiedades no decoradas
+      forbidNonWhitelisted: true, // Lanza error si hay propiedades no permitidas
+      transform: true,        // Transforma automáticamente tipos
+      transformOptions: {
+        enableImplicitConversion: true,
+      },
+    }),
+  );
+  
   // Set global API prefix
   app.setGlobalPrefix('api/v1');
 
+  app.useGlobalFilters(new HttpExceptionFilter());
+  
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
 
