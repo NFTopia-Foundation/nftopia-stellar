@@ -5,7 +5,8 @@ members = [
 ]
 
 [workspace.dependencies]
-soroban-sdk = "23"
+# Use git source as fallback when crates.io is unreachable (e.g. DNS issues)
+soroban-sdk = { git = "https://github.com/stellar/rs-soroban-sdk", tag = "v23.4.1" }
 
 [profile.release]
 opt-level = "z"
