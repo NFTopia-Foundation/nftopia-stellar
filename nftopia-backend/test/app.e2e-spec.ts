@@ -21,8 +21,9 @@ describe('AppController (e2e)', () => {
     return request(app.getHttpServer())
       .get('/api/v1/health')
       .expect(200)
-      .expect((res) => {
-        expect(res.body.status).toBe('OK');
+      .expect((res: request.Response) => {
+        const body = res.body as { status: string };
+        expect(body.status).toBe('OK');
       });
   });
 });

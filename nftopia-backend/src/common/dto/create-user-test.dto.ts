@@ -22,8 +22,7 @@ export class CreateUserTestDto {
   @IsNotEmpty({ message: 'La contraseña es requerida' })
   @MinLength(8, { message: 'La contraseña debe tener al menos 8 caracteres' })
   @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, {
-    message:
-      'La contraseña debe contener mayúsculas, minúsculas y números',
+    message: 'La contraseña debe contener mayúsculas, minúsculas y números',
   })
   password: string;
 

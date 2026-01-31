@@ -30,32 +30,29 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     
+    - name: Install pnpm
+      uses: pnpm/action-setup@v2
+      with:
+        version: 10
+    
     - name: Use Node.js ${{ matrix.node-version }}
       uses: actions/setup-node@v3
       with:
         node-version: ${{ matrix.node-version }}
-        cache: 'npm'
-        cache-dependency-path: './nftopia-backend/package-lock.json'
-    
-    - name: Cache node modules
-      uses: actions/cache@v3
-      with:
-        path: ./nftopia-backend/node_modules
-        key: ${{ runner.os }}-node-${{ hashFiles('nftopia-backend/package-lock.json') }}
-        restore-keys: |
-          ${{ runner.os }}-node-
+        cache: 'pnpm'
+        cache-dependency-path: './nftopia-backend/pnpm-lock.yaml'
     
     - name: Install dependencies
-      run: npm ci
+      run: pnpm install --frozen-lockfile
     
     - name: Lint
-      run: npm run lint || true
+      run: pnpm run lint || true
     
     - name: Run tests
-      run: npm test -- --coverage
+      run: pnpm test --passWithNoTests --coverage
     
     - name: Build
-      run: npm run build
+      run: pnpm run build
 
   docker-build:
     needs: test

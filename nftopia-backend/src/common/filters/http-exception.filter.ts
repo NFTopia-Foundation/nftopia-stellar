@@ -5,7 +5,6 @@ import {
   ArgumentsHost,
   HttpException,
   HttpStatus,
-  BadRequestException,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 
@@ -26,7 +25,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const status = exception.getStatus();
     const exceptionResponse = exception.getResponse();
 
-    let errorResponse: ErrorResponse = {
+    const errorResponse: ErrorResponse = {
       statusCode: status,
       message: 'Error en la solicitud',
       timestamp: new Date().toISOString(),
@@ -34,8 +33,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
     };
 
     // Manejo especial para errores de validación (BadRequestException)
-    if (status === HttpStatus.BAD_REQUEST && typeof exceptionResponse === 'object') {
-      const responseObj = exceptionResponse as any;
+    if (
+      status === (HttpStatus.BAD_REQUEST as number) &&
+      typeof exceptionResponse === 'object' &&
+      exceptionResponse !== null
+    ) {
+      const responseObj = exceptionResponse as { message?: string | string[] };
       if (responseObj.message && Array.isArray(responseObj.message)) {
         // Formatear errores de validación
         errorResponse.message = 'Error de validación';
@@ -43,8 +46,11 @@ export class HttpExceptionFilter implements ExceptionFilter {
       } else if (typeof responseObj.message === 'string') {
         errorResponse.message = responseObj.message;
       }
-    } else if (typeof exceptionResponse === 'object') {
-      const responseObj = exceptionResponse as any;
+    } else if (
+      typeof exceptionResponse === 'object' &&
+      exceptionResponse !== null
+    ) {
+      const responseObj = exceptionResponse as { message?: string };
       errorResponse.message = responseObj.message || exception.message;
     } else {
       errorResponse.message = exception.message;
@@ -53,9 +59,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     response.status(status).json(errorResponse);
   }
 
-  private formatValidationErrors(
-    messages: string[],
-  ): Record<string, string[]> {
+  private formatValidationErrors(messages: string[]): Record<string, string[]> {
     const errors: Record<string, string[]> = {};
 
     messages.forEach((message) => {

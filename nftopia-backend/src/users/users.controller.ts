@@ -1,6 +1,14 @@
-import { Body, Controller, Get, Headers, Param, Patch, UnauthorizedException } from "@nestjs/common";
-import { UsersService } from "./users.service";
-import { UpdateProfileDto } from "./dto/update-profile.dto";
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  Param,
+  Patch,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { UsersService } from './users.service';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 
 @Controller('users')
 export class UsersController {
