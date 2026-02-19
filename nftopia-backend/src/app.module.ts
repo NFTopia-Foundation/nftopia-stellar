@@ -7,6 +7,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
+import { NftModule } from './nft/nft.module';
 
 @Module({
   imports: [
@@ -30,20 +31,21 @@ import { UsersModule } from './users/users.module';
     ...(process.env.NODE_ENV === 'test'
       ? []
       : [
-          TypeOrmModule.forRootAsync({
-            imports: [ConfigModule], // TypeOrm still needs imports
-            inject: [ConfigService],
-            useFactory: (config: ConfigService) => ({
-              type: 'postgres',
-              url: config.get<string>('DATABASE_URL'),
-              autoLoadEntities: true,
-              synchronize: false,
-            }),
+        TypeOrmModule.forRootAsync({
+          imports: [ConfigModule], // TypeOrm still needs imports
+          inject: [ConfigService],
+          useFactory: (config: ConfigService) => ({
+            type: 'postgres',
+            url: config.get<string>('DATABASE_URL'),
+            autoLoadEntities: true,
+            synchronize: false,
           }),
-          UsersModule,
-        ]),
+        }),
+        UsersModule,
+      ]),
+    NftModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }
