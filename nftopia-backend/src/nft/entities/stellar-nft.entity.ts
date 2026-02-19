@@ -1,8 +1,10 @@
 
-import { Entity, Column, PrimaryColumn, CreateDateColumn, UpdateDateColumn, OneToOne, JoinColumn } from 'typeorm';
+import { Entity, Column, PrimaryColumn, CreateDateColumn, UpdateDateColumn, OneToOne, JoinColumn, Index } from 'typeorm';
 import { NftMetadata } from './nft-metadata.entity';
 
 @Entity('stellar_nfts')
+@Index(['owner']) // Optimize queries by owner
+@Index(['contractId']) // Optimize filter by contract
 export class StellarNft {
     @PrimaryColumn()
     contractId: string;
