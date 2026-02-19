@@ -11,88 +11,115 @@ on:
     branches: [main, develop]
   workflow_dispatch:
 
+concurrency:
+  group: nftopia-backend-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   NODE_VERSION: '20'
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/nftopia-backend
 
 jobs:
-  test:
+  build-and-verify:
     runs-on: ubuntu-latest
+
     defaults:
       run:
         working-directory: ./nftopia-backend
 
-    strategy:
-      matrix:
-        node-version: [18.x, 20.x]
-
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: Install pnpm
-      uses: pnpm/action-setup@v2
-      with:
-        version: 10
-    
-    - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v3
-      with:
-        node-version: ${{ matrix.node-version }}
-        cache: 'pnpm'
-        cache-dependency-path: './nftopia-backend/pnpm-lock.yaml'
-    
-    - name: Install dependencies
-      run: pnpm install --frozen-lockfile
-    
-    - name: Lint
-      run: pnpm run lint || true
-    
-    - name: Run tests
-      run: pnpm test --passWithNoTests --coverage
-    
-    - name: Build
-      run: pnpm run build
+      # ----------------------------------
+      # Checkout
+      # ----------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-  docker-build:
-    needs: test
-    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
-    
-    - name: Log in to Container Registry
-      uses: docker/login-action@v2
-      with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    
-    - name: Extract metadata
-      id: meta
-      uses: docker/metadata-action@v4
-      with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=semver,pattern={{version}}
-          type=semver,pattern={{major}}.{{minor}}
-          type=sha,prefix={{branch}}-
-    
-    - name: Build and push
-      uses: docker/build-push-action@v4
-      with:
-        context: ./nftopia-backend
-        push: ${{ github.ref == 'refs/heads/main' }}
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+      # ----------------------------------
+      # Detect package manager
+      # ----------------------------------
+      - name: Detect package manager
+        id: detect
+        run: |
+          if [ -f pnpm-lock.yaml ]; then
+            echo "manager=pnpm" >> $GITHUB_OUTPUT
+          elif [ -f package-lock.json ]; then
+            echo "manager=npm" >> $GITHUB_OUTPUT
+          else
+            echo "No lockfile found. CI requires a lockfile."
+            exit 1
+          fi
+
+      # ----------------------------------
+      # Setup Node
+      # ----------------------------------
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: ${{ steps.detect.outputs.manager }}
+          cache-dependency-path: |
+            nftopia-backend/pnpm-lock.yaml
+            nftopia-backend/package-lock.json
+
+      # ----------------------------------
+      # Setup pnpm if needed
+      # ----------------------------------
+      - name: Setup pnpm
+        if: steps.detect.outputs.manager == 'pnpm'
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10
+
+      # ----------------------------------
+      # Install Dependencies
+      # ----------------------------------
+      - name: Install dependencies (pnpm)
+        if: steps.detect.outputs.manager == 'pnpm'
+        run: pnpm install --frozen-lockfile
+
+      - name: Install dependencies (npm)
+        if: steps.detect.outputs.manager == 'npm'
+        run: npm ci
+
+      # ----------------------------------
+      # TypeScript Strict Type Check
+      # ----------------------------------
+      - name: Type check
+        run: |
+          if [ "${{ steps.detect.outputs.manager }}" = "pnpm" ]; then
+            pnpm exec tsc --noEmit
+          else
+            npx tsc --noEmit
+          fi
+
+      # ----------------------------------
+      # Lint (fail on error)
+      # ----------------------------------
+      - name: Lint
+        run: |
+          if [ "${{ steps.detect.outputs.manager }}" = "pnpm" ]; then
+            pnpm run lint
+          else
+            npm run lint
+          fi
+
+      # ----------------------------------
+      # Run Unit Tests (if available)
+      # ----------------------------------
+      - name: Run tests (if available)
+        run: |
+          if [ "${{ steps.detect.outputs.manager }}" = "pnpm" ]; then
+            pnpm run test --if-present
+          else
+            npm run test --if-present
+          fi
+
+      # ----------------------------------
+      # Build NestJS (Hard Gate)
+      # ----------------------------------
+      - name: Build
+        run: |
+          if [ "${{ steps.detect.outputs.manager }}" = "pnpm" ]; then
+            pnpm run build
+          else
+            npm run build
+          fi
