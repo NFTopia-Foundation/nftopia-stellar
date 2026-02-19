@@ -8,6 +8,11 @@ import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 export class NftController {
     constructor(private readonly nftService: NftService) { }
 
+    /**
+   * List NFTs with optional filtering, sorting, and pagination.
+   * @param query NftFilterDto containing filter parameters
+   * @returns List of StellarNft entities
+   */
     @Get()
     @ApiOperation({ summary: 'List NFTs with filtering, sorting, and pagination' })
     @ApiResponse({ status: 200, description: 'List of NFTs.' })
@@ -17,6 +22,10 @@ export class NftController {
         return this.nftService.findAll(query);
     }
 
+    /**
+   * Get the most popular NFTs based on view count.
+   * Cached for 5 minutes.
+   */
     @Get('popular')
     @ApiOperation({ summary: 'Get Popular This Week NFTs' })
     async getPopular() {
