@@ -1,0 +1,46 @@
+
+> nftopia-backend@0.0.1 lint
+> eslint "{src,apps,libs,test}/**/*.ts" --fix
+
+
+/home/knights/Documents/Project/Drips/nftopia-stellar/nftopia-backend/src/app.module.ts
+  10:0  error  Parsing error: Merge conflict marker encountered
+
+/home/knights/Documents/Project/Drips/nftopia-stellar/nftopia-backend/src/common/filters/http-exception.filter.ts
+  70:7   error  Unsafe call of a type that could not be resolved               @typescript-eslint/no-unsafe-call
+  70:19  error  Unsafe member access .error on a type that cannot be resolved  @typescript-eslint/no-unsafe-member-access
+  78:7   error  Unsafe call of a type that could not be resolved               @typescript-eslint/no-unsafe-call
+  78:19  error  Unsafe member access .warn on a type that cannot be resolved   @typescript-eslint/no-unsafe-member-access
+  80:7   error  Unsafe call of a type that could not be resolved               @typescript-eslint/no-unsafe-call
+  80:19  error  Unsafe member access .info on a type that cannot be resolved   @typescript-eslint/no-unsafe-member-access
+
+/home/knights/Documents/Project/Drips/nftopia-stellar/nftopia-backend/src/main.ts
+  10:25  warning  Unsafe argument of type error typed assigned to a parameter of type `string | symbol | Function | Type<any>`  @typescript-eslint/no-unsafe-argument
+  47:9   error    Unsafe assignment of an `any` value                                                                           @typescript-eslint/no-unsafe-assignment
+  47:26  warning  Unsafe argument of type error typed assigned to a parameter of type `string | symbol | Function | Type<any>`  @typescript-eslint/no-unsafe-argument
+  49:3   error    Unsafe call of an `any` typed value                                                                           @typescript-eslint/no-unsafe-call
+  49:10  error    Unsafe member access .log on an `any` value                                                                   @typescript-eslint/no-unsafe-member-access
+  50:3   error    Unsafe call of an `any` typed value                                                                           @typescript-eslint/no-unsafe-call
+  50:10  error    Unsafe member access .log on an `any` value                                                                   @typescript-eslint/no-unsafe-member-access
+
+/home/knights/Documents/Project/Drips/nftopia-stellar/nftopia-backend/src/nft/nft.controller.ts
+  31:36  warning  Unsafe argument of type `any` assigned to a parameter of type `NftFilterDto`  @typescript-eslint/no-unsafe-argument
+  47:5   error    Unsafe return of a value of type `Promise<any>`                               @typescript-eslint/no-unsafe-return
+
+/home/knights/Documents/Project/Drips/nftopia-stellar/nftopia-backend/src/nft/nft.service.ts
+   11:10  error  'scValToNative' is defined but never used        @typescript-eslint/no-unused-vars
+   11:25  error  'xdr' is defined but never used                  @typescript-eslint/no-unused-vars
+   89:11  error  Unsafe assignment of an `any` value              @typescript-eslint/no-unsafe-assignment
+   98:5   error  Unsafe return of a value of type `any`           @typescript-eslint/no-unsafe-return
+  115:13  error  'events' is assigned a value but never used      @typescript-eslint/no-unused-vars
+  126:43  error  Unsafe member access .message on an `any` value  @typescript-eslint/no-unsafe-member-access
+
+/home/knights/Documents/Project/Drips/nftopia-stellar/nftopia-backend/src/nft/soroban.service.ts
+   4:10  error  'scValToNative' is defined but never used        @typescript-eslint/no-unused-vars
+  35:72  error  Unsafe member access .message on an `any` value  @typescript-eslint/no-unsafe-member-access
+  36:11  error  Unsafe member access .stack on an `any` value    @typescript-eslint/no-unsafe-member-access
+  60:53  error  Unsafe member access .message on an `any` value  @typescript-eslint/no-unsafe-member-access
+  70:60  error  Unsafe member access .message on an `any` value  @typescript-eslint/no-unsafe-member-access
+
+✖ 27 problems (24 errors, 3 warnings)
+

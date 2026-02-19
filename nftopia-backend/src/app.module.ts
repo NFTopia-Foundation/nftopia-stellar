@@ -7,6 +7,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
+import { NftModule } from './nft/nft.module';
 import { LoggerModule } from 'nestjs-pino';
 import { APP_FILTER } from '@nestjs/core';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -68,6 +69,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
           }),
           UsersModule,
         ]),
+    NftModule,
   ],
   controllers: [AppController],
   providers: [
