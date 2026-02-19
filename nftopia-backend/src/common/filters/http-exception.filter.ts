@@ -7,6 +7,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { PinoLogger } from 'nestjs-pino';
 
 interface ErrorResponse {
   statusCode: number;
@@ -18,6 +19,7 @@ interface ErrorResponse {
 
 @Catch(HttpException)
 export class HttpExceptionFilter implements ExceptionFilter {
+  constructor(private readonly logger: PinoLogger) {}
   catch(exception: HttpException, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const request = ctx.getRequest<Request>();
@@ -54,6 +56,28 @@ export class HttpExceptionFilter implements ExceptionFilter {
       errorResponse.message = responseObj.message || exception.message;
     } else {
       errorResponse.message = exception.message;
+    }
+
+    const logContext = {
+      method: request.method,
+      url: request.url,
+      statusCode: status,
+      query: request.query,
+      params: request.params,
+    };
+
+    if (status >= 500) {
+      this.logger.error(
+        {
+          ...logContext,
+          err: exception,
+        },
+        'HTTP 5xx Exception',
+      );
+    } else if (status >= 400) {
+      this.logger.warn(logContext, 'HTTP 4xx Exception');
+    } else {
+      this.logger.info(logContext, 'HTTP Exception');
     }
 
     response.status(status).json(errorResponse);
