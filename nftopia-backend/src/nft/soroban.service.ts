@@ -10,10 +10,11 @@ export class SorobanService {
     private server: Server;
 
     constructor(private configService: ConfigService) {
-        const rpcUrl =
-            this.configService.get<string>('SOROBAN_RPC_URL') ||
-            'https://soroban-testnet.stellar.org';
-        this.server = new Server(rpcUrl);
+        const rpcUrl = this.configService.get<string>('SOROBAN_RPC_URL');
+        if (!rpcUrl) {
+            this.logger.warn('SOROBAN_RPC_URL is not set. Using default testnet URL.');
+        }
+        this.server = new Server(rpcUrl || 'https://soroban-testnet.stellar.org');
     }
 
     getRpcServer() {
