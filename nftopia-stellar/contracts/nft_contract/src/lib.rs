@@ -24,6 +24,28 @@ use crate::types::{TokenAttribute, RoyaltyInfo};
 pub struct NftContract;
 
 #[contractimpl]
+impl NftContract {
+    pub fn initialize(env: Env, admin: Address) {
+        if crate::access_control::has_admin(&env) {
+            panic!("already initialized");
+        }
+        crate::access_control::set_admin(&env, &admin);
+    }
+
+    pub fn grant_role(env: Env, role: u32, address: Address) -> Result<(), ContractError> {
+        let r = match role {
+            0 => crate::types::Role::Owner,
+            1 => crate::types::Role::Admin,
+            2 => crate::types::Role::Minter,
+            3 => crate::types::Role::Burner,
+            4 => crate::types::Role::MetadataUpdater,
+            _ => return Err(ContractError::NotPermitted),
+        };
+        crate::access_control::grant_role(&env, r, &address)
+    }
+}
+
+#[contractimpl]
 impl INft for NftContract {
     fn mint(
         env: Env,
