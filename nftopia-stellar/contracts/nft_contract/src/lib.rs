@@ -1,6 +1,6 @@
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, Address, Bytes, Env, String, Vec};
+use soroban_sdk::{Address, Bytes, Env, String, Vec, contract, contractimpl};
 
 pub mod access_control;
 pub mod error;
@@ -18,7 +18,7 @@ mod test;
 
 use crate::error::ContractError;
 use crate::interface::INft;
-use crate::types::{TokenAttribute, RoyaltyInfo};
+use crate::types::{RoyaltyInfo, TokenAttribute};
 
 #[contract]
 pub struct NftContract;
@@ -110,7 +110,7 @@ impl INft for NftContract {
             let to = recipients.get(i).unwrap();
             let uri = metadata_uris.get(i).unwrap();
             let attrs = attributes.get(i).unwrap();
-            
+
             let id = crate::token::mint_token(&env, &to, uri, attrs, None, &sender)?;
             results.push_back(id);
         }

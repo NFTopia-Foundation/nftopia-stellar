@@ -1,7 +1,7 @@
-use soroban_sdk::{Address, Env};
+use crate::error::ContractError;
 use crate::storage::DataKey;
 use crate::types::Role;
-use crate::error::ContractError;
+use soroban_sdk::{Address, Env};
 
 // In a real contract, we might want to store roles differently (e.g., mapping of (Address, Role) -> bool).
 // For simplicity and common standard, we typically store the admin in DataKey::Admin.
@@ -36,7 +36,7 @@ pub fn require_admin(env: &Env) -> Result<(), ContractError> {
 
 pub fn grant_role(env: &Env, role: Role, address: &Address) -> Result<(), ContractError> {
     require_admin(env)?;
-    
+
     let key = match role {
         Role::Minter => DataKey::Minter(address.clone()),
         Role::Burner => DataKey::Burner(address.clone()),
@@ -45,14 +45,14 @@ pub fn grant_role(env: &Env, role: Role, address: &Address) -> Result<(), Contra
             return Err(ContractError::NotPermitted); // Admin is set via set_admin
         }
     };
-    
+
     env.storage().instance().set(&key, &true);
     Ok(())
 }
 
 pub fn revoke_role(env: &Env, role: Role, address: &Address) -> Result<(), ContractError> {
     require_admin(env)?;
-    
+
     let key = match role {
         Role::Minter => DataKey::Minter(address.clone()),
         Role::Burner => DataKey::Burner(address.clone()),
@@ -61,7 +61,7 @@ pub fn revoke_role(env: &Env, role: Role, address: &Address) -> Result<(), Contr
             return Err(ContractError::NotPermitted);
         }
     };
-    
+
     env.storage().instance().remove(&key);
     Ok(())
 }
@@ -80,7 +80,7 @@ pub fn has_role(env: &Env, role: Role, address: &Address) -> bool {
         Role::MetadataUpdater => DataKey::MetadataUpdater(address.clone()),
         _ => return false,
     };
-    
+
     env.storage().instance().get(&key).unwrap_or(false)
 }
 

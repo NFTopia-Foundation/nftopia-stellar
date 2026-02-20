@@ -1,6 +1,6 @@
-use soroban_sdk::{Address, Bytes, Env, String, Vec};
-use crate::types::{TokenAttribute, RoyaltyInfo};
 use crate::error::ContractError;
+use crate::types::{RoyaltyInfo, TokenAttribute};
+use soroban_sdk::{Address, Bytes, Env, String, Vec};
 
 pub trait INft {
     // Core NFT functions

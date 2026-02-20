@@ -1,10 +1,10 @@
-use soroban_sdk::{Address, Env, String, Vec};
-use crate::storage::DataKey;
-use crate::types::{TokenData, TokenAttribute, RoyaltyInfo, Role};
-use crate::error::ContractError;
 use crate::access_control::require_role;
-use crate::events::{emit_mint, emit_burn};
+use crate::error::ContractError;
+use crate::events::{emit_burn, emit_mint};
 use crate::royalty::get_royalty_default;
+use crate::storage::DataKey;
+use crate::types::{Role, RoyaltyInfo, TokenAttribute, TokenData};
+use soroban_sdk::{Address, Env, String, Vec};
 
 pub fn get_token(env: &Env, token_id: u64) -> Result<TokenData, ContractError> {
     env.storage()
@@ -14,9 +14,15 @@ pub fn get_token(env: &Env, token_id: u64) -> Result<TokenData, ContractError> {
 }
 
 pub fn increment_supply(env: &Env) -> u64 {
-    let mut current: u64 = env.storage().instance().get(&DataKey::TotalSupply).unwrap_or(0);
+    let mut current: u64 = env
+        .storage()
+        .instance()
+        .get(&DataKey::TotalSupply)
+        .unwrap_or(0);
     current += 1;
-    env.storage().instance().set(&DataKey::TotalSupply, &current);
+    env.storage()
+        .instance()
+        .set(&DataKey::TotalSupply, &current);
     current
 }
 
@@ -53,12 +59,20 @@ pub fn mint_token(
         total_editions: None,
     };
 
-    env.storage().persistent().set(&DataKey::Token(token_id), &token);
-    
+    env.storage()
+        .persistent()
+        .set(&DataKey::Token(token_id), &token);
+
     // Update balance
-    let mut balance: u32 = env.storage().persistent().get(&DataKey::Balance(to.clone())).unwrap_or(0);
+    let mut balance: u32 = env
+        .storage()
+        .persistent()
+        .get(&DataKey::Balance(to.clone()))
+        .unwrap_or(0);
     balance += 1;
-    env.storage().persistent().set(&DataKey::Balance(to.clone()), &balance);
+    env.storage()
+        .persistent()
+        .set(&DataKey::Balance(to.clone()), &balance);
 
     emit_mint(env, to, token_id);
 
@@ -76,10 +90,16 @@ pub fn burn_token(env: &Env, token_id: u64, sender: &Address) -> Result<(), Cont
     env.storage().persistent().remove(&DataKey::Token(token_id));
 
     // Update balance
-    let mut balance: u32 = env.storage().persistent().get(&DataKey::Balance(token.owner.clone())).unwrap_or(0);
+    let mut balance: u32 = env
+        .storage()
+        .persistent()
+        .get(&DataKey::Balance(token.owner.clone()))
+        .unwrap_or(0);
     if balance > 0 {
         balance -= 1;
-        env.storage().persistent().set(&DataKey::Balance(token.owner.clone()), &balance);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Balance(token.owner.clone()), &balance);
     }
 
     emit_burn(env, token_id);
