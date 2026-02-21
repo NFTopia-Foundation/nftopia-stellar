@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Server, Durability } from 'stellar-sdk/rpc';
 import { xdr } from 'stellar-sdk';
+import { SorobanRpcError } from '../common/errors/stellar.errors';
 
 @Injectable()
 export class SorobanService {
@@ -36,7 +37,10 @@ export class SorobanService {
         `Failed to fetch contract data for contract ${contractId}: ${error.message}`,
         error.stack,
       );
-      return null;
+      throw new SorobanRpcError(
+        `Contract data fetch failed: ${error.message}`,
+        { contractId },
+      );
     }
   }
 
@@ -60,7 +64,7 @@ export class SorobanService {
     } catch (e) {
       const error = e as Error;
       this.logger.error(`Error fetching events: ${error.message}`);
-      return [];
+      throw new SorobanRpcError(`Events fetch failed: ${error.message}`);
     }
   }
 
@@ -71,7 +75,7 @@ export class SorobanService {
     } catch (e) {
       const error = e as Error;
       this.logger.error(`Error fetching latest ledger: ${error.message}`);
-      return 0;
+      throw new SorobanRpcError(`Latest ledger fetch failed: ${error.message}`);
     }
   }
 }

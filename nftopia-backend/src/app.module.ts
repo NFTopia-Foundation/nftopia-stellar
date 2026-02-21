@@ -11,6 +11,7 @@ import { NftModule } from './nft/nft.module';
 import { LoggerModule } from 'nestjs-pino';
 import { APP_FILTER } from '@nestjs/core';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import stellarConfig from './config/stellar.config';
 
 @Module({
   imports: [
@@ -38,7 +39,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
         },
       }),
     }),
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({ isGlobal: true, load: [stellarConfig] }),
     CacheModule.registerAsync({
       isGlobal: true,
       inject: [ConfigService],
