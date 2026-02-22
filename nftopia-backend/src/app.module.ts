@@ -1,13 +1,13 @@
 import { Module } from '@nestjs/common';
 import { CacheModule } from '@nestjs/cache-manager';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { TypeOrmModule } from '@nestjs/typeorm';
+// import { TypeOrmModule } from '@nestjs/typeorm'; // unused
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
-import { UsersModule } from './users/users.module';
-//import { NftModule } from './nft/nft.module';
+// import { UsersModule } from './users/users.module'; // unused
+// import { NftModule } from './nft/nft.module'; // unused
 import { LoggerModule } from 'nestjs-pino';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -56,52 +56,22 @@ import { ThrottlerGuard } from '@nestjs/throttler';
     ThrottlerModule.forRoot({
       throttlers: [
         {
-          ttl: 60000, // 60 seconds = 1 minute
-          limit: 100, // 100 requests per minute (as suggested in issue)
+          ttl: 60000,
+          limit: 100,
         },
       ],
     }),
 
     AuthModule,
 
-    // ...(process.env.NODE_ENV === 'test'
-    //   ? []
-    //   : [
-    //       TypeOrmModule.forRootAsync({
-    //         imports: [ConfigModule], // TypeOrm still needs imports
-    //         inject: [ConfigService],
-    //         useFactory: (config: ConfigService) => ({
-    //           type: 'postgres',
-    //           url: config.get<string>('DATABASE_URL'),
-    //           autoLoadEntities: true,
-    //           synchronize: false,
-    //         }),
-    //       }),
-    //       UsersModule,
-    //     ]),
-    ...(process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development'
-  ? []
-  : [
-      TypeOrmModule.forRootAsync({
-        imports: [ConfigModule],
-        inject: [ConfigService],
-        useFactory: (config: ConfigService) => {
-          const url = config.get<string>('DATABASE_URL');
-          if (!url) {
-            console.warn('DATABASE_URL not set — skipping DB connection');
-            return {}; // empty config → TypeOrm won't connect
-          }
-          return {
-            type: 'postgres',
-            url,
-            autoLoadEntities: true,
-            synchronize: false,
-          };
-        },
-      }),
-      UsersModule,
-    ]),
-   // NftModule,
+    ...(process.env.NODE_ENV === 'test' ||
+    process.env.NODE_ENV === 'development'
+      ? []
+      : [
+          // TypeOrmModule.forRootAsync({ ... }), // skipped in dev/test
+          // UsersModule,
+        ]),
+    // NftModule, // skipped for testing
   ],
   controllers: [AppController],
   providers: [
