@@ -7,7 +7,7 @@ export class InMemoryRetryQueueService implements RetryQueue {
   private readonly logger = new Logger(InMemoryRetryQueueService.name);
   private readonly entries: RetryQueueEntry[] = [];
 
-  async enqueue(entry: RetryQueueEntry): Promise<void> {
+  enqueue(entry: RetryQueueEntry): Promise<void> {
     this.entries.push({
       ...entry,
       queuedAt: new Date().toISOString(),
@@ -16,6 +16,8 @@ export class InMemoryRetryQueueService implements RetryQueue {
     this.logger.warn(
       `Storage retry queued for ${entry.provider} (hash=${entry.fileHash}, attempt=${entry.attempt})`,
     );
+
+    return Promise.resolve();
   }
 
   getEntries(): RetryQueueEntry[] {

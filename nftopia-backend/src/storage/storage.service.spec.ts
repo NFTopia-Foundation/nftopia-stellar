@@ -21,9 +21,7 @@ import {
   toStellarMetadataUri,
 } from './utils/uri.utils';
 
-const createFile = (
-  overrides: Partial<UploadedFile> = {},
-): UploadedFile => {
+const createFile = (overrides: Partial<UploadedFile> = {}): UploadedFile => {
   const buffer = overrides.buffer ?? Buffer.from('nftopia-storage-file');
 
   return {
@@ -66,7 +64,7 @@ describe('StorageService', () => {
 
     repository = {
       findOne: jest.fn(),
-      create: jest.fn((input) => input),
+      create: jest.fn((input: Partial<StoredAsset>) => input as StoredAsset),
       save: jest.fn(),
     };
 
@@ -142,12 +140,14 @@ describe('StorageService', () => {
       uri: 'ipfs://bafy-ipfs-cid',
       gatewayUrl: 'https://provider.gateway/bafy-ipfs-cid',
     });
-    repository.save.mockImplementation(async (entity) => ({
-      id: 'asset-1',
-      createdAt: new Date('2026-02-20T00:00:00.000Z'),
-      updatedAt: new Date('2026-02-20T00:00:00.000Z'),
-      ...entity,
-    }));
+    repository.save.mockImplementation((entity: StoredAsset) =>
+      Promise.resolve({
+        id: 'asset-1',
+        createdAt: new Date('2026-02-20T00:00:00.000Z'),
+        updatedAt: new Date('2026-02-20T00:00:00.000Z'),
+        ...entity,
+      }),
+    );
 
     const result = await service.storeAsset(file, 'user-1', { type: 'nft' });
 
@@ -181,12 +181,14 @@ describe('StorageService', () => {
       uri: 'ar://arweave-tx-id',
       gatewayUrl: 'https://provider.arweave/arweave-tx-id',
     });
-    repository.save.mockImplementation(async (entity) => ({
-      id: 'asset-2',
-      createdAt: new Date('2026-02-20T00:00:00.000Z'),
-      updatedAt: new Date('2026-02-20T00:00:00.000Z'),
-      ...entity,
-    }));
+    repository.save.mockImplementation((entity: StoredAsset) =>
+      Promise.resolve({
+        id: 'asset-2',
+        createdAt: new Date('2026-02-20T00:00:00.000Z'),
+        updatedAt: new Date('2026-02-20T00:00:00.000Z'),
+        ...entity,
+      }),
+    );
 
     const result = await service.storeAsset(file, 'user-2');
 

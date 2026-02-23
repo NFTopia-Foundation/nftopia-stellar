@@ -26,8 +26,12 @@ export class IpfsService {
         return this.uploadWithStorageApi(file, 'web3storage');
       case 'nftstorage':
         return this.uploadWithStorageApi(file, 'nftstorage');
-      default:
-        throw new Error(`Unsupported IPFS provider: ${ipfsConfig.provider}`);
+      default: {
+        const unsupportedProvider: unknown = ipfsConfig.provider;
+        throw new Error(
+          `Unsupported IPFS provider: ${String(unsupportedProvider)}`,
+        );
+      }
     }
   }
 
@@ -52,17 +56,22 @@ export class IpfsService {
       JSON.stringify({ name: file.originalname }),
     );
 
-    const response = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${ipfsConfig.pinataJwt}`,
+    const response = await fetch(
+      'https://api.pinata.cloud/pinning/pinFileToIPFS',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${ipfsConfig.pinataJwt}`,
+        },
+        body: formData,
       },
-      body: formData,
-    });
+    );
 
     if (!response.ok) {
       const errorBody = await response.text();
-      throw new Error(`Pinata upload failed (${response.status}): ${errorBody}`);
+      throw new Error(
+        `Pinata upload failed (${response.status}): ${errorBody}`,
+      );
     }
 
     const payload = (await response.json()) as PinataUploadResponse;
@@ -142,7 +151,7 @@ export class IpfsService {
 
     const value = payload.value as Record<string, unknown> | undefined;
     if (value) {
-      const valueCid = value.cid as unknown;
+      const valueCid = value.cid;
       const parsedValueCid = this.parseCidLike(valueCid);
       if (parsedValueCid) {
         return parsedValueCid;
