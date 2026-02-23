@@ -1,3 +1,4 @@
+# Updated with pnpm setup - Feb 23 2026
 name: NFTopia Backend CI/CD
 
 on:
