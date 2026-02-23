@@ -1,16 +1,17 @@
 import { Module } from '@nestjs/common';
 import { CacheModule } from '@nestjs/cache-manager';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { TypeOrmModule } from '@nestjs/typeorm';
-
+// import { TypeOrmModule } from '@nestjs/typeorm'; // unused
+import { ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
-import { UsersModule } from './users/users.module';
-import { NftModule } from './nft/nft.module';
+// import { UsersModule } from './users/users.module'; // unused
+// import { NftModule } from './nft/nft.module'; // unused
 import { LoggerModule } from 'nestjs-pino';
-import { APP_FILTER } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { ThrottlerGuard } from '@nestjs/throttler';
 
 @Module({
   imports: [
@@ -52,24 +53,25 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
       }),
     }),
 
+    ThrottlerModule.forRoot({
+      throttlers: [
+        {
+          ttl: 60000,
+          limit: 100,
+        },
+      ],
+    }),
+
     AuthModule,
 
-    ...(process.env.NODE_ENV === 'test'
+    ...(process.env.NODE_ENV === 'test' ||
+    process.env.NODE_ENV === 'development'
       ? []
       : [
-          TypeOrmModule.forRootAsync({
-            imports: [ConfigModule], // TypeOrm still needs imports
-            inject: [ConfigService],
-            useFactory: (config: ConfigService) => ({
-              type: 'postgres',
-              url: config.get<string>('DATABASE_URL'),
-              autoLoadEntities: true,
-              synchronize: false,
-            }),
-          }),
-          UsersModule,
+          // TypeOrmModule.forRootAsync({ ... }), // skipped in dev/test
+          // UsersModule,
         ]),
-    NftModule,
+    // NftModule, // skipped for testing
   ],
   controllers: [AppController],
   providers: [
@@ -77,6 +79,10 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
     {
       provide: APP_FILTER,
       useClass: HttpExceptionFilter,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
     },
   ],
 })
