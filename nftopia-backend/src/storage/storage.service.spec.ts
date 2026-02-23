@@ -27,8 +27,6 @@ const createFile = (overrides: Partial<UploadedFile> = {}): UploadedFile => {
   return {
     originalname: 'asset.png',
     mimetype: 'image/png',
-    size: overrides.size ?? buffer.length,
-    buffer,
     ...overrides,
     buffer,
     size: overrides.size ?? buffer.length,
@@ -142,10 +140,10 @@ describe('StorageService', () => {
     });
     repository.save.mockImplementation((entity: StoredAsset) =>
       Promise.resolve({
+        ...entity,
         id: 'asset-1',
         createdAt: new Date('2026-02-20T00:00:00.000Z'),
         updatedAt: new Date('2026-02-20T00:00:00.000Z'),
-        ...entity,
       }),
     );
 
@@ -183,10 +181,10 @@ describe('StorageService', () => {
     });
     repository.save.mockImplementation((entity: StoredAsset) =>
       Promise.resolve({
+        ...entity,
         id: 'asset-2',
         createdAt: new Date('2026-02-20T00:00:00.000Z'),
         updatedAt: new Date('2026-02-20T00:00:00.000Z'),
-        ...entity,
       }),
     );
 
