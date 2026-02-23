@@ -1,7 +1,4 @@
-import {
-  BadRequestException,
-  PayloadTooLargeException,
-} from '@nestjs/common';
+import { BadRequestException, PayloadTooLargeException } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { ALLOWED_MIME_TYPES } from '../storage.constants';
 import type { StorageConfig, UploadedFile } from '../storage.types';
@@ -14,7 +11,12 @@ export const validateFileForStorage = (
   file: UploadedFile,
   config: StorageConfig,
 ): FileValidationResult => {
-  if (!file || !file.buffer || !file.mimetype || typeof file.size !== 'number') {
+  if (
+    !file ||
+    !file.buffer ||
+    !file.mimetype ||
+    typeof file.size !== 'number'
+  ) {
     throw new BadRequestException('Invalid upload payload');
   }
 

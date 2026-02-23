@@ -22,7 +22,10 @@ const toNumber = (value: string | undefined, defaultValue: number): number => {
   return Number.isFinite(parsed) ? parsed : defaultValue;
 };
 
-const toBoolean = (value: string | undefined, defaultValue: boolean): boolean => {
+const toBoolean = (
+  value: string | undefined,
+  defaultValue: boolean,
+): boolean => {
   if (!value) {
     return defaultValue;
   }
@@ -47,7 +50,9 @@ const toIpfsProvider = (value: string | undefined): IpfsProvider => {
   return DEFAULT_IPFS_PROVIDER;
 };
 
-export const getStorageConfig = (configService: ConfigService): StorageConfig => ({
+export const getStorageConfig = (
+  configService: ConfigService,
+): StorageConfig => ({
   fallbackEnabled: toBoolean(
     configService.get<string>('STORAGE_FALLBACK_ENABLED'),
     DEFAULT_FALLBACK_ENABLED,

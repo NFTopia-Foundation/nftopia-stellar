@@ -67,21 +67,26 @@ export class StorageService {
       return this.mapEntityToResult(existing, storageConfig);
     }
 
-    let ipfsResult: { cid: string; uri: string; gatewayUrl: string } | null = null;
-    let arweaveResult: { id: string; uri: string; gatewayUrl: string } | null = null;
+    let ipfsResult: { cid: string; uri: string; gatewayUrl: string } | null =
+      null;
+    let arweaveResult: { id: string; uri: string; gatewayUrl: string } | null =
+      null;
     let lastError: unknown;
 
     if (validation.ipfsEligible) {
       try {
-        ipfsResult = await retryWithBackoff(() => this.ipfsService.upload(file), {
-          attempts: storageConfig.ipfs.retryAttempts,
-          baseDelayMs: storageConfig.ipfs.retryBackoffMs,
-          onRetry: (error, attempt, delayMs) => {
-            this.logger.warn(
-              `Retrying IPFS upload (attempt=${attempt + 1}, delayMs=${delayMs}): ${this.getErrorMessage(error)}`,
-            );
+        ipfsResult = await retryWithBackoff(
+          () => this.ipfsService.upload(file),
+          {
+            attempts: storageConfig.ipfs.retryAttempts,
+            baseDelayMs: storageConfig.ipfs.retryBackoffMs,
+            onRetry: (error, attempt, delayMs) => {
+              this.logger.warn(
+                `Retrying IPFS upload (attempt=${attempt + 1}, delayMs=${delayMs}): ${this.getErrorMessage(error)}`,
+              );
+            },
           },
-        });
+        );
       } catch (error) {
         lastError = error;
         await this.enqueueRetry(
@@ -175,7 +180,10 @@ export class StorageService {
         id: entity.arweaveId,
         uri: entity.arweaveId ? toArweaveUri(entity.arweaveId) : null,
         gatewayUrl: entity.arweaveId
-          ? toArweaveGatewayUrl(entity.arweaveId, storageConfig.arweave.gatewayUrl)
+          ? toArweaveGatewayUrl(
+              entity.arweaveId,
+              storageConfig.arweave.gatewayUrl,
+            )
           : null,
       },
       primary: entity.primaryStorage,

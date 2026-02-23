@@ -20,7 +20,10 @@ export class ArweaveService {
     const wallet = await this.getWalletJwk();
     const arweaveConfig = getStorageConfig(this.configService).arweave;
 
-    const transaction = await client.createTransaction({ data: file.buffer }, wallet);
+    const transaction = await client.createTransaction(
+      { data: file.buffer },
+      wallet,
+    );
     transaction.addTag('Content-Type', file.mimetype);
     transaction.addTag('App-Name', 'NFTopia');
     transaction.addTag('File-Name', file.originalname);
