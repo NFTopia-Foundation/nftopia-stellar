@@ -13,6 +13,7 @@ import { BidsModule } from './bids/bids.module';
 import { LoggerModule } from 'nestjs-pino';
 import { APP_FILTER } from '@nestjs/core';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { StorageModule } from './storage/storage.module';
 
 @Module({
   imports: [
@@ -74,6 +75,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
     SorobanModule,
     BidsModule,
     NftModule,
+    StorageModule,
   ],
   controllers: [AppController],
   providers: [
