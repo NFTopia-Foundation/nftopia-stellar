@@ -1,6 +1,6 @@
-use soroban_sdk::{Env, Map, Vec, Symbol, symbol_short};
-use crate::types::{SaleTransaction, TradeTransaction, BundleTransaction};
 use crate::error::SettlementError;
+use crate::types::{BundleTransaction, SaleTransaction, TradeTransaction};
+use soroban_sdk::{symbol_short, Env, Map, Symbol, Vec};
 
 // Storage keys
 pub const SALE_TRANSACTIONS: Symbol = symbol_short!("sale_tx");
@@ -31,7 +31,9 @@ impl SaleTransactionStore {
             .unwrap_or(Map::new(env));
 
         transactions.set(transaction.transaction_id, transaction.clone());
-        env.storage().instance().set(&SALE_TRANSACTIONS, &transactions);
+        env.storage()
+            .instance()
+            .set(&SALE_TRANSACTIONS, &transactions);
         Ok(())
     }
 
@@ -62,7 +64,9 @@ impl SaleTransactionStore {
             .ok_or(SettlementError::TransactionNotFound)?;
 
         transactions.remove(transaction_id);
-        env.storage().instance().set(&SALE_TRANSACTIONS, &transactions);
+        env.storage()
+            .instance()
+            .set(&SALE_TRANSACTIONS, &transactions);
         Ok(())
     }
 
@@ -149,7 +153,9 @@ impl TradeTransactionStore {
             .unwrap_or(Map::new(env));
 
         transactions.set(transaction.trade_id, transaction.clone());
-        env.storage().instance().set(&TRADE_TRANSACTIONS, &transactions);
+        env.storage()
+            .instance()
+            .set(&TRADE_TRANSACTIONS, &transactions);
         Ok(())
     }
 
@@ -193,7 +199,9 @@ impl BundleTransactionStore {
             .unwrap_or(Map::new(env));
 
         transactions.set(transaction.bundle_id, transaction.clone());
-        env.storage().instance().set(&BUNDLE_TRANSACTIONS, &transactions);
+        env.storage()
+            .instance()
+            .set(&BUNDLE_TRANSACTIONS, &transactions);
         Ok(())
     }
 

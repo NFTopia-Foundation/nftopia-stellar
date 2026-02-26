@@ -1,21 +1,20 @@
-use soroban_sdk::{contract, contractimpl, Address, Env, Vec, symbol_short, Symbol, Bytes};
-use crate::error::SettlementError;
-use crate::types::{
-    SaleTransaction, AuctionTransaction, TradeTransaction, BundleTransaction,
-    ExecutionResult, Asset, AuctionType, AdminConfig,
-    FeeConfig, VolumeTier
-};
-use crate::storage::{
-    transaction_store::{SaleTransactionStore, TradeTransactionStore, BundleTransactionStore},
-    auction_store::AuctionStore,
-};
 use crate::atomic_swap::AtomicSwapEngine;
 use crate::auction_engine::AuctionEngine;
-use crate::royalty_distributor::RoyaltyDistributor;
-use crate::fee_manager::FeeManager;
 use crate::dispute_resolution::DisputeResolutionManager;
+use crate::error::SettlementError;
+use crate::fee_manager::FeeManager;
+use crate::royalty_distributor::RoyaltyDistributor;
 use crate::security::reentrancy_guard::ReentrancyGuard;
+use crate::storage::{
+    auction_store::AuctionStore,
+    transaction_store::{BundleTransactionStore, SaleTransactionStore, TradeTransactionStore},
+};
+use crate::types::{
+    AdminConfig, Asset, AuctionTransaction, AuctionType, BundleTransaction, ExecutionResult,
+    FeeConfig, SaleTransaction, TradeTransaction, VolumeTier,
+};
 use crate::utils::{asset_utils, time_utils};
+use soroban_sdk::{contract, contractimpl, symbol_short, Address, Bytes, Env, Symbol, Vec};
 
 /// Marketplace Settlement Contract
 #[contract]
@@ -38,24 +37,29 @@ impl MarketplaceSettlement {
             arbitration_quorum: 3,
         };
 
-        env.storage().instance().set(&symbol_short!("admin_cfg"), &admin_config);
+        env.storage()
+            .instance()
+            .set(&symbol_short!("admin_cfg"), &admin_config);
 
         // Set default fee config
         let fee_config = FeeConfig {
             platform_fee_bps: 250, // 2.5%
             minimum_fee: 1000,     // Minimum 1000 units
             maximum_fee: 1000000,  // Maximum 1M units
-            fee_recipient: Address::from_string(&soroban_sdk::String::from_str(&env, "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")), // Fee recipient address
+            fee_recipient: Address::from_string(&soroban_sdk::String::from_str(
+                &env,
+                "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            )), // Fee recipient address
             dynamic_fee_enabled: true,
             volume_discounts: {
                 let mut discounts = Vec::new(&env);
                 discounts.push_back(VolumeTier {
-                    min_volume: 1000000,     // 1M volume
-                    fee_discount_bps: 50,    // 0.5% discount
+                    min_volume: 1000000,  // 1M volume
+                    fee_discount_bps: 50, // 0.5% discount
                 });
                 discounts.push_back(VolumeTier {
-                    min_volume: 10000000,    // 10M volume
-                    fee_discount_bps: 100,   // 1% discount
+                    min_volume: 10000000,  // 10M volume
+                    fee_discount_bps: 100, // 1% discount
                 });
                 discounts
             },
@@ -82,7 +86,7 @@ impl MarketplaceSettlement {
         token_id: u64,
         price: i128,
         currency: Asset,
-        duration_seconds: u64
+        duration_seconds: u64,
     ) -> Result<u64, SettlementError> {
         ReentrancyGuard::execute(&env, &seller, "create_sale", || {
             // Validate inputs
@@ -92,19 +96,15 @@ impl MarketplaceSettlement {
                 env.ledger().timestamp(),
                 env.ledger().timestamp() + duration_seconds,
                 2592000, // 30 days max
-                &env
+                &env,
             )?;
 
             // Check NFT ownership
             asset_utils::check_nft_ownership(&nft_address, token_id, &seller, &env)?;
 
             // Calculate royalties
-            let royalty_distribution = RoyaltyDistributor::calculate_royalties(
-                &env,
-                &nft_address,
-                token_id,
-                price
-            )?;
+            let royalty_distribution =
+                RoyaltyDistributor::calculate_royalties(&env, &nft_address, token_id, price)?;
 
             // Calculate platform fee
             let platform_fee = FeeManager::calculate_fee(&env, price, &seller)?;
@@ -138,7 +138,7 @@ impl MarketplaceSettlement {
                 &nft_address,
                 token_id,
                 &currency,
-                price
+                price,
             )?;
 
             Ok(transaction_id)
@@ -150,7 +150,7 @@ impl MarketplaceSettlement {
         env: Env,
         transaction_id: u64,
         buyer: Address,
-        payment_amount: i128
+        payment_amount: i128,
     ) -> Result<ExecutionResult, SettlementError> {
         ReentrancyGuard::execute(&env, &buyer, "execute_sale", || {
             let mut sale = SaleTransactionStore::get(&env, transaction_id)?;
@@ -183,16 +183,11 @@ impl MarketplaceSettlement {
                 &env,
                 transaction_id,
                 &sale.royalty_info,
-                &sale.currency
+                &sale.currency,
             )?;
 
             // Collect platform fee
-            FeeManager::collect_platform_fee(
-                &env,
-                sale.platform_fee,
-                &sale.currency,
-                &buyer
-            )?;
+            FeeManager::collect_platform_fee(&env, sale.platform_fee, &sale.currency, &buyer)?;
 
             // Update final state
             sale.state = crate::types::TransactionState::Executed;
@@ -221,7 +216,7 @@ impl MarketplaceSettlement {
         duration_seconds: u64,
         bid_increment: i128,
         auction_type: AuctionType,
-        currency: Asset
+        currency: Asset,
     ) -> Result<u64, SettlementError> {
         ReentrancyGuard::execute(&env, &seller, "create_auction", || {
             AuctionEngine::create_auction(
@@ -234,7 +229,7 @@ impl MarketplaceSettlement {
                 reserve_price,
                 duration_seconds,
                 bid_increment,
-                &currency
+                &currency,
             )
         })
     }
@@ -245,7 +240,7 @@ impl MarketplaceSettlement {
         auction_id: u64,
         bidder: Address,
         bid_amount: i128,
-        commitment_hash: Option<Bytes>
+        commitment_hash: Option<Bytes>,
     ) -> Result<(), SettlementError> {
         ReentrancyGuard::execute(&env, &bidder, "place_bid", || {
             AuctionEngine::place_bid(&env, auction_id, &bidder, bid_amount, commitment_hash)
@@ -258,7 +253,7 @@ impl MarketplaceSettlement {
         auction_id: u64,
         bidder: Address,
         bid_amount: i128,
-        salt: Bytes
+        salt: Bytes,
     ) -> Result<(), SettlementError> {
         ReentrancyGuard::execute(&env, &bidder, "reveal_bid", || {
             AuctionEngine::reveal_bid(&env, auction_id, &bidder, bid_amount, &salt)
@@ -279,7 +274,7 @@ impl MarketplaceSettlement {
         counterparty: Option<Address>,
         initiator_nfts: Vec<crate::types::NFTItem>,
         counterparty_nfts: Vec<crate::types::NFTItem>,
-        duration_seconds: u64
+        duration_seconds: u64,
     ) -> Result<u64, SettlementError> {
         ReentrancyGuard::execute(&env, &initiator, "create_trade", || {
             // Validate trade parameters
@@ -328,7 +323,11 @@ impl MarketplaceSettlement {
     }
 
     /// Execute a trade
-    pub fn execute_trade(env: Env, trade_id: u64, executor: Address) -> Result<(), SettlementError> {
+    pub fn execute_trade(
+        env: Env,
+        trade_id: u64,
+        executor: Address,
+    ) -> Result<(), SettlementError> {
         ReentrancyGuard::execute(&env, &executor, "execute_trade", || {
             let mut trade = TradeTransactionStore::get(&env, trade_id)?;
 
@@ -352,7 +351,7 @@ impl MarketplaceSettlement {
         items: Vec<crate::types::NFTItem>,
         total_price: i128,
         currency: Asset,
-        duration_seconds: u64
+        duration_seconds: u64,
     ) -> Result<u64, SettlementError> {
         ReentrancyGuard::execute(&env, &seller, "create_bundle", || {
             if items.is_empty() {
@@ -384,22 +383,22 @@ impl MarketplaceSettlement {
         env: Env,
         transaction_id: u64,
         transaction_type: Symbol, // "sale", "auction", "trade", "bundle"
-        canceller: Address
+        canceller: Address,
     ) -> Result<(), SettlementError> {
         ReentrancyGuard::execute(&env, &canceller, "cancel_transaction", || {
-        if transaction_type == Symbol::new(&env, "sale") {
-            let mut sale = SaleTransactionStore::get(&env, transaction_id)?;
-            if sale.seller != canceller {
-                return Err(SettlementError::Unauthorized);
+            if transaction_type == Symbol::new(&env, "sale") {
+                let mut sale = SaleTransactionStore::get(&env, transaction_id)?;
+                if sale.seller != canceller {
+                    return Err(SettlementError::Unauthorized);
+                }
+                if sale.state != crate::types::TransactionState::Pending {
+                    return Err(SettlementError::InvalidState);
+                }
+                sale.state = crate::types::TransactionState::Cancelled;
+                SaleTransactionStore::update(&env, &sale)?;
+            } else {
+                return Err(SettlementError::InvalidAmount);
             }
-            if sale.state != crate::types::TransactionState::Pending {
-                return Err(SettlementError::InvalidState);
-            }
-            sale.state = crate::types::TransactionState::Cancelled;
-            SaleTransactionStore::update(&env, &sale)?;
-        } else {
-            return Err(SettlementError::InvalidAmount);
-        }
             Ok(())
         })
     }
@@ -410,7 +409,7 @@ impl MarketplaceSettlement {
         transaction_id: u64,
         reason: Bytes,
         evidence_uri: Option<Bytes>,
-        initiator: Address
+        initiator: Address,
     ) -> Result<u64, SettlementError> {
         ReentrancyGuard::execute(&env, &initiator, "initiate_dispute", || {
             DisputeResolutionManager::initiate_dispute(
@@ -419,7 +418,7 @@ impl MarketplaceSettlement {
                 None, // No auction ID for now
                 &initiator,
                 &reason,
-                evidence_uri
+                evidence_uri,
             )
         })
     }
@@ -429,7 +428,7 @@ impl MarketplaceSettlement {
         env: Env,
         dispute_id: u64,
         arbitrator: Address,
-        vote: u64
+        vote: u64,
     ) -> Result<(), SettlementError> {
         ReentrancyGuard::execute(&env, &arbitrator, "vote_on_dispute", || {
             DisputeResolutionManager::vote_on_dispute(&env, dispute_id, &arbitrator, vote)
@@ -440,7 +439,7 @@ impl MarketplaceSettlement {
     pub fn execute_dispute_resolution(
         env: Env,
         dispute_id: u64,
-        executor: Address
+        executor: Address,
     ) -> Result<(), SettlementError> {
         ReentrancyGuard::execute(&env, &executor, "execute_dispute_resolution", || {
             DisputeResolutionManager::execute_dispute_resolution(&env, dispute_id, &executor)
@@ -452,10 +451,11 @@ impl MarketplaceSettlement {
         env: Env,
         transaction_id: u64,
         reason: Bytes,
-        admin: Address
+        admin: Address,
     ) -> Result<(), SettlementError> {
         // Check admin permissions
-        let admin_config: AdminConfig = env.storage()
+        let admin_config: AdminConfig = env
+            .storage()
             .instance()
             .get(&symbol_short!("admin_cfg"))
             .ok_or(SettlementError::Unauthorized)?;
@@ -475,10 +475,11 @@ impl MarketplaceSettlement {
     pub fn update_fee_config(
         env: Env,
         new_config: FeeConfig,
-        admin: Address
+        admin: Address,
     ) -> Result<(), SettlementError> {
         // Check admin permissions
-        let admin_config: AdminConfig = env.storage()
+        let admin_config: AdminConfig = env
+            .storage()
             .instance()
             .get(&symbol_short!("admin_cfg"))
             .ok_or(SettlementError::Unauthorized)?;
@@ -495,10 +496,11 @@ impl MarketplaceSettlement {
         env: Env,
         asset: Asset,
         recipient: Address,
-        admin: Address
+        admin: Address,
     ) -> Result<i128, SettlementError> {
         // Check admin permissions
-        let admin_config: AdminConfig = env.storage()
+        let admin_config: AdminConfig = env
+            .storage()
             .instance()
             .get(&symbol_short!("admin_cfg"))
             .ok_or(SettlementError::Unauthorized)?;

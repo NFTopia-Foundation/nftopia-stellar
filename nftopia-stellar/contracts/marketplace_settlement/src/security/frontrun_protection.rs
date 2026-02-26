@@ -1,7 +1,7 @@
-use soroban_sdk::{Env, Symbol, Vec, Address, symbol_short, Bytes};
 use crate::error::SettlementError;
 use crate::events::{emit_front_running_detected, FrontRunningDetectedEvent};
 use crate::types::Bid;
+use soroban_sdk::{symbol_short, Address, Bytes, Env, Symbol, Vec};
 
 // Storage keys
 const COMMITMENT_STORAGE: Symbol = symbol_short!("commits");
@@ -15,7 +15,7 @@ impl CommitRevealScheme {
         _bidder: &Address,
         _auction_id: u64,
         _bid_amount: i128,
-        salt: &Bytes
+        salt: &Bytes,
     ) -> Bytes {
         salt.clone()
     }
@@ -26,7 +26,7 @@ impl CommitRevealScheme {
         bidder: &Address,
         auction_id: u64,
         commitment_hash: &Bytes,
-        reveal_deadline: u64
+        reveal_deadline: u64,
     ) -> Result<(), SettlementError> {
         let mut commitments: soroban_sdk::Map<Address, soroban_sdk::Map<u64, (Bytes, u64)>> = env
             .storage()
@@ -41,7 +41,9 @@ impl CommitRevealScheme {
         bidder_commitments.set(auction_id, (commitment_hash.clone(), reveal_deadline));
         commitments.set(bidder.clone(), bidder_commitments);
 
-        env.storage().instance().set(&COMMITMENT_STORAGE, &commitments);
+        env.storage()
+            .instance()
+            .set(&COMMITMENT_STORAGE, &commitments);
         Ok(())
     }
 
@@ -51,7 +53,7 @@ impl CommitRevealScheme {
         bidder: &Address,
         auction_id: u64,
         bid_amount: i128,
-        salt: &Bytes
+        salt: &Bytes,
     ) -> Result<(), SettlementError> {
         let commitments: soroban_sdk::Map<Address, soroban_sdk::Map<u64, (Bytes, u64)>> = env
             .storage()
@@ -65,7 +67,7 @@ impl CommitRevealScheme {
 
         let (stored_hash, reveal_deadline) = bidder_commitments
             .get(auction_id)
-            .unwrap_or((Bytes::new(&env), 0));
+            .unwrap_or((Bytes::new(env), 0));
 
         // Check if reveal deadline has passed
         let current_time = env.ledger().timestamp();
@@ -114,7 +116,9 @@ impl CommitRevealScheme {
             }
         }
 
-        env.storage().instance().set(&COMMITMENT_STORAGE, &commitments);
+        env.storage()
+            .instance()
+            .set(&COMMITMENT_STORAGE, &commitments);
         Ok(())
     }
 }
@@ -128,10 +132,11 @@ impl FrontRunningDetector {
         env: &Env,
         auction_id: u64,
         new_bid: &Bid,
-        recent_bids: &Vec<Bid>
+        recent_bids: &Vec<Bid>,
     ) -> Result<(), SettlementError> {
         // Check for suspicious patterns
-        let suspicious_patterns = Self::detect_suspicious_patterns(env, auction_id, new_bid, recent_bids)?;
+        let suspicious_patterns =
+            Self::detect_suspicious_patterns(env, auction_id, new_bid, recent_bids)?;
 
         if !suspicious_patterns.is_empty() {
             // Emit front-running detection event
@@ -153,7 +158,7 @@ impl FrontRunningDetector {
         env: &Env,
         _auction_id: u64,
         new_bid: &Bid,
-        recent_bids: &Vec<Bid>
+        recent_bids: &Vec<Bid>,
     ) -> Result<Vec<Bytes>, SettlementError> {
         let mut patterns = Vec::new(env);
 
@@ -181,14 +186,13 @@ impl FrontRunningDetector {
         let time_window = 60; // 60 seconds
 
         for bid in recent_bids.iter() {
-            if bid.bidder == new_bid.bidder {
-                if new_bid.placed_at - bid.placed_at < time_window {
+            if bid.bidder == new_bid.bidder
+                && new_bid.placed_at - bid.placed_at < time_window {
                     same_bidder_count += 1;
                     if same_bidder_count >= 3 {
                         return true;
                     }
                 }
-            }
         }
         false
     }
@@ -227,12 +231,9 @@ impl FrontRunningDetector {
 
         // Check if new bid follows similar pattern
         if let Some(last_interval) = intervals.get(intervals.len() - 1) {
-            let new_interval = new_bid.placed_at - recent_bids.get(recent_bids.len() - 1).unwrap().placed_at;
-            let diff = if new_interval > last_interval {
-                new_interval - last_interval
-            } else {
-                last_interval - new_interval
-            };
+            let new_interval =
+                new_bid.placed_at - recent_bids.get(recent_bids.len() - 1).unwrap().placed_at;
+            let diff = new_interval.abs_diff(last_interval);
 
             // If timing is too regular (within 5 seconds), flag as suspicious
             diff < 5
@@ -251,7 +252,7 @@ impl WithdrawalPatternMonitor {
         _env: &Env,
         _user: &Address,
         _amount: i128,
-        _withdrawal_type: &str
+        _withdrawal_type: &str,
     ) -> Result<(), SettlementError> {
         // Store withdrawal pattern for analysis
         // This would be expanded with more sophisticated monitoring
@@ -263,7 +264,7 @@ impl WithdrawalPatternMonitor {
     pub fn check_unusual_pattern(
         _env: &Env,
         _user: &Address,
-        _amount: i128
+        _amount: i128,
     ) -> Result<(), SettlementError> {
         // Placeholder for pattern analysis
         Ok(())

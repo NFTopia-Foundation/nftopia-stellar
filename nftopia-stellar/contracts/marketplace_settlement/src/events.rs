@@ -1,5 +1,5 @@
-use soroban_sdk::{contracttype, symbol_short, Env, Address, Vec, Bytes};
 use crate::types::*;
+use soroban_sdk::{contracttype, symbol_short, Address, Bytes, Env, Vec};
 
 // Sale Events
 #[contracttype]
@@ -239,115 +239,138 @@ pub struct AdminConfigUpdatedEvent {
 // Event emission functions
 #[allow(deprecated)]
 pub fn emit_sale_created(env: &Env, event: SaleCreatedEvent) {
-    env.events().publish(("MarketplaceSettlement", symbol_short!("sale_crtd")), event);
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("sale_crtd")), event);
 }
 
 #[allow(deprecated)]
 pub fn emit_sale_executed(env: &Env, event: SaleExecutedEvent) {
-    env.events().publish(("MarketplaceSettlement", symbol_short!("sale_exec")), event);
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("sale_exec")), event);
 }
 
 #[allow(deprecated)]
 pub fn emit_sale_cancelled(env: &Env, event: SaleCancelledEvent) {
-    env.events().publish(("MarketplaceSettlement", symbol_short!("sale_canc")), event);
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("sale_canc")), event);
 }
 
 #[allow(deprecated)]
 pub fn emit_auction_created(env: &Env, event: AuctionCreatedEvent) {
-    env.events().publish(("MarketplaceSettlement", symbol_short!("auc_crtd")), event);
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("auc_crtd")), event);
 }
 
 #[allow(deprecated)]
 pub fn emit_bid_placed(env: &Env, event: BidPlacedEvent) {
-    env.events().publish(("MarketplaceSettlement", symbol_short!("bid_plcd")), event);
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("bid_plcd")), event);
 }
 
 #[allow(deprecated)]
 pub fn emit_bid_revealed(env: &Env, event: BidRevealedEvent) {
-    env.events().publish(("MarketplaceSettlement", symbol_short!("bid_revl")), event);
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("bid_revl")), event);
 }
 
 #[allow(deprecated)]
 pub fn emit_auction_ended(env: &Env, event: AuctionEndedEvent) {
-    env.events().publish(("MarketplaceSettlement", symbol_short!("auc_ended")), event);
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("auc_ended")), event);
 }
 
 #[allow(deprecated)]
 pub fn emit_auction_extended(env: &Env, event: AuctionExtendedEvent) {
-    env.events().publish(("MarketplaceSettlement", symbol_short!("auc_extd")), event);
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("auc_extd")), event);
 }
 
 #[allow(deprecated)]
 pub fn emit_trade_created(env: &Env, event: TradeCreatedEvent) {
-    env.events().publish(("MarketplaceSettlement", symbol_short!("trd_crtd")), event);
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("trd_crtd")), event);
 }
 
 #[allow(deprecated)]
 pub fn emit_trade_accepted(env: &Env, event: TradeAcceptedEvent) {
-    env.events().publish(("MarketplaceSettlement", symbol_short!("trd_acc")), event);
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("trd_acc")), event);
 }
 
 #[allow(deprecated)]
 pub fn emit_trade_executed(env: &Env, event: TradeExecutedEvent) {
-    env.events().publish(("MarketplaceSettlement", symbol_short!("trd_exec")), event);
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("trd_exec")), event);
 }
 
 #[allow(deprecated)]
 pub fn emit_bundle_created(env: &Env, event: BundleCreatedEvent) {
-    env.events().publish(("MarketplaceSettlement", symbol_short!("bndl_crtd")), event);
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("bndl_crtd")), event);
 }
 
 #[allow(deprecated)]
 pub fn emit_bundle_executed(env: &Env, event: BundleExecutedEvent) {
-    env.events().publish(("MarketplaceSettlement", symbol_short!("bndl_exec")), event);
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("bndl_exec")), event);
 }
 
 #[allow(deprecated)]
 pub fn emit_royalties_distributed(env: &Env, event: RoyaltiesDistributedEvent) {
-    env.events().publish(("MarketplaceSettlement", symbol_short!("roy_dist")), event);
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("roy_dist")), event);
 }
 
 #[allow(deprecated)]
 pub fn emit_platform_fees_collected(env: &Env, event: PlatformFeesCollectedEvent) {
-    env.events().publish(("MarketplaceSettlement", symbol_short!("fee_coll")), event);
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("fee_coll")), event);
 }
 
 #[allow(deprecated)]
 pub fn emit_dispute_created(env: &Env, event: DisputeCreatedEvent) {
-    env.events().publish(("MarketplaceSettlement", symbol_short!("dsp_crtd")), event);
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("dsp_crtd")), event);
 }
 
 #[allow(deprecated)]
 pub fn emit_dispute_vote(env: &Env, event: DisputeVoteEvent) {
-    env.events().publish(("MarketplaceSettlement", symbol_short!("dsp_vote")), event);
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("dsp_vote")), event);
 }
 
 #[allow(deprecated)]
 pub fn emit_dispute_resolved(env: &Env, event: DisputeResolvedEvent) {
-    env.events().publish(("MarketplaceSettlement", symbol_short!("dsp_rslv")), event);
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("dsp_rslv")), event);
 }
 
 #[allow(deprecated)]
 pub fn emit_reentrancy_detected(env: &Env, event: ReentrancyDetectedEvent) {
-    env.events().publish(("MarketplaceSettlement", symbol_short!("reentr")), event);
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("reentr")), event);
 }
 
 #[allow(deprecated)]
 pub fn emit_front_running_detected(env: &Env, event: FrontRunningDetectedEvent) {
-    env.events().publish(("MarketplaceSettlement", symbol_short!("frontrun")), event);
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("frontrun")), event);
 }
 
 #[allow(deprecated)]
 pub fn emit_emergency_withdrawal(env: &Env, event: EmergencyWithdrawalEvent) {
-    env.events().publish(("MarketplaceSettlement", symbol_short!("emerg_wd")), event);
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("emerg_wd")), event);
 }
 
 #[allow(deprecated)]
 pub fn emit_fee_config_updated(env: &Env, event: FeeConfigUpdatedEvent) {
-    env.events().publish(("MarketplaceSettlement", symbol_short!("fee_upd")), event);
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("fee_upd")), event);
 }
 
 #[allow(deprecated)]
 pub fn emit_admin_config_updated(env: &Env, event: AdminConfigUpdatedEvent) {
-    env.events().publish(("MarketplaceSettlement", symbol_short!("admin_upd")), event);
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("admin_upd")), event);
 }

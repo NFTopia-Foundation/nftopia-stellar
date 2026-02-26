@@ -1,19 +1,21 @@
 #![no_std]
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::needless_borrow)]
 
 // Module declarations
-pub mod error;
-pub mod types;
-pub mod utils;
-pub mod storage;
 pub mod atomic_swap;
 pub mod auction_engine;
-pub mod royalty_distributor;
-pub mod fee_manager;
 pub mod dispute_resolution;
-pub mod security;
+pub mod error;
 pub mod events;
+pub mod fee_manager;
+pub mod royalty_distributor;
+pub mod security;
 pub mod settlement_core;
+pub mod storage;
 pub mod test;
+pub mod types;
+pub mod utils;
 
 // Re-exports for convenience
 pub use settlement_core::MarketplaceSettlement;

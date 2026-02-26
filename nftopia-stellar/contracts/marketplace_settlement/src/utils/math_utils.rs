@@ -1,5 +1,5 @@
-use soroban_sdk::{Env, Vec};
 use crate::error::SettlementError;
+use soroban_sdk::{Env, Vec};
 
 /// Safe multiplication that checks for overflow
 pub fn safe_mul(a: i128, b: i128, _env: &Env) -> Result<i128, SettlementError> {
@@ -34,7 +34,11 @@ pub fn safe_div(a: i128, b: i128, _env: &Env) -> Result<i128, SettlementError> {
 }
 
 /// Calculate percentage using basis points (10000 = 100%)
-pub fn calculate_percentage(amount: i128, basis_points: u64, env: &Env) -> Result<i128, SettlementError> {
+pub fn calculate_percentage(
+    amount: i128,
+    basis_points: u64,
+    env: &Env,
+) -> Result<i128, SettlementError> {
     if basis_points > 10000 {
         return Err(SettlementError::InvalidRoyaltyPercentage);
     }
@@ -45,7 +49,13 @@ pub fn calculate_percentage(amount: i128, basis_points: u64, env: &Env) -> Resul
 }
 
 /// Calculate fee based on amount and fee structure
-pub fn calculate_fee(amount: i128, fee_bps: u64, min_fee: i128, max_fee: i128, env: &Env) -> Result<i128, SettlementError> {
+pub fn calculate_fee(
+    amount: i128,
+    fee_bps: u64,
+    min_fee: i128,
+    max_fee: i128,
+    env: &Env,
+) -> Result<i128, SettlementError> {
     let calculated_fee = calculate_percentage(amount, fee_bps, env)?;
 
     // Apply minimum fee
@@ -94,7 +104,11 @@ pub fn distribute_amount(
 }
 
 /// Calculate the next bid increment for auctions
-pub fn calculate_bid_increment(current_price: i128, increment_bps: u64, env: &Env) -> Result<i128, SettlementError> {
+pub fn calculate_bid_increment(
+    current_price: i128,
+    increment_bps: u64,
+    env: &Env,
+) -> Result<i128, SettlementError> {
     calculate_percentage(current_price, increment_bps, env)
 }
 
@@ -133,11 +147,7 @@ pub fn calculate_time_weighted_price(
 
     // Price decreases linearly over time
     let price_diff = safe_sub(start_price, end_price, env)?;
-    let weighted_diff = safe_mul(
-        price_diff,
-        elapsed as i128,
-        env
-    )?;
+    let weighted_diff = safe_mul(price_diff, elapsed as i128, env)?;
     let time_weighted_diff = safe_div(weighted_diff, total_duration as i128, env)?;
 
     safe_sub(start_price, time_weighted_diff, env)

@@ -1,15 +1,17 @@
-use soroban_sdk::{Env, Address, Vec, Map, Symbol, symbol_short, Bytes, contracttype};
 use crate::error::SettlementError;
-use crate::types::{AuctionTransaction, AuctionType, Bid, DutchAuctionData, TransactionState, Asset, RoyaltyDistribution};
-use crate::storage::auction_store::{AuctionStore, DutchAuctionStore};
-use crate::utils::{math_utils, time_utils};
-use crate::security::frontrun_protection::{CommitRevealScheme, FrontRunningDetector};
 use crate::events::{
-    emit_auction_created, emit_bid_placed, emit_bid_revealed,
-    emit_auction_ended, emit_auction_extended,
-    AuctionCreatedEvent, BidPlacedEvent, BidRevealedEvent,
-    AuctionEndedEvent, AuctionExtendedEvent
+    emit_auction_created, emit_auction_ended, emit_auction_extended, emit_bid_placed,
+    emit_bid_revealed, AuctionCreatedEvent, AuctionEndedEvent, AuctionExtendedEvent,
+    BidPlacedEvent, BidRevealedEvent,
 };
+use crate::security::frontrun_protection::{CommitRevealScheme, FrontRunningDetector};
+use crate::storage::auction_store::{AuctionStore, DutchAuctionStore};
+use crate::types::{
+    Asset, AuctionTransaction, AuctionType, Bid, DutchAuctionData, RoyaltyDistribution,
+    TransactionState,
+};
+use crate::utils::{math_utils, time_utils};
+use soroban_sdk::{contracttype, symbol_short, Address, Bytes, Env, Map, Symbol, Vec};
 
 // Storage keys
 const AUCTION_CONFIG: Symbol = symbol_short!("auc_cfg");
@@ -18,12 +20,12 @@ const AUCTION_CONFIG: Symbol = symbol_short!("auc_cfg");
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
 pub struct AuctionConfig {
-    pub min_bid_increment_bps: u64,    // Minimum bid increment in basis points
-    pub max_auction_duration: u64,     // Maximum auction duration in seconds
-    pub extension_window: u64,         // Time extension window for last-minute bids
-    pub dutch_price_decrement: u64,   // Price decrement per time unit for Dutch auctions
-    pub commit_reveal_enabled: u64,    // Whether commit-reveal is enabled (0 = false, 1 = true)
-    pub reveal_period: u64,            // Time allowed for bid reveals
+    pub min_bid_increment_bps: u64, // Minimum bid increment in basis points
+    pub max_auction_duration: u64,  // Maximum auction duration in seconds
+    pub extension_window: u64,      // Time extension window for last-minute bids
+    pub dutch_price_decrement: u64, // Price decrement per time unit for Dutch auctions
+    pub commit_reveal_enabled: u64, // Whether commit-reveal is enabled (0 = false, 1 = true)
+    pub reveal_period: u64,         // Time allowed for bid reveals
 }
 
 /// Auction engine for managing different auction types
@@ -41,7 +43,7 @@ impl AuctionEngine {
         reserve_price: i128,
         duration_seconds: u64,
         bid_increment: i128,
-        currency: &Asset
+        currency: &Asset,
     ) -> Result<u64, SettlementError> {
         let config = Self::get_auction_config(env)?;
 
@@ -51,7 +53,7 @@ impl AuctionEngine {
             reserve_price,
             duration_seconds,
             bid_increment,
-            &config
+            &config,
         )?;
 
         let auction_id = AuctionStore::next_id(env);
@@ -79,8 +81,8 @@ impl AuctionEngine {
             currency: currency.clone(),
             royalty_info: RoyaltyDistribution {
                 creator_address: seller.clone(), // Placeholder
-                creator_percentage: 500, // 5%
-                seller_percentage: 9500, // 95%
+                creator_percentage: 500,         // 5%
+                seller_percentage: 9500,         // 95%
                 platform_percentage: 0,
                 total_amount: 0,
                 amounts: Map::new(env),
@@ -127,7 +129,7 @@ impl AuctionEngine {
         auction_id: u64,
         bidder: &Address,
         bid_amount: i128,
-        commitment_hash: Option<Bytes>
+        commitment_hash: Option<Bytes>,
     ) -> Result<(), SettlementError> {
         let mut auction = AuctionStore::get(env, auction_id)?;
 
@@ -150,7 +152,7 @@ impl AuctionEngine {
                     bidder,
                     auction_id,
                     &commitment,
-                    timestamp + config.reveal_period
+                    timestamp + config.reveal_period,
                 )?;
 
                 (true, Some(commitment))
@@ -173,7 +175,7 @@ impl AuctionEngine {
                 is_committed,
                 commitment_hash: commitment_hash.clone(),
             },
-            &recent_bids
+            &recent_bids,
         )?;
 
         let bid = Bid {
@@ -193,11 +195,16 @@ impl AuctionEngine {
         }
 
         // Check if auction should be extended
-        if time_utils::should_extend_auction(auction.end_time, timestamp, auction.extension_window, env) {
+        if time_utils::should_extend_auction(
+            auction.end_time,
+            timestamp,
+            auction.extension_window,
+            env,
+        ) {
             let new_end_time = time_utils::calculate_extended_end_time(
                 auction.end_time,
                 auction.extension_window,
-                env
+                env,
             );
 
             auction.end_time = new_end_time;
@@ -207,7 +214,7 @@ impl AuctionEngine {
             let event = AuctionExtendedEvent {
                 auction_id,
                 new_end_time,
-                extension_reason: Bytes::from_slice(&env, "last_minute_bid".as_bytes()),
+                extension_reason: Bytes::from_slice(env, "last_minute_bid".as_bytes()),
                 timestamp,
             };
             emit_auction_extended(env, event);
@@ -232,7 +239,7 @@ impl AuctionEngine {
         auction_id: u64,
         bidder: &Address,
         bid_amount: i128,
-        salt: &Bytes
+        salt: &Bytes,
     ) -> Result<(), SettlementError> {
         let config = Self::get_auction_config(env)?;
         if config.commit_reveal_enabled == 0 {
@@ -240,13 +247,7 @@ impl AuctionEngine {
         }
 
         // Verify commitment
-        CommitRevealScheme::reveal_commitment(
-            env,
-            bidder,
-            auction_id,
-            bid_amount,
-            salt
-        )?;
+        CommitRevealScheme::reveal_commitment(env, bidder, auction_id, bid_amount, salt)?;
 
         let mut auction = AuctionStore::get(env, auction_id)?;
 
@@ -255,13 +256,18 @@ impl AuctionEngine {
         Self::process_direct_bid(env, &mut auction, bidder, bid_amount, timestamp)?;
 
         // Update the committed bid to revealed
-        AuctionStore::update_bid(env, auction_id, bidder, &Bid {
-            bidder: bidder.clone(),
-            amount: bid_amount,
-            placed_at: timestamp,
-            is_committed: false,
-            commitment_hash: None,
-        })?;
+        AuctionStore::update_bid(
+            env,
+            auction_id,
+            bidder,
+            &Bid {
+                bidder: bidder.clone(),
+                amount: bid_amount,
+                placed_at: timestamp,
+                is_committed: false,
+                commitment_hash: None,
+            },
+        )?;
 
         AuctionStore::update(env, &auction)?;
 
@@ -278,7 +284,11 @@ impl AuctionEngine {
     }
 
     /// End an auction
-    pub fn end_auction(env: &Env, auction_id: u64, _caller: &Address) -> Result<(), SettlementError> {
+    pub fn end_auction(
+        env: &Env,
+        auction_id: u64,
+        _caller: &Address,
+    ) -> Result<(), SettlementError> {
         let mut auction = AuctionStore::get(env, auction_id)?;
 
         // Check if auction can be ended
@@ -328,7 +338,7 @@ impl AuctionEngine {
             current_time,
             dutch_data.current_price,
             dutch_data.ending_price,
-            env
+            env,
         )?;
 
         // Update stored price
@@ -344,7 +354,7 @@ impl AuctionEngine {
     pub fn cancel_auction(
         env: &Env,
         auction_id: u64,
-        canceller: &Address
+        canceller: &Address,
     ) -> Result<(), SettlementError> {
         let mut auction = AuctionStore::get(env, auction_id)?;
 
@@ -376,7 +386,7 @@ impl AuctionEngine {
     pub fn update_auction_config(
         env: &Env,
         config: &AuctionConfig,
-        _admin: &Address
+        _admin: &Address,
     ) -> Result<(), SettlementError> {
         // Check admin permissions
         env.storage().instance().set(&AUCTION_CONFIG, config);
@@ -389,7 +399,7 @@ impl AuctionEngine {
         reserve_price: i128,
         duration: u64,
         bid_increment: i128,
-        config: &AuctionConfig
+        config: &AuctionConfig,
     ) -> Result<(), SettlementError> {
         if starting_price <= 0 {
             return Err(SettlementError::InvalidAmount);
@@ -413,16 +423,16 @@ impl AuctionEngine {
     /// Internal: Check if auction is active
     fn is_auction_active(auction: &AuctionTransaction, env: &Env) -> Result<bool, SettlementError> {
         let current_time = env.ledger().timestamp();
-        Ok(current_time >= auction.start_time &&
-           current_time <= auction.end_time &&
-           auction.state == TransactionState::Pending)
+        Ok(current_time >= auction.start_time
+            && current_time <= auction.end_time
+            && auction.state == TransactionState::Pending)
     }
 
     /// Internal: Validate bid amount
     fn validate_bid_amount(
         auction: &AuctionTransaction,
         bid_amount: i128,
-        env: &Env
+        env: &Env,
     ) -> Result<(), SettlementError> {
         // Must be higher than current highest bid
         if bid_amount <= auction.highest_bid {
@@ -434,7 +444,7 @@ impl AuctionEngine {
             let min_increment = math_utils::calculate_bid_increment(
                 auction.highest_bid,
                 (auction.bid_increment.max(100) as u64).max(100), // At least 1%
-                env
+                env,
             )?;
             if bid_amount < auction.highest_bid + min_increment {
                 return Err(SettlementError::BidTooLow);
@@ -455,7 +465,7 @@ impl AuctionEngine {
         auction: &mut AuctionTransaction,
         bidder: &Address,
         bid_amount: i128,
-        timestamp: u64
+        timestamp: u64,
     ) -> Result<Bid, SettlementError> {
         // Update auction state
         auction.highest_bid = bid_amount;
@@ -488,12 +498,12 @@ impl AuctionEngine {
 impl Default for AuctionConfig {
     fn default() -> Self {
         Self {
-            min_bid_increment_bps: 100,      // 1%
-            max_auction_duration: 604800,    // 7 days
-            extension_window: 300,           // 5 minutes
-            dutch_price_decrement: 1000,     // 1000 units per time unit
+            min_bid_increment_bps: 100,   // 1%
+            max_auction_duration: 604800, // 7 days
+            extension_window: 300,        // 5 minutes
+            dutch_price_decrement: 1000,  // 1000 units per time unit
             commit_reveal_enabled: 0,
-            reveal_period: 3600,             // 1 hour
+            reveal_period: 3600, // 1 hour
         }
     }
 }

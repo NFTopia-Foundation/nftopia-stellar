@@ -1,6 +1,6 @@
-use soroban_sdk::{Address, Env, Symbol, Vec, Bytes};
 use crate::error::SettlementError;
 use crate::types::Asset;
+use soroban_sdk::{Address, Bytes, Env, Symbol, Vec};
 
 /// Create a native XLM asset
 pub fn native_asset() -> Asset {
@@ -11,7 +11,11 @@ pub fn native_asset() -> Asset {
 }
 
 /// Validate that an asset is supported
-pub fn validate_asset(asset: &Asset, supported_assets: &Vec<Asset>, _env: &Env) -> Result<(), SettlementError> {
+pub fn validate_asset(
+    asset: &Asset,
+    supported_assets: &Vec<Asset>,
+    _env: &Env,
+) -> Result<(), SettlementError> {
     // Check if asset is in the supported list
     for supported in supported_assets.iter() {
         if supported.contract == asset.contract {

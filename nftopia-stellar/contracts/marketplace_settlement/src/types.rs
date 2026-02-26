@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, Vec, Map, Symbol, Bytes};
+use soroban_sdk::{contracttype, Address, Bytes, Map, Symbol, Vec};
 
 // Transaction state enum
 #[contracttype]
@@ -78,8 +78,8 @@ pub struct Bid {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RoyaltyDistribution {
     pub creator_address: Address,
-    pub creator_percentage: u64, // Basis points (10000 = 100%)
-    pub seller_percentage: u64, // Basis points
+    pub creator_percentage: u64,  // Basis points (10000 = 100%)
+    pub seller_percentage: u64,   // Basis points
     pub platform_percentage: u64, // Basis points
     pub total_amount: i128,
     pub amounts: Map<Address, i128>, // Final amounts for each party
@@ -205,7 +205,7 @@ pub struct DutchAuctionData {
     pub starting_price: i128,
     pub ending_price: i128,
     pub price_decrement: u64, // Amount to decrease per time unit
-    pub time_unit: u64,        // Time unit in seconds for decrement
+    pub time_unit: u64,       // Time unit in seconds for decrement
     pub current_price: i128,
     pub last_price_update: u64,
 }
@@ -221,5 +221,5 @@ pub struct AdminConfig {
     pub min_bid_increment_bps: u64, // Minimum bid increment in basis points
     pub max_royalty_percentage: u64, // Maximum royalty percentage
     pub dispute_cooling_period: u64, // Cooling period before dispute resolution
-    pub arbitration_quorum: u64, // Required votes for arbitration
+    pub arbitration_quorum: u64,    // Required votes for arbitration
 }

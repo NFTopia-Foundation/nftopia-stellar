@@ -1,5 +1,5 @@
-use soroban_sdk::Env;
 use crate::error::SettlementError;
+use soroban_sdk::Env;
 
 /// Get current timestamp from the environment
 pub fn current_timestamp(env: &Env) -> u64 {
@@ -31,14 +31,22 @@ pub fn is_within_time_window(start: u64, end: u64, env: &Env) -> bool {
 }
 
 /// Calculate expiration timestamp from duration
-pub fn calculate_expiration(start_time: u64, duration_seconds: u64) -> Result<u64, SettlementError> {
-    start_time.checked_add(duration_seconds)
+pub fn calculate_expiration(
+    start_time: u64,
+    duration_seconds: u64,
+) -> Result<u64, SettlementError> {
+    start_time
+        .checked_add(duration_seconds)
         .ok_or(SettlementError::Overflow)
 }
 
 /// Extend a deadline by additional seconds
-pub fn extend_deadline(current_deadline: u64, extension_seconds: u64) -> Result<u64, SettlementError> {
-    current_deadline.checked_add(extension_seconds)
+pub fn extend_deadline(
+    current_deadline: u64,
+    extension_seconds: u64,
+) -> Result<u64, SettlementError> {
+    current_deadline
+        .checked_add(extension_seconds)
         .ok_or(SettlementError::Overflow)
 }
 
@@ -51,11 +59,7 @@ pub fn has_time_elapsed(reference: u64, required_seconds: u64, env: &Env) -> boo
 /// Calculate remaining time until expiration
 pub fn remaining_time(expires_at: u64, env: &Env) -> u64 {
     let now = current_timestamp(env);
-    if now >= expires_at {
-        0
-    } else {
-        expires_at - now
-    }
+    expires_at.saturating_sub(now)
 }
 
 /// Validate auction timing parameters
@@ -78,7 +82,8 @@ pub fn validate_auction_timing(
     }
 
     // Extension window should be reasonable (not too long)
-    if extension_window > 86400 * 7 { // Max 7 days extension
+    if extension_window > 86400 * 7 {
+        // Max 7 days extension
         return Err(SettlementError::InvalidAmount);
     }
 
@@ -134,11 +139,7 @@ pub fn should_extend_auction(
 }
 
 /// Calculate new end time with extension
-pub fn calculate_extended_end_time(
-    current_end_time: u64,
-    extension_window: u64,
-    env: &Env,
-) -> u64 {
+pub fn calculate_extended_end_time(current_end_time: u64, extension_window: u64, env: &Env) -> u64 {
     let now = current_timestamp(env);
     let proposed_end = now + extension_window;
 

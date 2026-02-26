@@ -1,6 +1,6 @@
-use soroban_sdk::{Env, Symbol, Address, symbol_short, Bytes};
 use crate::error::SettlementError;
 use crate::events::{emit_reentrancy_detected, ReentrancyDetectedEvent};
+use soroban_sdk::{symbol_short, Address, Bytes, Env, Symbol};
 
 // Storage keys
 const REENTRANCY_GUARD: Symbol = symbol_short!("reentrant");
@@ -11,12 +11,21 @@ pub struct ReentrancyGuard;
 
 impl ReentrancyGuard {
     /// Execute a function with reentrancy protection
-    pub fn execute<F, R>(env: &Env, caller: &Address, function_name: &str, f: F) -> Result<R, SettlementError>
+    pub fn execute<F, R>(
+        env: &Env,
+        caller: &Address,
+        function_name: &str,
+        f: F,
+    ) -> Result<R, SettlementError>
     where
         F: FnOnce() -> Result<R, SettlementError>,
     {
         // Check if we're already in a protected function
-        let is_locked: bool = env.storage().instance().get(&REENTRANCY_GUARD).unwrap_or(false);
+        let is_locked: bool = env
+            .storage()
+            .instance()
+            .get(&REENTRANCY_GUARD)
+            .unwrap_or(false);
 
         if is_locked {
             // Emit reentrancy detection event
@@ -44,7 +53,10 @@ impl ReentrancyGuard {
 
     /// Check if currently in a reentrant call
     pub fn is_reentrant(env: &Env) -> bool {
-        env.storage().instance().get(&REENTRANCY_GUARD).unwrap_or(false)
+        env.storage()
+            .instance()
+            .get(&REENTRANCY_GUARD)
+            .unwrap_or(false)
     }
 }
 
@@ -57,7 +69,7 @@ impl FunctionLock {
         env: &Env,
         function_key: &Symbol,
         _caller: &Address,
-        f: F
+        f: F,
     ) -> Result<R, SettlementError>
     where
         F: FnOnce() -> Result<R, SettlementError>,
@@ -102,21 +114,17 @@ impl FunctionLock {
 /// Non-reentrant modifier for contract functions
 #[macro_export]
 macro_rules! non_reentrant {
-    ($env:expr, $caller:expr, $function_name:expr, $body:block) => {
-        {
-            use crate::security::reentrancy_guard::ReentrancyGuard;
-            ReentrancyGuard::execute($env, $caller, $function_name, || $body)
-        }
-    };
+    ($env:expr, $caller:expr, $function_name:expr, $body:block) => {{
+        use $crate::security::reentrancy_guard::ReentrancyGuard;
+        ReentrancyGuard::execute($env, $caller, $function_name, || $body)
+    }};
 }
 
 /// Function-specific lock modifier
 #[macro_export]
 macro_rules! function_lock {
-    ($env:expr, $function_key:expr, $caller:expr, $body:block) => {
-        {
-            use crate::security::reentrancy_guard::FunctionLock;
-            FunctionLock::execute($env, $function_key, $caller, || $body)
-        }
-    };
+    ($env:expr, $function_key:expr, $caller:expr, $body:block) => {{
+        use $crate::security::reentrancy_guard::FunctionLock;
+        FunctionLock::execute($env, $function_key, $caller, || $body)
+    }};
 }

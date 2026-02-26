@@ -1,8 +1,8 @@
-use soroban_sdk::{Env, Address, Map, Vec, Symbol, symbol_short};
 use crate::error::SettlementError;
-use crate::types::{FeeConfig, VolumeTier, Asset};
-use crate::utils::math_utils;
 use crate::events::{emit_platform_fees_collected, PlatformFeesCollectedEvent};
+use crate::types::{Asset, FeeConfig, VolumeTier};
+use crate::utils::math_utils;
+use soroban_sdk::{symbol_short, Address, Env, Map, Symbol, Vec};
 
 // Storage keys
 const FEE_CONFIG: Symbol = symbol_short!("fee_cfg");
@@ -17,7 +17,7 @@ impl FeeManager {
     pub fn calculate_fee(
         env: &Env,
         transaction_amount: i128,
-        user: &Address
+        user: &Address,
     ) -> Result<i128, SettlementError> {
         let fee_config = Self::get_fee_config(env)?;
 
@@ -28,7 +28,7 @@ impl FeeManager {
                 fee_config.platform_fee_bps,
                 fee_config.minimum_fee,
                 fee_config.maximum_fee,
-                env
+                env,
             );
         }
 
@@ -41,17 +41,14 @@ impl FeeManager {
         env: &Env,
         transaction_amount: i128,
         user: &Address,
-        fee_config: &FeeConfig
+        fee_config: &FeeConfig,
     ) -> Result<i128, SettlementError> {
         let user_volume = Self::get_user_volume(env, user)?;
-        let discount_bps: u64 = Self::calculate_volume_discount(user_volume, &fee_config.volume_discounts)?;
+        let discount_bps: u64 =
+            Self::calculate_volume_discount(user_volume, &fee_config.volume_discounts)?;
 
         // Apply discount to base fee
-        let discounted_fee_bps = if fee_config.platform_fee_bps > discount_bps {
-            fee_config.platform_fee_bps - discount_bps
-        } else {
-            0
-        };
+        let discounted_fee_bps = fee_config.platform_fee_bps.saturating_sub(discount_bps);
 
         // Check for VIP exemptions
         if fee_config.vip_exemptions.contains(user.clone()) {
@@ -63,7 +60,7 @@ impl FeeManager {
             discounted_fee_bps,
             fee_config.minimum_fee,
             fee_config.maximum_fee,
-            env
+            env,
         )
     }
 
@@ -72,7 +69,7 @@ impl FeeManager {
         env: &Env,
         amount: i128,
         asset: &Asset,
-        collector: &Address
+        collector: &Address,
     ) -> Result<(), SettlementError> {
         // Add to accumulated fees
         let mut accumulated_fees: Map<Asset, i128> = env
@@ -85,7 +82,9 @@ impl FeeManager {
         let new_amount = math_utils::safe_add(current_amount, amount, env)?;
 
         accumulated_fees.set(asset.clone(), new_amount);
-        env.storage().instance().set(&ACCUMULATED_FEES, &accumulated_fees);
+        env.storage()
+            .instance()
+            .set(&ACCUMULATED_FEES, &accumulated_fees);
 
         // Update user volume for dynamic fees
         Self::update_user_volume(env, collector, amount)?;
@@ -107,7 +106,7 @@ impl FeeManager {
         env: &Env,
         asset: &Asset,
         recipient: &Address,
-        admin: &Address
+        admin: &Address,
     ) -> Result<i128, SettlementError> {
         let fee_config = Self::get_fee_config(env)?;
 
@@ -134,12 +133,14 @@ impl FeeManager {
             &env.current_contract_address(),
             recipient,
             amount,
-            env
+            env,
         )?;
 
         // Reset accumulated fees
         accumulated_fees.set(asset.clone(), 0);
-        env.storage().instance().set(&ACCUMULATED_FEES, &accumulated_fees);
+        env.storage()
+            .instance()
+            .set(&ACCUMULATED_FEES, &accumulated_fees);
 
         Ok(amount)
     }
@@ -148,7 +149,7 @@ impl FeeManager {
     pub fn update_fee_config(
         env: &Env,
         new_config: &FeeConfig,
-        admin: &Address
+        admin: &Address,
     ) -> Result<(), SettlementError> {
         // Validate fee configuration
         Self::validate_fee_config(new_config)?;
@@ -162,7 +163,7 @@ impl FeeManager {
                 new_config: new_config.clone(),
                 updated_by: admin.clone(),
                 timestamp: env.ledger().timestamp(),
-            }
+            },
         );
 
         Ok(())
@@ -180,7 +181,7 @@ impl FeeManager {
     pub fn add_vip_exemption(
         env: &Env,
         user: &Address,
-        admin: &Address
+        admin: &Address,
     ) -> Result<(), SettlementError> {
         let mut fee_config = Self::get_fee_config(env)?;
         // Check admin permissions here
@@ -197,7 +198,7 @@ impl FeeManager {
     pub fn remove_vip_exemption(
         env: &Env,
         user: &Address,
-        admin: &Address
+        admin: &Address,
     ) -> Result<(), SettlementError> {
         let mut fee_config = Self::get_fee_config(env)?;
         // Check admin permissions here
@@ -238,7 +239,10 @@ impl FeeManager {
     }
 
     /// Calculate volume-based discount
-    fn calculate_volume_discount(volume: i128, tiers: &Vec<VolumeTier>) -> Result<u64, SettlementError> {
+    fn calculate_volume_discount(
+        volume: i128,
+        tiers: &Vec<VolumeTier>,
+    ) -> Result<u64, SettlementError> {
         for tier in tiers.iter() {
             if volume >= tier.min_volume {
                 return Ok(tier.fee_discount_bps);
@@ -295,7 +299,7 @@ impl FeeManager {
     pub fn reset_user_volume(
         env: &Env,
         user: &Address,
-        _admin: &Address
+        _admin: &Address,
     ) -> Result<(), SettlementError> {
         // Check admin permissions here
         let mut user_volumes: Map<Address, i128> = env
@@ -351,12 +355,12 @@ impl FeeConfig {
             volume_discounts: {
                 let mut discounts = Vec::new(env);
                 discounts.push_back(VolumeTier {
-                    min_volume: 1000000,     // 1M volume
-                    fee_discount_bps: 50,    // 0.5% discount
+                    min_volume: 1000000,  // 1M volume
+                    fee_discount_bps: 50, // 0.5% discount
                 });
                 discounts.push_back(VolumeTier {
-                    min_volume: 10000000,    // 10M volume
-                    fee_discount_bps: 100,   // 1% discount
+                    min_volume: 10000000,  // 10M volume
+                    fee_discount_bps: 100, // 1% discount
                 });
                 discounts
             },
@@ -381,7 +385,7 @@ impl FeeCalculator {
     pub fn calculate_tiered_fee(
         env: &Env,
         amount: i128,
-        tiers: &Vec<(i128, u64)> // (min_amount, fee_bps)
+        tiers: &Vec<(i128, u64)>, // (min_amount, fee_bps)
     ) -> Result<i128, SettlementError> {
         for (min_amount, fee_bps) in tiers.iter() {
             if amount >= min_amount {
@@ -395,10 +399,10 @@ impl FeeCalculator {
     pub fn calculate_time_based_fee(
         env: &Env,
         base_fee: i128,
-        current_hour: u64
+        current_hour: u64,
     ) -> Result<i128, SettlementError> {
         // Lower fees during off-peak hours (e.g., 2-6 AM)
-        let discount = if current_hour >= 2 && current_hour <= 6 {
+        let discount = if (2..=6).contains(&current_hour) {
             25 // 25% discount
         } else {
             0
@@ -412,7 +416,7 @@ impl FeeCalculator {
     pub fn calculate_bundle_fee(
         env: &Env,
         individual_fees: &Vec<i128>,
-        bundle_discount_bps: u64
+        bundle_discount_bps: u64,
     ) -> Result<i128, SettlementError> {
         let mut total_fee = 0i128;
         for fee in individual_fees.iter() {

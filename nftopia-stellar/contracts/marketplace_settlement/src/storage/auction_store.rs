@@ -1,6 +1,6 @@
-use soroban_sdk::{Env, Map, Vec, Symbol, Address, symbol_short};
-use crate::types::{AuctionTransaction, Bid, DutchAuctionData};
 use crate::error::SettlementError;
+use crate::types::{AuctionTransaction, Bid, DutchAuctionData};
+use soroban_sdk::{symbol_short, Address, Env, Map, Symbol, Vec};
 
 // Storage keys
 pub const AUCTIONS: Symbol = symbol_short!("auctions");
@@ -76,7 +76,9 @@ impl AuctionStore {
         let current_time = env.ledger().timestamp();
 
         for (_, auction) in auctions.iter() {
-            if auction.end_time > current_time && auction.state == crate::types::TransactionState::Pending {
+            if auction.end_time > current_time
+                && auction.state == crate::types::TransactionState::Pending
+            {
                 result.push_back(auction);
             }
         }
@@ -128,7 +130,12 @@ impl AuctionStore {
     }
 
     /// Update a bid in an auction (for committed bids)
-    pub fn update_bid(env: &Env, auction_id: u64, bidder: &Address, new_bid: &Bid) -> Result<(), SettlementError> {
+    pub fn update_bid(
+        env: &Env,
+        auction_id: u64,
+        bidder: &Address,
+        new_bid: &Bid,
+    ) -> Result<(), SettlementError> {
         let mut all_bids: Map<u64, Vec<Bid>> = env
             .storage()
             .instance()
@@ -172,7 +179,9 @@ impl DutchAuctionStore {
             .unwrap_or(Map::new(env));
 
         dutch_auctions.set(auction_id, data.clone());
-        env.storage().instance().set(&DUTCH_AUCTIONS, &dutch_auctions);
+        env.storage()
+            .instance()
+            .set(&DUTCH_AUCTIONS, &dutch_auctions);
         Ok(())
     }
 
@@ -190,7 +199,11 @@ impl DutchAuctionStore {
     }
 
     /// Update Dutch auction data
-    pub fn update(env: &Env, auction_id: u64, data: &DutchAuctionData) -> Result<(), SettlementError> {
+    pub fn update(
+        env: &Env,
+        auction_id: u64,
+        data: &DutchAuctionData,
+    ) -> Result<(), SettlementError> {
         Self::put(env, auction_id, data)
     }
 
@@ -203,7 +216,9 @@ impl DutchAuctionStore {
             .ok_or(SettlementError::AuctionNotFound)?;
 
         dutch_auctions.remove(auction_id);
-        env.storage().instance().set(&DUTCH_AUCTIONS, &dutch_auctions);
+        env.storage()
+            .instance()
+            .set(&DUTCH_AUCTIONS, &dutch_auctions);
         Ok(())
     }
 }

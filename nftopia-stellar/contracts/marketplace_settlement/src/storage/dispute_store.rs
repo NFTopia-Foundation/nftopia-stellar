@@ -1,6 +1,6 @@
-use soroban_sdk::{Env, Map, Vec, Symbol, Address, symbol_short};
-use crate::types::Dispute;
 use crate::error::SettlementError;
+use crate::types::Dispute;
+use soroban_sdk::{symbol_short, Address, Env, Map, Symbol, Vec};
 
 // Storage keys
 pub const DISPUTES: Symbol = symbol_short!("disputes");

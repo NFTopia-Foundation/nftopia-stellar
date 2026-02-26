@@ -1,12 +1,16 @@
-use soroban_sdk::{Env, Address, Map, Vec, Symbol, symbol_short, Bytes, contracttype};
 use crate::error::SettlementError;
-use crate::types::Dispute;
-use crate::error::{DISPUTE_RESOLUTION_NOT_RESOLVED, DISPUTE_RESOLUTION_REFUND_BUYER, DISPUTE_RESOLUTION_RELEASE_TO_SELLER, DISPUTE_RESOLUTION_SPLIT_FUNDS, DISPUTE_RESOLUTION_CANCEL_TRANSACTION};
-use crate::storage::dispute_store::DisputeStore;
-use crate::events::{
-    emit_dispute_created, emit_dispute_vote, emit_dispute_resolved,
-    DisputeCreatedEvent, DisputeVoteEvent, DisputeResolvedEvent
+use crate::error::{
+    DISPUTE_RESOLUTION_CANCEL_TRANSACTION, DISPUTE_RESOLUTION_NOT_RESOLVED,
+    DISPUTE_RESOLUTION_REFUND_BUYER, DISPUTE_RESOLUTION_RELEASE_TO_SELLER,
+    DISPUTE_RESOLUTION_SPLIT_FUNDS,
 };
+use crate::events::{
+    emit_dispute_created, emit_dispute_resolved, emit_dispute_vote, DisputeCreatedEvent,
+    DisputeResolvedEvent, DisputeVoteEvent,
+};
+use crate::storage::dispute_store::DisputeStore;
+use crate::types::Dispute;
+use soroban_sdk::{contracttype, symbol_short, Address, Bytes, Env, Map, Symbol, Vec};
 
 // Storage keys
 const ARBITRATORS: Symbol = symbol_short!("arbiters");
@@ -16,8 +20,8 @@ const DISPUTE_CONFIG: Symbol = symbol_short!("dsp_cfg");
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DisputeConfig {
-    pub arbitration_quorum: u64,      // Required votes for resolution
-    pub cooling_period: u64,          // Cooling period before dispute resolution
+    pub arbitration_quorum: u64,         // Required votes for resolution
+    pub cooling_period: u64,             // Cooling period before dispute resolution
     pub evidence_submission_period: u64, // Time allowed for evidence submission
     pub max_arbitrators_per_dispute: u64,
     pub min_arbitrator_reputation: u64,
@@ -46,7 +50,7 @@ impl DisputeResolutionManager {
         auction_id: Option<u64>,
         initiator: &Address,
         reason: &Bytes,
-        evidence_uri: Option<Bytes>
+        evidence_uri: Option<Bytes>,
     ) -> Result<u64, SettlementError> {
         // Check if dispute already exists for this transaction
         if DisputeStore::exists_for_transaction(env, transaction_id) {
@@ -108,7 +112,7 @@ impl DisputeResolutionManager {
         env: &Env,
         dispute_id: u64,
         arbitrator: &Address,
-        vote: u64 // 1 = favor initiator, 0 = against
+        vote: u64, // 1 = favor initiator, 0 = against
     ) -> Result<(), SettlementError> {
         let mut dispute = DisputeStore::get(env, dispute_id)?;
 
@@ -151,13 +155,13 @@ impl DisputeResolutionManager {
         env: &Env,
         dispute_id: u64,
         submitter: &Address,
-        evidence_uri: &Bytes
+        evidence_uri: &Bytes,
     ) -> Result<(), SettlementError> {
         let mut dispute = DisputeStore::get(env, dispute_id)?;
 
         // Only initiator or arbitrators can submit evidence
-        let is_authorized = dispute.initiator == *submitter ||
-                           dispute.arbitrators.contains(submitter.clone());
+        let is_authorized =
+            dispute.initiator == *submitter || dispute.arbitrators.contains(submitter.clone());
 
         if !is_authorized {
             return Err(SettlementError::Unauthorized);
@@ -182,7 +186,7 @@ impl DisputeResolutionManager {
         env: &Env,
         dispute_id: u64,
         resolution: u64,
-        _admin: &Address
+        _admin: &Address,
     ) -> Result<(), SettlementError> {
         // Check admin permissions
         let mut dispute = DisputeStore::get(env, dispute_id)?;
@@ -216,7 +220,7 @@ impl DisputeResolutionManager {
     pub fn execute_dispute_resolution(
         env: &Env,
         dispute_id: u64,
-        _executor: &Address
+        _executor: &Address,
     ) -> Result<(), SettlementError> {
         let dispute = DisputeStore::get(env, dispute_id)?;
 
@@ -250,7 +254,7 @@ impl DisputeResolutionManager {
     pub fn register_arbitrator(
         env: &Env,
         arbitrator: &Address,
-        initial_reputation: u64
+        initial_reputation: u64,
     ) -> Result<(), SettlementError> {
         let arbitrator_info = Arbitrator {
             address: arbitrator.clone(),
@@ -269,14 +273,16 @@ impl DisputeResolutionManager {
     pub fn update_arbitrator_reputation(
         env: &Env,
         arbitrator: &Address,
-        reputation_change: i32
+        reputation_change: i32,
     ) -> Result<(), SettlementError> {
         let mut arb = Self::get_arbitrator(env, arbitrator)?;
 
         let new_reputation = if reputation_change > 0 {
-            arb.reputation_score.saturating_add(reputation_change as u64)
+            arb.reputation_score
+                .saturating_add(reputation_change as u64)
         } else {
-            arb.reputation_score.saturating_sub((-reputation_change) as u64)
+            arb.reputation_score
+                .saturating_sub((-reputation_change) as u64)
         };
 
         arb.reputation_score = new_reputation;
@@ -297,7 +303,7 @@ impl DisputeResolutionManager {
     pub fn update_dispute_config(
         env: &Env,
         config: &DisputeConfig,
-        _admin: &Address
+        _admin: &Address,
     ) -> Result<(), SettlementError> {
         // Check admin permissions
         env.storage().instance().set(&DISPUTE_CONFIG, config);
@@ -347,7 +353,10 @@ impl DisputeResolutionManager {
     }
 
     /// Internal: Select arbitrators for a dispute
-    fn select_arbitrators(env: &Env, config: &DisputeConfig) -> Result<Vec<Address>, SettlementError> {
+    fn select_arbitrators(
+        env: &Env,
+        config: &DisputeConfig,
+    ) -> Result<Vec<Address>, SettlementError> {
         let all_arbitrators = Self::get_all_arbitrators(env)?;
 
         if all_arbitrators.is_empty() {
@@ -373,7 +382,7 @@ impl DisputeResolutionManager {
     fn update_arbitrator_reputations(
         env: &Env,
         dispute: &Dispute,
-        successful_resolution: bool
+        successful_resolution: bool,
     ) -> Result<(), SettlementError> {
         for arbitrator in dispute.arbitrators.iter() {
             let mut arb = Self::get_arbitrator(env, &arbitrator)?;
@@ -449,16 +458,14 @@ impl DisputeResolutionManager {
             .get(&ARBITRATORS)
             .unwrap_or(Map::new(env));
 
-        Ok(arbitrators
-            .get(address.clone())
-            .unwrap_or(Arbitrator {
-                address: address.clone(),
-                reputation_score: 1000, // Default reputation
-                disputes_handled: 0,
-                successful_resolutions: 0,
-                is_active: 1, // Active by default
-                registered_at: env.ledger().timestamp(),
-            }))
+        Ok(arbitrators.get(address.clone()).unwrap_or(Arbitrator {
+            address: address.clone(),
+            reputation_score: 1000, // Default reputation
+            disputes_handled: 0,
+            successful_resolutions: 0,
+            is_active: 1, // Active by default
+            registered_at: env.ledger().timestamp(),
+        }))
     }
 
     /// Internal: Store arbitrator
@@ -481,7 +488,7 @@ impl Default for DisputeConfig {
     fn default() -> Self {
         Self {
             arbitration_quorum: 3,
-            cooling_period: 86400, // 24 hours
+            cooling_period: 86400,              // 24 hours
             evidence_submission_period: 604800, // 7 days
             max_arbitrators_per_dispute: 5,
             min_arbitrator_reputation: 50,
@@ -498,9 +505,8 @@ impl DisputeEvidenceManager {
         _env: &Env,
         _dispute_id: u64,
         _evidence_data: &Vec<u8>,
-        _submitter: &Address
+        _submitter: &Address,
     ) -> Result<(), SettlementError> {
-
         Ok(())
     }
 
@@ -513,7 +519,8 @@ impl DisputeEvidenceManager {
     /// Validate evidence format
     pub fn validate_evidence(evidence: &Vec<u8>) -> Result<(), SettlementError> {
         // Basic validation - check size limits
-        if evidence.len() > 10000 { // 10KB limit
+        if evidence.len() > 10000 {
+            // 10KB limit
             return Err(SettlementError::InvalidAmount);
         }
         Ok(())
