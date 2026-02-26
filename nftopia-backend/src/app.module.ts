@@ -8,6 +8,8 @@ import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { NftModule } from './nft/nft.module';
+import { SorobanModule } from './soroban/soroban.module';
+import { BidsModule } from './bids/bids.module';
 import { LoggerModule } from 'nestjs-pino';
 import { APP_FILTER } from '@nestjs/core';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -70,6 +72,8 @@ import { StorageModule } from './storage/storage.module';
           }),
           UsersModule,
         ]),
+    SorobanModule,
+    BidsModule,
     NftModule,
     StorageModule,
   ],

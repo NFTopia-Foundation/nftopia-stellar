@@ -5,6 +5,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { StellarStrategy } from './stellar.strategy';
 import { JwtStrategy } from './jwt.strategy';
+import { StellarSignatureGuard } from './stellar-signature.guard';
 
 @Module({
   imports: [
@@ -15,7 +16,7 @@ import { JwtStrategy } from './jwt.strategy';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, StellarStrategy, JwtStrategy],
-  exports: [AuthService, JwtStrategy],
+  providers: [AuthService, StellarStrategy, JwtStrategy, StellarSignatureGuard],
+  exports: [AuthService, JwtStrategy, StellarSignatureGuard],
 })
 export class AuthModule {}
