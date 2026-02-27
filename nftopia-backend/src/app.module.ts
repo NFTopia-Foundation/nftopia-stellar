@@ -12,6 +12,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { APP_FILTER } from '@nestjs/core';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import stellarConfig from './config/stellar.config';
+import { StorageModule } from './storage/storage.module';
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import stellarConfig from './config/stellar.config';
           UsersModule,
         ]),
     NftModule,
+    StorageModule,
   ],
   controllers: [AppController],
   providers: [
