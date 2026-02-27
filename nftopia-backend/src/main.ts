@@ -4,6 +4,12 @@ import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
 import { Logger } from 'nestjs-pino';
+import { ConfigService } from '@nestjs/config';
+import { StellarResponseInterceptor } from './interceptors/stellar-response.interceptor';
+import { StellarLoggingInterceptor } from './interceptors/stellar-logging.interceptor';
+import { StellarErrorInterceptor } from './interceptors/stellar-error.interceptor';
+import { StellarTimeoutInterceptor } from './interceptors/stellar-timeout.interceptor';
+import { StellarTransformInterceptor } from './interceptors/stellar-transform.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -24,6 +30,15 @@ async function bootstrap() {
         enableImplicitConversion: true,
       },
     }),
+  );
+
+  const configService = app.get(ConfigService);
+  app.useGlobalInterceptors(
+    new StellarLoggingInterceptor(),
+    new StellarTimeoutInterceptor(configService),
+    new StellarErrorInterceptor(),
+    new StellarTransformInterceptor(),
+    new StellarResponseInterceptor(configService),
   );
 
   // Set global API prefix
