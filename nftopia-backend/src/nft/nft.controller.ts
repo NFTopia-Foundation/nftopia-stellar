@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { NftService } from './nft.service';
 import { NftFilterDto } from './dto/nft-filter.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
@@ -48,6 +48,12 @@ export class NftController {
     Array<{ owner: string; sales: string; volume: string }>
   > {
     return this.nftService.getTopSellers();
+  }
+
+  @Post('reindex-search')
+  @ApiOperation({ summary: 'Backfill search index with all NFTs (e.g. after deployment)' })
+  async reindexSearch(): Promise<{ indexed: number }> {
+    return this.nftService.reindexSearch();
   }
 
   @Get(':contractId/:tokenId')

@@ -30,7 +30,6 @@
     "@nestjs/schedule": "^6.1.1",
     "@nestjs/swagger": "^11.2.5",
     "@nestjs/typeorm": "^11.0.0",
-    "@types/cron": "^2.0.1",
     "arweave": "^1.15.7",
     "cache-manager": "^7.2.8",
     "cache-manager-redis-store": "^3.0.1",
@@ -49,6 +48,7 @@
     "rxjs": "^7.8.1",
     "stellar-sdk": "^13.3.0",
     "swagger-ui-express": "^5.0.1",
+    "meilisearch": "^0.37.0",
     "typeorm": "^0.3.28"
   },
   "devDependencies": {

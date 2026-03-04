@@ -7,6 +7,7 @@ import { NftFilterDto } from './dto/nft-filter.dto';
 import { StellarNft } from './entities/stellar-nft.entity';
 import { NftMetadata } from './entities/nft-metadata.entity';
 import { SorobanService } from './soroban.service';
+import { SearchService } from '../search/search.service';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()
@@ -21,6 +22,7 @@ export class NftService implements OnModuleInit {
     @InjectRepository(NftMetadata)
     private readonly metadataRepository: Repository<NftMetadata>,
     private readonly sorobanService: SorobanService,
+    private readonly searchService: SearchService,
   ) {}
 
   async onModuleInit() {
@@ -135,5 +137,12 @@ export class NftService implements OnModuleInit {
       const error = e as Error;
       this.logger.error(`Sync failed: ${error.message}`);
     }
+  }
+
+  /** Backfill search index with all NFTs from DB. Call when NFTs are persisted (e.g. after cron upsert) or via endpoint. */
+  async reindexSearch(): Promise<{ indexed: number }> {
+    const nfts = await this.nftRepository.find({ relations: ['metadata'] });
+    await this.searchService.reindexAllNfts(nfts);
+    return { indexed: nfts.length };
   }
 }

@@ -5,6 +5,11 @@ import { StellarNft } from './entities/stellar-nft.entity';
 import { NftMetadata } from './entities/nft-metadata.entity';
 import { SorobanService } from './soroban.service';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { SearchService } from '../search/search.service';
+
+const mockSearchService = {
+  reindexAllNfts: jest.fn().mockResolvedValue(undefined),
+};
 
 const mockRepository = {
   find: jest.fn(),
@@ -54,6 +59,10 @@ describe('NftService', () => {
         {
           provide: CACHE_MANAGER,
           useValue: mockCacheManager,
+        },
+        {
+          provide: SearchService,
+          useValue: mockSearchService,
         },
       ],
     }).compile();
