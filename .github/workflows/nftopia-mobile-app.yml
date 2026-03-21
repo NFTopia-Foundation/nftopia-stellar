@@ -1,0 +1,106 @@
+name: NFTopia Mobile App CI/CD
+
+on:
+  push:
+    paths:
+      - 'nftopia-mobile-app/**'
+    branches: [main, develop]
+  pull_request:
+    paths:
+      - 'nftopia-mobile-app/**'
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: nftopia-mobile-app-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  build-and-verify:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./nftopia-mobile-app
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Detect package manager
+        id: detect
+        run: |
+          if [ -f pnpm-lock.yaml ]; then
+            echo "manager=pnpm" >> $GITHUB_OUTPUT
+          elif [ -f package-lock.json ]; then
+            echo "manager=npm" >> $GITHUB_OUTPUT
+          else
+            echo "No lockfile found. CI requires a lockfile."
+            exit 1
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: ${{ steps.detect.outputs.manager }}
+          cache-dependency-path: |
+            nftopia-mobile-app/pnpm-lock.yaml
+            nftopia-mobile-app/package-lock.json
+
+      - name: Setup pnpm
+        if: steps.detect.outputs.manager == 'pnpm'
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10
+
+      - name: Install dependencies (pnpm)
+        if: steps.detect.outputs.manager == 'pnpm'
+        run: pnpm install --frozen-lockfile
+
+      - name: Install dependencies (npm)
+        if: steps.detect.outputs.manager == 'npm'
+        run: npm ci
+
+      - name: Type check
+        run: |
+          if [ "${{ steps.detect.outputs.manager }}" = "pnpm" ]; then
+            pnpm exec tsc --noEmit
+          else
+            npx tsc --noEmit
+          fi
+
+      - name: Lint (if available)
+        run: |
+          if [ "${{ steps.detect.outputs.manager }}" = "pnpm" ]; then
+            pnpm run lint --if-present
+          else
+            npm run lint --if-present
+          fi
+
+      - name: Run tests (if available)
+        run: |
+          if [ "${{ steps.detect.outputs.manager }}" = "pnpm" ]; then
+            pnpm run test --if-present
+          else
+            npm run test --if-present
+          fi
+
+      - name: Validate Expo config
+        run: |
+          if [ "${{ steps.detect.outputs.manager }}" = "pnpm" ]; then
+            pnpm exec expo config --type public > /dev/null
+          else
+            npx expo config --type public > /dev/null
+          fi
+
+      - name: Build web bundle (if available)
+        run: |
+          if [ "${{ steps.detect.outputs.manager }}" = "pnpm" ]; then
+            pnpm run build --if-present
+          else
+            npm run build --if-present
+          fi
