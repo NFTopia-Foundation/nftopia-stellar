@@ -9,14 +9,22 @@
     "web": "expo start --web"
   },
   "dependencies": {
-    "expo": "~53.0.17",
+    "babel-preset-expo": "~13.0.0",
+    "expo": "~53.0.27",
     "expo-status-bar": "~2.2.3",
+    "nativewind": "^4.2.3",
     "react": "19.0.0",
-    "react-native": "0.79.5"
+    "react-native": "0.79.6",
+    "react-native-reanimated": "~3.17.4",
+    "react-native-safe-area-context": "5.4.0",
+    "react-native-worklets": "^0.8.1"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
     "@types/react": "~19.0.10",
+    "babel-preset-expo": "^55.0.12",
+    "prettier-plugin-tailwindcss": "^0.5.14",
+    "tailwindcss": "^3.4.19",
     "typescript": "~5.8.3"
   },
   "private": true
