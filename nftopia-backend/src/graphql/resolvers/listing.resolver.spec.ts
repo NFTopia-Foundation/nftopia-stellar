@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ListingService } from '../../marketplace/listing.service';
 import { ListingResolver } from './listing.resolver';
+import { ListingStatus } from '../types/listing.types';
 
 describe('ListingResolver', () => {
   let resolver: ListingResolver;
@@ -66,7 +67,7 @@ describe('ListingResolver', () => {
     });
 
     const result = await resolver.listings(
-      { status: 'ACTIVE', nftId: 'n1', sellerId: 'u1' },
+      { status: ListingStatus.ACTIVE, nftId: 'n1', sellerId: 'u1' },
       { limit: 10, offset: 0 },
     );
 
