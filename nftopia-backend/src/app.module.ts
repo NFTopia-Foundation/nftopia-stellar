@@ -12,6 +12,8 @@ import { LoggerModule } from 'nestjs-pino';
 import { APP_FILTER } from '@nestjs/core';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { StorageModule } from './storage/storage.module';
+import { MarketplaceModule } from './marketplace/marketplace.module';
+import { AppGraphqlModule } from './graphql/graphql.module';
 
 @Module({
   imports: [
@@ -72,6 +74,8 @@ import { StorageModule } from './storage/storage.module';
         ]),
     NftModule,
     StorageModule,
+    MarketplaceModule,
+    AppGraphqlModule,
   ],
   controllers: [AppController],
   providers: [
