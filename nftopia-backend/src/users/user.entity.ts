@@ -1,4 +1,5 @@
 import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { UserRole } from '../common/enums/user-role.enum';
 
 @Entity('users')
 export class User {
@@ -16,4 +17,14 @@ export class User {
 
   @Column({ nullable: true })
   avatarUrl?: string;
+
+  @Column({
+    type: 'enum',
+    enum: UserRole,
+    default: UserRole.USER,
+  })
+  role: UserRole;
+
+  @Column({ default: false })
+  isBanned: boolean;
 }

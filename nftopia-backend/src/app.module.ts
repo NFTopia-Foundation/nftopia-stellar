@@ -9,6 +9,7 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { NftModule } from './nft/nft.module';
 import { AuctionModule } from './modules/auction/auction.module';
+import { AdminModule } from './admin/admin.module';
 import { LoggerModule } from 'nestjs-pino';
 import { APP_FILTER } from '@nestjs/core';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -82,6 +83,7 @@ import { MarketplaceModule } from './marketplace/marketplace.module';
             }),
           }),
           UsersModule,
+          AdminModule,
         ]),
     NftModule,
     AuctionModule,
