@@ -6,10 +6,7 @@ import { Order } from './entities/order.entity';
 import { AuctionModule } from '../auction/auction.module';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Order]),
-    forwardRef(() => AuctionModule),
-  ],
+  imports: [TypeOrmModule.forFeature([Order]), forwardRef(() => AuctionModule)],
   controllers: [OrderController],
   providers: [OrderService],
   exports: [OrderService],

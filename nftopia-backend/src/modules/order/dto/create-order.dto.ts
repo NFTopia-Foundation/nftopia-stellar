@@ -1,4 +1,10 @@
-import { IsUUID, IsString, IsNumberString, IsOptional, IsEnum } from 'class-validator';
+import {
+  IsUUID,
+  IsString,
+  IsNumberString,
+  IsOptional,
+  IsEnum,
+} from 'class-validator';
 
 export enum OrderType {
   SALE = 'SALE',

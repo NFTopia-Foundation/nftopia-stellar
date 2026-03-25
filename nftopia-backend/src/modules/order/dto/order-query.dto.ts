@@ -1,4 +1,11 @@
-import { IsOptional, IsUUID, IsEnum, IsDateString, IsNumber, IsString } from 'class-validator';
+import {
+  IsOptional,
+  IsUUID,
+  IsEnum,
+  IsDateString,
+  IsNumber,
+  IsString,
+} from 'class-validator';
 import { OrderStatus, OrderType } from './create-order.dto';
 
 export class OrderQueryDto {

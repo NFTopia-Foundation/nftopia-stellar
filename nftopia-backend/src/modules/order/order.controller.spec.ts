@@ -4,7 +4,6 @@ import { OrderService } from './order.service';
 
 describe('OrderController', () => {
   let controller: OrderController;
-  let service: OrderService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({

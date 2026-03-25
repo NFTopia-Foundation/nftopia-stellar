@@ -6,7 +6,6 @@ import { Repository } from 'typeorm';
 
 describe('OrderService', () => {
   let service: OrderService;
-  let repo: Repository<Order>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({

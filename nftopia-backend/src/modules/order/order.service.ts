@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Order } from './entities/order.entity';
@@ -21,14 +25,24 @@ export class OrderService {
 
   async findAll(query: OrderQueryDto): Promise<OrderInterface[]> {
     const qb = this.orderRepository.createQueryBuilder('order');
-    if (query.nftId) qb.andWhere('order.nftId = :nftId', { nftId: query.nftId });
-    if (query.buyerId) qb.andWhere('order.buyerId = :buyerId', { buyerId: query.buyerId });
-    if (query.sellerId) qb.andWhere('order.sellerId = :sellerId', { sellerId: query.sellerId });
+    if (query.nftId)
+      qb.andWhere('order.nftId = :nftId', { nftId: query.nftId });
+    if (query.buyerId)
+      qb.andWhere('order.buyerId = :buyerId', { buyerId: query.buyerId });
+    if (query.sellerId)
+      qb.andWhere('order.sellerId = :sellerId', { sellerId: query.sellerId });
     if (query.type) qb.andWhere('order.type = :type', { type: query.type });
-    if (query.status) qb.andWhere('order.status = :status', { status: query.status });
-    if (query.fromDate) qb.andWhere('order.createdAt >= :fromDate', { fromDate: query.fromDate });
-    if (query.toDate) qb.andWhere('order.createdAt <= :toDate', { toDate: query.toDate });
-    if (query.sortBy) qb.orderBy(`order.${query.sortBy}`, query.sortOrder === 'DESC' ? 'DESC' : 'ASC');
+    if (query.status)
+      qb.andWhere('order.status = :status', { status: query.status });
+    if (query.fromDate)
+      qb.andWhere('order.createdAt >= :fromDate', { fromDate: query.fromDate });
+    if (query.toDate)
+      qb.andWhere('order.createdAt <= :toDate', { toDate: query.toDate });
+    if (query.sortBy)
+      qb.orderBy(
+        `order.${query.sortBy}`,
+        query.sortOrder === 'DESC' ? 'DESC' : 'ASC',
+      );
     if (query.page && query.limit) {
       qb.skip((query.page - 1) * query.limit).take(query.limit);
     }
@@ -52,25 +66,28 @@ export class OrderService {
     const saved = await this.orderRepository.save(order);
     return this.toOrderInterface(saved);
   }
-  private toOrderInterface(order: Order): OrderInterface {
-    return {
-      ...order,
-      type: order.type as OrderType,
-      status: order.status as OrderStatus,
-    };
-  }
+  private toOrderInterface = (order: Order): OrderInterface => ({
+    ...order,
+    type: order.type as OrderType,
+    status: order.status as OrderStatus,
+  });
 
   async getStats(nftId: string): Promise<OrderStats> {
-    const qb = this.orderRepository.createQueryBuilder('order')
+    const qb = this.orderRepository
+      .createQueryBuilder('order')
       .select('SUM(order.price)', 'volume')
       .addSelect('COUNT(order.id)', 'count')
       .addSelect('AVG(order.price)', 'averagePrice')
       .where('order.nftId = :nftId', { nftId });
-    const stats = await qb.getRawOne();
+    const stats: {
+      volume: string | null;
+      count: string | null;
+      averagePrice: string | null;
+    } = await qb.getRawOne();
     return {
-      volume: stats.volume || '0',
-      count: Number(stats.count) || 0,
-      averagePrice: stats.averagePrice || '0',
+      volume: stats?.volume ?? '0',
+      count: Number(stats?.count ?? 0),
+      averagePrice: stats?.averagePrice ?? '0',
     };
   }
 }

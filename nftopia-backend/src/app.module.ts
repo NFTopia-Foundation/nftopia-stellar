@@ -84,7 +84,7 @@ import { GraphqlGatewayModule } from './graphql/graphql.module';
         ]),
     NftModule,
     AuctionModule,
-  OrderModule,
+    OrderModule,
     StorageModule,
     GraphqlGatewayModule,
   ],
