@@ -14,6 +14,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { APP_FILTER } from '@nestjs/core';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { StorageModule } from './storage/storage.module';
+import { GraphqlGatewayModule } from './graphql/graphql.module';
 
 @Module({
   imports: [
@@ -86,6 +87,7 @@ import { StorageModule } from './storage/storage.module';
     // Listing module
     ListingModule,
     StorageModule,
+    GraphqlGatewayModule,
   ],
   controllers: [AppController],
   providers: [
