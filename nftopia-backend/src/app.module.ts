@@ -10,6 +10,7 @@ import { UsersModule } from './users/users.module';
 import { NftModule } from './nft/nft.module';
 import { AuctionModule } from './modules/auction/auction.module';
 import { ListingModule } from './modules/listing/listing.module';
+import { OrderModule } from './modules/order/order.module';
 import { LoggerModule } from 'nestjs-pino';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -86,6 +87,7 @@ import { RedisRateGuard } from './common/guards/redis-rate.guard';
     NftModule,
     AuctionModule,
     ListingModule,
+    OrderModule,
     StorageModule,
     GraphqlGatewayModule,
   ],
