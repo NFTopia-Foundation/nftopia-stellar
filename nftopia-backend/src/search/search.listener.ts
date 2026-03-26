@@ -42,7 +42,10 @@ export class SearchSyncListener {
     try {
       await this.searchService.removeNft(payload.nftId);
     } catch (error) {
-      this.logger.error(`Failed to remove NFT ${payload.nftId} from search`, error);
+      this.logger.error(
+        `Failed to remove NFT ${payload.nftId} from search`,
+        error,
+      );
     }
   }
 

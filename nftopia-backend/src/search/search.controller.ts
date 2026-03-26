@@ -10,7 +10,8 @@ export class SearchController {
 
   @Get()
   @ApiOperation({
-    summary: 'Search NFTs and profiles with fuzzy matching, filters, and sorting',
+    summary:
+      'Search NFTs and profiles with fuzzy matching, filters, and sorting',
   })
   async search(@Query() query: SearchQueryDto) {
     return this.searchService.search(query);

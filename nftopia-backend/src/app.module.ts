@@ -19,6 +19,8 @@ import { StorageModule } from './storage/storage.module';
 import { GraphqlGatewayModule } from './graphql/graphql.module';
 import { RedisRateGuard } from './common/guards/redis-rate.guard';
 import { SearchModule } from './search/search.module';
+import { SorobanRpcService } from './services/soroban-rpc.service';
+import { StellarAccountService } from './services/stellar-account.service';
 
 @Module({
   imports: [
@@ -98,6 +100,8 @@ import { SearchModule } from './search/search.module';
   controllers: [AppController],
   providers: [
     AppService,
+    SorobanRpcService,
+    StellarAccountService,
     {
       provide: APP_FILTER,
       useClass: HttpExceptionFilter,

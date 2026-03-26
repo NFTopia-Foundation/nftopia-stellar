@@ -9,7 +9,10 @@ import { User } from '../../users/user.entity';
 import { SorobanService } from '../../nft/soroban.service';
 
 @Module({
-  imports: [EventEmitterModule, TypeOrmModule.forFeature([Nft, NftMetadata, User])],
+  imports: [
+    EventEmitterModule,
+    TypeOrmModule.forFeature([Nft, NftMetadata, User]),
+  ],
   controllers: [NftController],
   providers: [NftService, SorobanService],
   exports: [NftService],
