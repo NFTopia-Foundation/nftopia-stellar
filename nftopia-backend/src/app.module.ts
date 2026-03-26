@@ -16,6 +16,7 @@ import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { StorageModule } from './storage/storage.module';
 import { GraphqlGatewayModule } from './graphql/graphql.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { RedisRateGuard } from './common/guards/redis-rate.guard';
 
 @Module({
@@ -90,6 +91,7 @@ import { RedisRateGuard } from './common/guards/redis-rate.guard';
     OrderModule,
     StorageModule,
     GraphqlGatewayModule,
+    AnalyticsModule,
   ],
   controllers: [AppController],
   providers: [
