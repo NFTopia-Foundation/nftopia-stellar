@@ -5,14 +5,33 @@ import {
   Headers,
   Param,
   Patch,
+  Req,
   UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { UsersService } from './users.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+
+type RequestWithUser = Request & {
+  user?: {
+    userId: string;
+  };
+};
 
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  @UseGuards(JwtAuthGuard)
+  @Get('wallets')
+  async listMyWallets(@Req() req: RequestWithUser) {
+    if (!req.user?.userId) {
+      throw new UnauthorizedException('Invalid JWT payload');
+    }
+    return this.usersService.listWallets(req.user.userId);
+  }
 
   @Get(':address')
   getPublicProfile(@Param('address') address: string) {

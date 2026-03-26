@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
+import { ConfigService } from '@nestjs/config';
 import { NftFilterDto } from './dto/nft-filter.dto';
 import { StellarNft } from './entities/stellar-nft.entity';
 import { NftMetadata } from './entities/nft-metadata.entity';
@@ -13,9 +14,11 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 export class NftService implements OnModuleInit {
   private readonly logger = new Logger(NftService.name);
   private lastSyncedLedger = 0;
+  private eventContractIds: string[] = [];
 
   constructor(
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
+    private readonly configService: ConfigService,
     @InjectRepository(StellarNft)
     private readonly nftRepository: Repository<StellarNft>,
     @InjectRepository(NftMetadata)
@@ -24,6 +27,14 @@ export class NftService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
+    this.eventContractIds = this.loadEventContractIds();
+
+    if (this.eventContractIds.length === 0) {
+      this.logger.warn(
+        'NFT sync contract IDs are not configured. Set SOROBAN_EVENT_CONTRACT_IDS to enable event polling.',
+      );
+    }
+
     // Initialize lastSyncedLedger from latest ledger or DB
     const latest = await this.sorobanService.getLatestLedger();
     this.lastSyncedLedger = latest > 1000 ? latest - 1000 : 0;
@@ -108,19 +119,20 @@ export class NftService implements OnModuleInit {
   async handleCron() {
     this.logger.debug('Syncing NFT data...');
     try {
+      if (this.eventContractIds.length === 0) {
+        this.logger.debug(
+          'Skipping NFT sync: no valid SOROBAN_EVENT_CONTRACT_IDS configured.',
+        );
+        return;
+      }
+
       const latest = await this.sorobanService.getLatestLedger();
       if (latest <= this.lastSyncedLedger) return;
 
       // Fetch events from lastSyncedLedger to latest
-      // For simplicity, we just fetch specific contract events if we knew the IDs,
-      // but here we might need to scan known contracts or assume a factory.
-      // Issue description says "marketplace_contract: Get listings... nft_contract...".
-      // Use a dummy contract ID list or config for now.
-      const contractIds = ['CDUMMY_CONTRACT_ID']; // Replace with actual or config
-
       const events = await this.sorobanService.getEvents(
         this.lastSyncedLedger,
-        contractIds,
+        this.eventContractIds,
       );
 
       // Process events to find minted/transferred tokens
@@ -135,5 +147,26 @@ export class NftService implements OnModuleInit {
       const error = e as Error;
       this.logger.error(`Sync failed: ${error.message}`);
     }
+  }
+
+  private loadEventContractIds(): string[] {
+    const configured =
+      this.configService.get<string>('SOROBAN_EVENT_CONTRACT_IDS') || '';
+
+    const ids = configured
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
+
+    const validIds = ids.filter((id) => /^C[A-Z0-9]{55}$/.test(id));
+    const invalidCount = ids.length - validIds.length;
+
+    if (invalidCount > 0) {
+      this.logger.warn(
+        `${invalidCount} invalid contract ID(s) ignored from SOROBAN_EVENT_CONTRACT_IDS.`,
+      );
+    }
+
+    return validIds;
   }
 }

@@ -96,6 +96,20 @@ curl http://localhost:3000/api/v1/health
 3. Click Send
 4. You should receive a 200 OK response with the JSON body above
 
+### NFT Endpoints
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | `/api/v1/nfts` | List NFTs (pagination, owner/collection/search filters) | Optional |
+| GET | `/api/v1/nfts/:id` | Get NFT by ID | Optional |
+| GET | `/api/v1/nfts/token/:tokenId` | Get NFT by token ID | Optional |
+| GET | `/api/v1/nfts/owner/:ownerId` | Get NFTs by owner | Optional |
+| GET | `/api/v1/nfts/collection/:collectionId` | Get NFTs by collection | Optional |
+| POST | `/api/v1/nfts` | Mint new NFT | Required |
+| PUT | `/api/v1/nfts/:id` | Update NFT metadata | Required |
+| DELETE | `/api/v1/nfts/:id` | Burn NFT (soft-delete) | Required |
+| GET | `/api/v1/nfts/:id/attributes` | Get NFT attributes | Optional |
+
 ## Project Structure
 
 ```
@@ -171,6 +185,8 @@ The application supports the following environment variables via the `.env` file
 | `PORT` | `3000` | Port on which the server listens |
 | `NODE_ENV` | `development` | Environment mode (development/production) |
 | `CORS_ORIGIN` | `http://localhost:3001` | Allowed CORS origin for frontend requests |
+| `MEILISEARCH_HOST` | `http://127.0.0.1:7700` | MeiliSearch HTTP endpoint for NFT/profile discovery |
+| `MEILISEARCH_API_KEY` | `` | Optional MeiliSearch API key / master key |
 
 ### Adding New Modules
 

@@ -2,16 +2,25 @@ import { Module } from '@nestjs/common';
 import { CacheModule } from '@nestjs/cache-manager';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
-import { NftModule } from './nft/nft.module';
+import { NftModule } from './modules/nft/nft.module';
+import { AuctionModule } from './modules/auction/auction.module';
+import { ListingModule } from './modules/listing/listing.module';
+import { OrderModule } from './modules/order/order.module';
 import { LoggerModule } from 'nestjs-pino';
-import { APP_FILTER } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { StorageModule } from './storage/storage.module';
+import { GraphqlGatewayModule } from './graphql/graphql.module';
+import { RedisRateGuard } from './common/guards/redis-rate.guard';
+import { SearchModule } from './search/search.module';
+import { SorobanRpcService } from './services/soroban-rpc.service';
+import { StellarAccountService } from './services/stellar-account.service';
 
 @Module({
   imports: [
@@ -40,6 +49,7 @@ import { StorageModule } from './storage/storage.module';
       }),
     }),
     ConfigModule.forRoot({ isGlobal: true }),
+    EventEmitterModule.forRoot(),
     CacheModule.registerAsync({
       isGlobal: true,
       inject: [ConfigService],
@@ -59,26 +69,46 @@ import { StorageModule } from './storage/storage.module';
       ? []
       : [
           TypeOrmModule.forRootAsync({
-            imports: [ConfigModule], // TypeOrm still needs imports
+            imports: [ConfigModule],
             inject: [ConfigService],
             useFactory: (config: ConfigService) => ({
               type: 'postgres',
-              url: config.get<string>('DATABASE_URL'),
+              url:
+                config.get<string>('DATABASE_URL') || process.env.DATABASE_URL,
+              host: config.get<string>('DB_HOST') || process.env.DB_HOST,
+              port: parseInt(
+                config.get('DB_PORT') || process.env.DB_PORT || '5432',
+                10,
+              ),
+              username: config.get<string>('DB_USER') || process.env.DB_USER,
+              password: config.get<string>('DB_PASS') || process.env.DB_PASS,
+              database: config.get<string>('DB_NAME') || process.env.DB_NAME,
               autoLoadEntities: true,
-              synchronize: false,
+              synchronize: true,
             }),
           }),
           UsersModule,
         ]),
     NftModule,
+    AuctionModule,
+    ListingModule,
+    OrderModule,
     StorageModule,
+    SearchModule,
+    GraphqlGatewayModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
+    SorobanRpcService,
+    StellarAccountService,
     {
       provide: APP_FILTER,
       useClass: HttpExceptionFilter,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RedisRateGuard,
     },
   ],
 })

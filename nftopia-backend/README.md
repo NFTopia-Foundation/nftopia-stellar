@@ -5,8 +5,9 @@ A scalable NestJS backend for the NFTopia NFT marketplace platform. This service
 ## 🚀 Features
 
 - ✨ RESTful API with global `/api/v1` prefix
+- �️ Embedded GraphQL gateway sidecar on `/graphql`
 - 🔒 CORS enabled for frontend integration
-- 🏥 Health check endpoint (`GET /api/v1/health`)
+- 🏥 REST and GraphQL health checks
 - 🛠️ Environment configuration support
 - 📦 Modular NestJS architecture
 - 🧪 Jest testing setup
@@ -41,11 +42,13 @@ cp .env.example .env
 npm run start:dev
 ```
 
-The server will start on `http://localhost:3000` in watch mode.
+The backend starts two HTTP servers in the same Nest.js process:
+- REST API: `http://localhost:3000`
+- GraphQL gateway: `http://localhost:3001/graphql`
 
-### 4. Test Health Endpoint
+### 4. Test Health Endpoints
 
-Open your browser or use curl:
+REST health check:
 
 ```bash
 curl http://localhost:3000/api/v1/health
@@ -56,6 +59,27 @@ Expected response:
 {
   "status": "OK",
   "timestamp": "2026-01-21T12:00:00.000Z"
+}
+```
+
+GraphQL health check:
+
+```bash
+curl -X POST http://localhost:3001/graphql \
+  -H "content-type: application/json" \
+  --data '{"query":"query { health { status service timestamp } }"}'
+```
+
+Expected response:
+```json
+{
+  "data": {
+    "health": {
+      "status": "ok",
+      "service": "graphql-gateway",
+      "timestamp": "2026-03-25T13:32:46.566Z"
+    }
+  }
 }
 ```
 
@@ -102,15 +126,20 @@ nftopia-backend/
 Edit `.env` to configure:
 
 ```env
-# Server Configuration
+# REST Server
 PORT=3000
 NODE_ENV=development
+
+# GraphQL Gateway
+GRAPHQL_PORT=3001
+GRAPHQL_PLAYGROUND_ENABLED=true
+GRAPHQL_INTROSPECTION_ENABLED=true
 
 # CORS Configuration
 CORS_ORIGIN=http://localhost:3001
 ```
 
-### Optional Future Variables
+### Core Application Variables
 
 ```env
 # Database
@@ -118,22 +147,38 @@ DATABASE_URL=postgresql://user:password@localhost:5432/nftopia
 
 # JWT
 JWT_SECRET=your_jwt_secret_key_here
+JWT_EXPIRES_IN_SECONDS=900
+JWT_REFRESH_EXPIRES_IN_SECONDS=604800
 
 # Stellar/Soroban
 SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
 STELLAR_NETWORK=testnet
-SOROBAN_NFT_CONTRACT_ID=your_contract_id
+SOROBAN_EVENT_CONTRACT_IDS=CXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 ```
 
 ## 📡 API Endpoints
 
-### Health Check
+### REST Health Check
 - **GET** `/api/v1/health`
 - **Response:**
   ```json
   {
     "status": "OK",
     "timestamp": "2026-01-21T12:00:00.000Z"
+  }
+  ```
+
+### GraphQL Gateway
+- **URL:** `http://localhost:3001/graphql`
+- **Playground:** available in development when `GRAPHQL_PLAYGROUND_ENABLED=true`
+- **Health Query:**
+  ```graphql
+  query {
+    health {
+      status
+      service
+      timestamp
+    }
   }
   ```
 
@@ -168,8 +213,9 @@ npm run format
 This NestJS backend follows enterprise-grade architecture patterns:
 
 - **Modular Design:** Features are organized into separate modules
-- **Global Prefix:** All API routes use `/api/v1` for versioning
-- **CORS Handling:** Configured to work with frontend at `http://localhost:3001`
+- **Global Prefix:** All REST API routes use `/api/v1` for versioning
+- **Dual Transport Setup:** REST runs on port `3000` while GraphQL gateway runs on port `3001`
+- **CORS Handling:** Configured to work with the frontend origin defined in `.env`
 - **Environment Configuration:** Externalize all configuration to `.env`
 - **TypeScript:** Full type safety with strict mode
 
@@ -186,7 +232,10 @@ The compiled code will be in the `dist/` directory.
 ### Environment for Production
 ```env
 PORT=3000
+GRAPHQL_PORT=3001
 NODE_ENV=production
+GRAPHQL_PLAYGROUND_ENABLED=false
+GRAPHQL_INTROSPECTION_ENABLED=false
 CORS_ORIGIN=https://your-frontend-domain.com
 ```
 
@@ -228,8 +277,8 @@ src/features/nft/
 
 ### Port Already in Use
 ```bash
-# Use a different port
-PORT=3001 npm run start:dev
+# Use different REST and GraphQL ports
+PORT=3000 GRAPHQL_PORT=3002 npm run start:dev
 ```
 
 ### Dependencies Not Installed
