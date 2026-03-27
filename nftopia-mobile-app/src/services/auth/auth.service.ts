@@ -1,4 +1,4 @@
-import axios, { AxiosError, AxiosInstance } from "axios";
+import axios, { AxiosInstance } from "axios";
 import { AuthResponse, AuthError } from "./types";
 import { tokenStorage } from "./tokenStorage";
 
