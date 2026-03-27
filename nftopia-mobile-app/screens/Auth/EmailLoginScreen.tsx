@@ -1,15 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { FormInput } from '../../components/FormInput';
-
-// Mock AuthService for UI
-const AuthService = {
-  login: async (email: string, password: string) => {
-    return new Promise((resolve, reject) => {
-      setTimeout(() => resolve(true), 1500);
-    });
-  }
-};
+import { AuthService } from '../../lib/api/AuthService';
+import { useAuthStore } from '../../lib/zustand/useAuthStore';
 
 
 export default function EmailLoginScreen({ navigation }: any) {
@@ -36,8 +29,9 @@ export default function EmailLoginScreen({ navigation }: any) {
     setLoading(true);
     setErrors({});
     try {
-      await AuthService.login(email, password);
-      // navigation?.navigate('MainApp');
+      const response = await AuthService.login(email, password);
+      useAuthStore.getState().setAuth(response.accessToken, response.user);
+      navigation?.navigate('MainApp');
       Alert.alert('Success', 'Logged in successfully!');
     } catch (error: any) {
       setErrors({ api: error.message || 'Login failed' });

@@ -12,7 +12,7 @@ importers:
         specifier: ~13.0.0
         version: 13.0.0(@babel/core@7.29.0)
       expo:
-        specifier: ~53.0.17
+        specifier: ~53.0.27
         version: 53.0.27(@babel/core@7.29.0)(react-native@0.79.6(@babel/core@7.29.0)(@types/react@19.0.14)(react@19.0.0))(react@19.0.0)
       expo-status-bar:
         specifier: ~2.2.3
@@ -35,6 +35,9 @@ importers:
       react-native-worklets:
         specifier: ^0.8.1
         version: 0.8.1(@babel/core@7.29.0)(@react-native/metro-config@0.84.1(@babel/core@7.29.0))(react-native@0.79.6(@babel/core@7.29.0)(@types/react@19.0.14)(react@19.0.0))(react@19.0.0)
+      zustand:
+        specifier: ^5.0.12
+        version: 5.0.12(@types/react@19.0.14)(react@19.0.0)
     devDependencies:
       '@babel/core':
         specifier: ^7.25.2
@@ -2952,6 +2955,24 @@ packages:
   yocto-queue@0.1.0:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
+
+  zustand@5.0.12:
+    resolution: {integrity: sha512-i77ae3aZq4dhMlRhJVCYgMLKuSiZAaUPAct2AksxQ+gOtimhGMdXljRT21P5BNpeT4kXlLIckvkPM029OljD7g==}
+    engines: {node: '>=12.20.0'}
+    peerDependencies:
+      '@types/react': '>=18.0.0'
+      immer: '>=9.0.6'
+      react: '>=18.0.0'
+      use-sync-external-store: '>=1.2.0'
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+      immer:
+        optional: true
+      react:
+        optional: true
+      use-sync-external-store:
+        optional: true
 
 snapshots:
 
@@ -6506,3 +6527,8 @@ snapshots:
       yargs-parser: 21.1.1
 
   yocto-queue@0.1.0: {}
+
+  zustand@5.0.12(@types/react@19.0.14)(react@19.0.0):
+    optionalDependencies:
+      '@types/react': 19.0.14
+      react: 19.0.0

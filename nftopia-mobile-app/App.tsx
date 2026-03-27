@@ -8,6 +8,8 @@ import EmailRegisterScreen from './screens/Auth/EmailRegisterScreen';
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<'Login' | 'Register'>('Login');
 
+
+  // Mock navigations
   const mockNavigation = {
     navigate: (screenName: string) => {
       if (screenName === 'EmailRegister') setCurrentScreen('Register');

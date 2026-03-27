@@ -8,15 +8,8 @@ import {
   ScrollView,
 } from "react-native";
 import { FormInput } from "../../components/FormInput";
-
-// Mock AuthService for auth UI
-const AuthService = {
-  register: async (data: any) => {
-    return new Promise((resolve, reject) => {
-      setTimeout(() => resolve(true), 1500);
-    });
-  },
-};
+import { AuthService } from '../../lib/api/AuthService';
+import { useAuthStore } from '../../lib/zustand/useAuthStore';
 
 export default function EmailRegisterScreen({ navigation }: any) {
   const [username, setUsername] = useState("");
@@ -99,9 +92,10 @@ export default function EmailRegisterScreen({ navigation }: any) {
     setLoading(true);
     setErrors({});
     try {
-      await AuthService.register({ username, email, password });
+      const response = await AuthService.register({ username, email, password });
+      useAuthStore.getState().setAuth(response.accessToken, response.user);
       Alert.alert("Success", "Account created successfully!");
-      // navigation?.navigate('MainApp');
+      navigation?.navigate('MainApp');
     } catch (error: any) {
       setErrors({ api: error.message || "Registration failed" });
     } finally {
