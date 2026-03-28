@@ -1,4 +1,13 @@
-import { Args, Context, ID, Mutation, Query, Resolver } from '@nestjs/graphql';
+import {
+  Args,
+  Context,
+  ID,
+  Mutation,
+  Parent,
+  Query,
+  ResolveField,
+  Resolver,
+} from '@nestjs/graphql';
 import {
   BadRequestException,
   UnauthorizedException,
@@ -13,6 +22,8 @@ import {
   UpdateNFTMetadataInput,
 } from '../inputs/nft.inputs';
 import { GraphqlNft, NFTConnection } from '../types/nft.types';
+import { GraphqlUserProfile } from '../types/user.types';
+import { GraphqlCollection } from '../types/collection.types';
 import { NftService } from '../../modules/nft/nft.service';
 import type { Nft } from '../../modules/nft/entities/nft.entity';
 
@@ -144,6 +155,31 @@ export class NftResolver {
     );
 
     return this.toGraphqlNft(nft);
+  }
+
+  @ResolveField('owner', () => GraphqlUserProfile, { nullable: true })
+  async owner(
+    @Parent() nft: GraphqlNft,
+    @Context() { loaders }: GraphqlContext,
+  ) {
+    return loaders.userLoader.load(nft.ownerId);
+  }
+
+  @ResolveField('creator', () => GraphqlUserProfile, { nullable: true })
+  async creator(
+    @Parent() nft: GraphqlNft,
+    @Context() { loaders }: GraphqlContext,
+  ) {
+    return loaders.userLoader.load(nft.creatorId);
+  }
+
+  @ResolveField('collection', () => GraphqlCollection, { nullable: true })
+  async collection(
+    @Parent() nft: GraphqlNft,
+    @Context() { loaders }: GraphqlContext,
+  ) {
+    if (!nft.collectionId) return null;
+    return loaders.collectionLoader.load(nft.collectionId);
   }
 
   private getAuthenticatedUserId(context: GraphqlContext): string {
