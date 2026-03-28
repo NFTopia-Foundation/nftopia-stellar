@@ -10,6 +10,10 @@ import { ROLES_KEY } from '../decorators/roles.decorator';
 import { UserRole } from '../enums/user-role.enum';
 import { User } from '../../users/user.entity';
 
+interface RequestWithUser extends Request {
+  user: User;
+}
+
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(private reflector: Reflector) {}
@@ -25,8 +29,8 @@ export class RolesGuard implements CanActivate {
       return true;
     }
 
-    const request = context.switchToHttp().getRequest();
-    const user = request.user as User;
+    const request = context.switchToHttp().getRequest<RequestWithUser>();
+    const user = request.user;
 
     if (!user) {
       throw new UnauthorizedException('User not authenticated');

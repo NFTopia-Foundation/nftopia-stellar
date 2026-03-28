@@ -1,6 +1,6 @@
 /**
  * RBAC Usage Examples
- * 
+ *
  * This file demonstrates how to use the Role-Based Access Control system
  * in your NestJS controllers.
  */
@@ -44,14 +44,14 @@ export class DashboardController {
 
 /**
  * RBAC Flow:
- * 
+ *
  * 1. JwtAuthGuard validates the JWT token and populates req.user
  * 2. RolesGuard checks if req.user exists
  * 3. RolesGuard checks if user.isBanned === true (throws ForbiddenException)
  * 4. RolesGuard retrieves required roles from @Roles decorator
  * 5. RolesGuard verifies user.role matches one of the required roles
  * 6. If all checks pass, the request proceeds to the controller method
- * 
+ *
  * Available Endpoints:
  * - PUT /admin/users/:id/ban - Ban a user (ADMIN only)
  * - PUT /admin/users/:id/unban - Unban a user (ADMIN only)
