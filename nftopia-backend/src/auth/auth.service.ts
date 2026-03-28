@@ -10,7 +10,9 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as crypto from 'crypto';
+import { promisify } from 'util';
 import { IsNull, MoreThan, Repository } from 'typeorm';
+import { EmailLoginDto, EmailRegisterDto } from './dto/email-auth.dto';
 import {
   WalletChallengeDto,
   WalletChallengeResponseDto,
@@ -31,6 +33,8 @@ type JwtUserPayload = {
   email?: string;
   walletAddress?: string;
 };
+
+const scryptAsync = promisify(crypto.scrypt);
 
 @Injectable()
 export class AuthService {
@@ -65,6 +69,55 @@ export class AuthService {
     @InjectRepository(WalletSession)
     private readonly walletSessionRepository: Repository<WalletSession>,
   ) {}
+
+  async registerWithEmail(dto: EmailRegisterDto) {
+    const normalizedEmail = this.normalizeEmail(dto.email);
+
+    const existing = await this.userRepository.findOne({
+      where: { email: normalizedEmail },
+    });
+
+    if (existing) {
+      throw new ConflictException('Email is already registered');
+    }
+
+    const passwordHash = await this.hashPassword(dto.password);
+
+    const user = await this.userRepository.save(
+      this.userRepository.create({
+        email: normalizedEmail,
+        passwordHash,
+        username: dto.username,
+        isEmailVerified: false,
+      }),
+    );
+
+    return this.buildAuthResponse(user);
+  }
+
+  async loginWithEmail(dto: EmailLoginDto) {
+    const normalizedEmail = this.normalizeEmail(dto.email);
+    const user = await this.userRepository.findOne({
+      where: { email: normalizedEmail },
+    });
+
+    if (!user || !user.passwordHash) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    const isValidPassword = await this.verifyPassword(
+      dto.password,
+      user.passwordHash,
+    );
+    if (!isValidPassword) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    user.lastLoginAt = new Date();
+    await this.userRepository.save(user);
+
+    return this.buildAuthResponse(user);
+  }
 
   async generateWalletChallenge(
     dto: WalletChallengeDto,
@@ -228,9 +281,14 @@ export class AuthService {
       where: { userId },
     });
 
-    if (linkedWalletCount <= 1) {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (linkedWalletCount <= 1 && !user.email) {
       throw new BadRequestException(
-        'Cannot unlink the only wallet. Link another wallet first.',
+        'Cannot unlink the only wallet from a wallet-only account.',
       );
     }
 
@@ -253,6 +311,16 @@ export class AuthService {
             walletPublicKey: nextPrimary.walletAddress,
             walletProvider: nextPrimary.walletProvider,
             walletConnectedAt: new Date(),
+          },
+        );
+      } else {
+        await this.userRepository.update(
+          { id: userId },
+          {
+            walletAddress: null,
+            walletPublicKey: null,
+            walletProvider: null,
+            walletConnectedAt: null,
           },
         );
       }
@@ -435,9 +503,13 @@ export class AuthService {
     walletAddress: string,
     walletProvider: string,
   ) {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    const resolvedAddress = user?.address || walletAddress;
+
     await this.userRepository.update(
       { id: userId },
       {
+        address: resolvedAddress,
         walletAddress,
         walletPublicKey: walletAddress,
         walletProvider,
@@ -446,11 +518,45 @@ export class AuthService {
     );
   }
 
+  private normalizeEmail(email: string): string {
+    return email.trim().toLowerCase();
+  }
+
+  private async hashPassword(password: string): Promise<string> {
+    const salt = crypto.randomBytes(16).toString('hex');
+    const hash = (await scryptAsync(password, salt, 64)) as Buffer;
+    return `${salt}:${hash.toString('hex')}`;
+  }
+
+  private async verifyPassword(
+    password: string,
+    storedPasswordHash: string,
+  ): Promise<boolean> {
+    const [salt, storedHash] = storedPasswordHash.split(':');
+    if (!salt || !storedHash) {
+      return false;
+    }
+
+    const derivedHash = (await scryptAsync(password, salt, 64)) as Buffer;
+    const storedHashBuffer = Buffer.from(storedHash, 'hex');
+
+    if (storedHashBuffer.length !== derivedHash.length) {
+      return false;
+    }
+
+    return crypto.timingSafeEqual(storedHashBuffer, derivedHash);
+  }
+
   private buildAuthResponse(user: User) {
+    const resolvedWalletAddress =
+      user.walletAddress ?? user.address ?? undefined;
+    const resolvedEmail = user.email ?? undefined;
+
     const tokenPair = this.buildTokenPair({
       sub: user.id,
       username: user.username,
-      walletAddress: user.walletAddress || user.address,
+      email: resolvedEmail,
+      walletAddress: resolvedWalletAddress,
     });
 
     return {
@@ -458,8 +564,9 @@ export class AuthService {
       user: {
         id: user.id,
         address: user.address,
+        email: resolvedEmail,
         username: user.username,
-        walletAddress: user.walletAddress || user.address,
+        walletAddress: resolvedWalletAddress,
         walletProvider: user.walletProvider,
       },
     };

@@ -185,6 +185,8 @@ The application supports the following environment variables via the `.env` file
 | `PORT` | `3000` | Port on which the server listens |
 | `NODE_ENV` | `development` | Environment mode (development/production) |
 | `CORS_ORIGIN` | `http://localhost:3001` | Allowed CORS origin for frontend requests |
+| `MEILISEARCH_HOST` | `http://127.0.0.1:7700` | MeiliSearch HTTP endpoint for NFT/profile discovery |
+| `MEILISEARCH_API_KEY` | `` | Optional MeiliSearch API key / master key |
 
 ### Adding New Modules
 

@@ -6,8 +6,9 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, SelectQueryBuilder } from 'typeorm';
 import { Nft } from './entities/nft.entity';
 import { NftMetadata } from './entities/nft-metadata.entity';
 import { CreateNftDto } from './dto/create-nft.dto';
@@ -15,6 +16,8 @@ import { UpdateNftDto } from './dto/update-nft.dto';
 import { NftQueryDto } from './dto/nft-query.dto';
 import {
   BurnNftResponse,
+  NftConnectionQuery,
+  NftConnectionResult,
   NftQueryResult,
   StellarMintSyncResult,
 } from './interfaces/nft.interface';
@@ -33,42 +36,14 @@ export class NftService {
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly sorobanService: SorobanService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async findAll(query: NftQueryDto): Promise<NftQueryResult<Nft>> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
 
-    const qb = this.nftRepository
-      .createQueryBuilder('nft')
-      .leftJoinAndSelect('nft.attributes', 'attributes');
-
-    if (!query.includeBurned) {
-      qb.andWhere('nft.isBurned = false');
-    }
-
-    if (query.ownerId) {
-      qb.andWhere('nft.ownerId = :ownerId', { ownerId: query.ownerId });
-    }
-
-    if (query.creatorId) {
-      qb.andWhere('nft.creatorId = :creatorId', { creatorId: query.creatorId });
-    }
-
-    if (query.collectionId) {
-      qb.andWhere('nft.collectionId = :collectionId', {
-        collectionId: query.collectionId,
-      });
-    }
-
-    if (query.search) {
-      qb.andWhere(
-        '(LOWER(nft.name) LIKE :search OR LOWER(nft.description) LIKE :search)',
-        {
-          search: `%${query.search.toLowerCase()}%`,
-        },
-      );
-    }
+    const qb = this.createBaseQuery(query);
 
     qb.orderBy('nft.createdAt', 'DESC');
     qb.skip((page - 1) * limit).take(limit);
@@ -81,6 +56,23 @@ export class NftService {
       limit,
       total,
       totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async findConnection(
+    query: NftConnectionQuery,
+  ): Promise<NftConnectionResult<Nft>> {
+    const first = query.first ?? 20;
+
+    const [total, rows] = await Promise.all([
+      this.createBaseQuery(query).getCount(),
+      this.createConnectionQuery(query, first).getMany(),
+    ]);
+
+    return {
+      data: rows.slice(0, first),
+      total,
+      hasNextPage: rows.length > first,
     };
   }
 
@@ -176,7 +168,9 @@ export class NftService {
       await this.metadataRepository.save(attributes);
     }
 
-    return this.findById(savedNft.id);
+    const indexedNft = await this.findById(savedNft.id);
+    this.emitSearchEvent('search.nft.upsert', { nftId: indexedNft.id });
+    return indexedNft;
   }
 
   async update(id: string, dto: UpdateNftDto, callerId: string): Promise<Nft> {
@@ -229,7 +223,9 @@ export class NftService {
       }
     }
 
-    return this.findById(nft.id);
+    const indexedNft = await this.findById(nft.id);
+    this.emitSearchEvent('search.nft.upsert', { nftId: indexedNft.id });
+    return indexedNft;
   }
 
   async burn(id: string, callerId: string): Promise<BurnNftResponse> {
@@ -245,6 +241,7 @@ export class NftService {
 
     nft.isBurned = true;
     await this.nftRepository.save(nft);
+    this.emitSearchEvent('search.nft.delete', { nftId: nft.id });
 
     return {
       id: nft.id,
@@ -299,5 +296,73 @@ export class NftService {
       tokenId,
       contractAddress,
     };
+  }
+
+  private emitSearchEvent(eventName: string, payload: Record<string, string>) {
+    setImmediate(() => {
+      this.eventEmitter.emit(eventName, payload);
+    });
+  }
+
+  private createBaseQuery(
+    query: Pick<
+      NftQueryDto,
+      'ownerId' | 'creatorId' | 'collectionId' | 'search' | 'includeBurned'
+    >,
+  ): SelectQueryBuilder<Nft> {
+    const qb = this.nftRepository
+      .createQueryBuilder('nft')
+      .leftJoinAndSelect('nft.attributes', 'attributes');
+
+    if (!query.includeBurned) {
+      qb.andWhere('nft.isBurned = false');
+    }
+
+    if (query.ownerId) {
+      qb.andWhere('nft.ownerId = :ownerId', { ownerId: query.ownerId });
+    }
+
+    if (query.creatorId) {
+      qb.andWhere('nft.creatorId = :creatorId', { creatorId: query.creatorId });
+    }
+
+    if (query.collectionId) {
+      qb.andWhere('nft.collectionId = :collectionId', {
+        collectionId: query.collectionId,
+      });
+    }
+
+    if (query.search) {
+      qb.andWhere(
+        '(LOWER(nft.name) LIKE :search OR LOWER(nft.description) LIKE :search)',
+        {
+          search: `%${query.search.toLowerCase()}%`,
+        },
+      );
+    }
+
+    return qb;
+  }
+
+  private createConnectionQuery(
+    query: NftConnectionQuery,
+    first: number,
+  ): SelectQueryBuilder<Nft> {
+    const qb = this.createBaseQuery(query);
+
+    if (query.after) {
+      qb.andWhere(
+        '(nft.createdAt < :cursorCreatedAt OR (nft.createdAt = :cursorCreatedAt AND nft.id < :cursorId))',
+        {
+          cursorCreatedAt: new Date(query.after.createdAt),
+          cursorId: query.after.id,
+        },
+      );
+    }
+
+    return qb
+      .orderBy('nft.createdAt', 'DESC')
+      .addOrderBy('nft.id', 'DESC')
+      .take(first + 1);
   }
 }

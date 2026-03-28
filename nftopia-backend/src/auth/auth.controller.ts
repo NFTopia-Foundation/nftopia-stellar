@@ -12,6 +12,7 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { AuthService } from './auth.service';
+import { EmailLoginDto, EmailRegisterDto } from './dto/email-auth.dto';
 import {
   WalletChallengeDto,
   WalletChallengeResponseDto,
@@ -33,6 +34,18 @@ type RequestWithUser = Request & {
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
+
+  @Post('register')
+  @ApiOperation({ summary: 'Register with email and password' })
+  register(@Body() dto: EmailRegisterDto) {
+    return this.authService.registerWithEmail(dto);
+  }
+
+  @Post('email/login')
+  @ApiOperation({ summary: 'Login with email and password' })
+  emailLogin(@Body() dto: EmailLoginDto) {
+    return this.authService.loginWithEmail(dto);
+  }
 
   @Post('wallet/challenge')
   @ApiOperation({ summary: 'Generate nonce challenge for Stellar wallet auth' })
@@ -67,9 +80,26 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @Post('wallet/unlink')
+  @Delete('wallet/unlink')
   @ApiOperation({
     summary: 'Unlink a Stellar wallet from current user account',
+  })
+  async unlinkWalletDelete(
+    @Req() req: RequestWithUser,
+    @Body() dto: WalletUnlinkDto,
+  ) {
+    if (!req.user?.userId) {
+      throw new UnauthorizedException('Invalid JWT payload');
+    }
+
+    return this.authService.unlinkWallet(req.user.userId, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Post('wallet/unlink')
+  @ApiOperation({
+    summary: 'Legacy alias: unlink a Stellar wallet from current user account',
   })
   async unlinkWallet(
     @Req() req: RequestWithUser,

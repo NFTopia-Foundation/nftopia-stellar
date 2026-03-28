@@ -1,5 +1,6 @@
 import { Inter } from "next/font/google";
 import "./globals.css";
+import ApolloWrapper from "@/lib/graphql/apollo-wrapper";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -75,7 +76,9 @@ export default function RootLayout({
         <meta name="msapplication-TileImage" content="/nftopia-03.png" />
         <meta name="msapplication-config" content="/browserconfig.xml" />
       </head>
-      <body className={inter.className}>{children}</body>
+      <body className={inter.className}>
+        <ApolloWrapper>{children}</ApolloWrapper>
+      </body>
     </html>
   );
 }

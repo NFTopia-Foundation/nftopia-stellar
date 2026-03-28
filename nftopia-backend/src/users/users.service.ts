@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './user.entity';
@@ -12,6 +13,7 @@ export class UsersService {
     private repo: Repository<User>,
     @InjectRepository(UserWallet)
     private readonly walletRepo: Repository<UserWallet>,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   findById(id: string) {
@@ -27,7 +29,11 @@ export class UsersService {
     if (!user) throw new NotFoundException('User not found');
 
     Object.assign(user, data);
-    return this.repo.save(user);
+    const savedUser = await this.repo.save(user);
+    setImmediate(() => {
+      this.eventEmitter.emit('search.user.upsert', { userId: savedUser.id });
+    });
+    return savedUser;
   }
 
   listWallets(userId: string) {
