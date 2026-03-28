@@ -9,6 +9,10 @@ import { JwtStrategy } from '../auth/jwt.strategy';
 import { GqlAuthGuard } from '../common/guards/gql-auth.guard';
 import { CollectionModule } from '../modules/collection/collection.module';
 import { NftModule } from '../modules/nft/nft.module';
+import { ListingModule } from '../modules/listing/listing.module';
+import { AuctionModule } from '../modules/auction/auction.module';
+import { OrderModule } from '../modules/order/order.module';
+import { UsersModule } from '../users/users.module';
 import { SearchModule } from '../search/search.module';
 import { GraphqlContextFactory } from './context/context.factory';
 import { GraphqlAuthMiddleware } from './middleware/auth.middleware';
@@ -49,6 +53,10 @@ const jwtAccessExpiresInSeconds = parseInt(
     }),
     CollectionModule,
     NftModule,
+    ListingModule,
+    AuctionModule,
+    OrderModule,
+    UsersModule,
     SearchModule,
   ],
   providers: [
