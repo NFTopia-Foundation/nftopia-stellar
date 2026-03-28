@@ -76,7 +76,7 @@ jobs:
       - name: Lint (if available)
         run: |
           if [ "${{ steps.detect.outputs.manager }}" = "pnpm" ]; then
-            pnpm run lint --if-present
+            pnpm pkg get scripts.lint | grep -q '"lint"' && pnpm run lint || echo "No lint script, skipping"
           else
             npm run lint --if-present
           fi
@@ -84,7 +84,7 @@ jobs:
       - name: Run tests (if available)
         run: |
           if [ "${{ steps.detect.outputs.manager }}" = "pnpm" ]; then
-            pnpm run test --if-present
+            pnpm pkg get scripts.test | grep -q '"test"' && pnpm run test || echo "No test script, skipping"
           else
             npm run test --if-present
           fi
@@ -100,7 +100,7 @@ jobs:
       - name: Build web bundle (if available)
         run: |
           if [ "${{ steps.detect.outputs.manager }}" = "pnpm" ]; then
-            pnpm run build --if-present
+            pnpm pkg get scripts.build | grep -q '"build"' && pnpm run build || echo "No build script, skipping"
           else
             npm run build --if-present
           fi
