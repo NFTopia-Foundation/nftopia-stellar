@@ -31,6 +31,7 @@ import {
   GraphqlCollection,
 } from '../types/collection.types';
 import { GraphqlNft, NFTConnection } from '../types/nft.types';
+import { GraphqlUserProfile } from '../types/user.types';
 import type { CollectionCursorPayload } from '../../modules/collection/interfaces/collection.interface';
 
 @Resolver(() => GraphqlCollection)
@@ -130,6 +131,14 @@ export class CollectionResolver {
     );
 
     return this.toGraphqlCollection(collection);
+  }
+
+  @ResolveField('creator', () => GraphqlUserProfile, { nullable: true })
+  async creator(
+    @Parent() collection: GraphqlCollection,
+    @Context() { loaders }: GraphqlContext,
+  ) {
+    return loaders.userLoader.load(collection.creatorId);
   }
 
   @ResolveField(() => NFTConnection, {
