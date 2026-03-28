@@ -1,34 +1,27 @@
-export interface ICollection {
+import type { Collection } from '../entities/collection.entity';
+
+export type CollectionCursorPayload = {
+  createdAt: string;
   id: string;
-  contractAddress: string;
-  name: string;
-  symbol: string;
-  description?: string;
-  imageUrl?: string;
-  bannerImageUrl?: string;
-  creatorId: string;
-  totalSupply: number;
-  floorPrice?: string;
-  totalVolume: string;
-  isVerified: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
+};
 
-export interface ICollectionStats {
-  totalSupply: number;
-  floorPrice?: string;
-  totalVolume: string;
-  owners: number;
-  listedCount: number;
-}
-
-export interface ICollectionQuery {
-  page?: number;
-  limit?: number;
-  search?: string;
+export type CollectionConnectionQuery = {
+  first?: number;
+  after?: CollectionCursorPayload;
   creatorId?: string;
-  isVerified?: boolean;
-  sortBy?: 'createdAt' | 'totalVolume' | 'floorPrice' | 'name';
-  sortOrder?: 'ASC' | 'DESC';
-}
+  search?: string;
+  verifiedOnly?: boolean;
+};
+
+export type CollectionConnectionResult<T = Collection> = {
+  data: T[];
+  total: number;
+  hasNextPage: boolean;
+};
+
+export type CollectionStatsResult = {
+  totalVolume: string;
+  floorPrice: string;
+  totalSupply: number;
+  ownerCount: number;
+};

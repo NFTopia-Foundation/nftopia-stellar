@@ -1,49 +1,67 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Test, TestingModule } from '@nestjs/testing';
+import { User } from '../../users/user.entity';
+import { Nft } from '../nft/entities/nft.entity';
 import { CollectionService } from './collection.service';
 import { Collection } from './entities/collection.entity';
-import { Nft } from '../nft/entities/nft.entity';
-import {
-  NotFoundException,
-  ForbiddenException,
-  ConflictException,
-} from '@nestjs/common';
+
+function makeCollection(overrides: Partial<Collection> = {}): Collection {
+  return {
+    id: 'collection-1',
+    contractAddress: 'C'.repeat(56),
+    name: 'NFTopia Genesis',
+    symbol: 'NFTG',
+    description: 'Genesis drop',
+    imageUrl: 'https://example.com/collection.png',
+    bannerImageUrl: null,
+    creatorId: 'creator-1',
+    creator: {} as User,
+    totalSupply: 12,
+    floorPrice: '1.2500000',
+    totalVolume: '25.5000000',
+    isVerified: false,
+    createdAt: new Date('2026-03-24T10:00:00.000Z'),
+    updatedAt: new Date('2026-03-24T10:00:00.000Z'),
+    ...overrides,
+  } as Collection;
+}
 
 describe('CollectionService', () => {
   let service: CollectionService;
 
+  const queryBuilder = {
+    andWhere: jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockReturnThis(),
+    addOrderBy: jest.fn().mockReturnThis(),
+    take: jest.fn().mockReturnThis(),
+    select: jest.fn().mockReturnThis(),
+    addSelect: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    getCount: jest.fn(),
+    getMany: jest.fn(),
+    getRawOne: jest.fn(),
+  };
+
   const mockCollectionRepository = {
-    create: jest.fn(),
-    save: jest.fn(),
     findOne: jest.fn(),
     find: jest.fn(),
-    createQueryBuilder: jest.fn(),
+    create: jest.fn(),
+    save: jest.fn(),
+    createQueryBuilder: jest.fn(() => queryBuilder),
   };
 
   const mockNftRepository = {
-    find: jest.fn(),
-    findAndCount: jest.fn(),
+    createQueryBuilder: jest.fn(() => queryBuilder),
   };
 
-  const mockCollection = {
-    id: '123e4567-e89b-12d3-a456-426614174000',
-    contractAddress: 'GABCDEFGHIJKLMNOPQRSTUVWXYZ234567890ABCDEFGHIJKLMNOPQR',
-    name: 'Test Collection',
-    symbol: 'TEST',
-    description: 'Test description',
-    imageUrl: 'https://example.com/image.png',
-    bannerImageUrl: 'https://example.com/banner.png',
-    creatorId: 'user-123',
-    totalSupply: 100,
-    floorPrice: '10.5',
-    totalVolume: '1000.0',
-    isVerified: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+  const mockUserRepository = {
+    exists: jest.fn(),
   };
 
   beforeEach(async () => {
+    jest.clearAllMocks();
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CollectionService,
@@ -55,175 +73,146 @@ describe('CollectionService', () => {
           provide: getRepositoryToken(Nft),
           useValue: mockNftRepository,
         },
+        {
+          provide: getRepositoryToken(User),
+          useValue: mockUserRepository,
+        },
       ],
     }).compile();
 
-    service = module.get<CollectionService>(CollectionService);
+    service = module.get(CollectionService);
   });
 
-  afterEach(() => {
-    jest.clearAllMocks();
-  });
+  it('finds a collection by id', async () => {
+    const collection = makeCollection();
+    mockCollectionRepository.findOne.mockResolvedValue(collection);
 
-  it('should be defined', () => {
-    expect(service).toBeDefined();
-  });
-
-  describe('create', () => {
-    it('should create a new collection', async () => {
-      const createDto = {
-        name: 'Test Collection',
-        symbol: 'TEST',
-        description: 'Test description',
-      };
-
-      mockCollectionRepository.findOne.mockResolvedValue(null);
-      mockCollectionRepository.create.mockReturnValue(mockCollection);
-      mockCollectionRepository.save.mockResolvedValue(mockCollection);
-
-      const result = await service.create(createDto, 'user-123');
-
-      expect(result).toEqual(mockCollection);
-      expect(mockCollectionRepository.create).toHaveBeenCalled();
-      expect(mockCollectionRepository.save).toHaveBeenCalled();
-    });
-
-    it('should throw ConflictException if contract address exists', async () => {
-      const createDto = {
-        name: 'Test Collection',
-        symbol: 'TEST',
-        contractAddress: mockCollection.contractAddress,
-      };
-
-      mockCollectionRepository.findOne.mockResolvedValue(mockCollection);
-
-      await expect(service.create(createDto, 'user-123')).rejects.toThrow(
-        ConflictException,
-      );
+    await expect(service.findById('collection-1')).resolves.toEqual(collection);
+    expect(mockCollectionRepository.findOne).toHaveBeenCalledWith({
+      where: { id: 'collection-1' },
     });
   });
 
-  describe('findOne', () => {
-    it('should return a collection by id', async () => {
-      mockCollectionRepository.findOne.mockResolvedValue(mockCollection);
+  it('throws when a collection is missing', async () => {
+    mockCollectionRepository.findOne.mockResolvedValue(null);
 
-      const result = await service.findOne(mockCollection.id);
+    await expect(service.findById('missing')).rejects.toThrow(
+      NotFoundException,
+    );
+  });
 
-      expect(result).toEqual(mockCollection);
-      expect(mockCollectionRepository.findOne).toHaveBeenCalledWith({
-        where: { id: mockCollection.id },
-        relations: ['creator'],
-      });
+  it('builds a paginated collection connection result', async () => {
+    const rows = [makeCollection(), makeCollection({ id: 'collection-2' })];
+    queryBuilder.getCount.mockResolvedValue(12);
+    queryBuilder.getMany.mockResolvedValue(rows);
+
+    const result = await service.findConnection({
+      first: 1,
+      search: 'genesis',
+      verifiedOnly: true,
     });
 
-    it('should throw NotFoundException if collection not found', async () => {
-      mockCollectionRepository.findOne.mockResolvedValue(null);
+    expect(result.total).toBe(12);
+    expect(result.data).toHaveLength(1);
+    expect(result.hasNextPage).toBe(true);
+    expect(mockCollectionRepository.createQueryBuilder).toHaveBeenCalledWith(
+      'collection',
+    );
+  });
 
-      await expect(service.findOne('non-existent-id')).rejects.toThrow(
-        NotFoundException,
-      );
+  it('returns top collections ordered by volume', async () => {
+    const rows = [makeCollection()];
+    mockCollectionRepository.find.mockResolvedValue(rows);
+
+    await expect(service.findTopCollections(5)).resolves.toEqual(rows);
+    expect(mockCollectionRepository.find).toHaveBeenCalledWith({
+      order: {
+        totalVolume: 'DESC',
+        createdAt: 'DESC',
+      },
+      take: 5,
     });
   });
 
-  describe('findByContractAddress', () => {
-    it('should return a collection by contract address', async () => {
-      mockCollectionRepository.findOne.mockResolvedValue(mockCollection);
-
-      const result = await service.findByContractAddress(
-        mockCollection.contractAddress,
-      );
-
-      expect(result).toEqual(mockCollection);
+  it('computes collection stats from nft aggregates', async () => {
+    mockCollectionRepository.findOne.mockResolvedValue(makeCollection());
+    queryBuilder.getRawOne.mockResolvedValue({
+      nftCount: '9',
+      ownerCount: '4',
+      floorPrice: '1.7500000',
     });
 
-    it('should throw NotFoundException if collection not found', async () => {
-      mockCollectionRepository.findOne.mockResolvedValue(null);
+    const result = await service.getStats('collection-1');
 
-      await expect(
-        service.findByContractAddress('non-existent-address'),
-      ).rejects.toThrow(NotFoundException);
+    expect(result).toEqual({
+      totalVolume: '25.5000000',
+      floorPrice: '1.7500000',
+      totalSupply: 9,
+      ownerCount: 4,
     });
   });
 
-  describe('update', () => {
-    it('should update a collection', async () => {
-      const updateDto = { name: 'Updated Name' };
-      const updatedCollection = { ...mockCollection, ...updateDto };
-
-      mockCollectionRepository.findOne.mockResolvedValue(mockCollection);
-      mockCollectionRepository.save.mockResolvedValue(updatedCollection);
-
-      const result = await service.update(
-        mockCollection.id,
-        updateDto,
-        'user-123',
-      );
-
-      expect(result.name).toEqual('Updated Name');
-      expect(mockCollectionRepository.save).toHaveBeenCalled();
+  it('creates a collection for a valid creator', async () => {
+    const collection = makeCollection({
+      totalSupply: 0,
+      totalVolume: '0.0000000',
     });
+    mockUserRepository.exists.mockResolvedValue(true);
+    mockCollectionRepository.findOne.mockResolvedValue(null);
+    mockCollectionRepository.create.mockReturnValue(collection);
+    mockCollectionRepository.save.mockResolvedValue(collection);
 
-    it('should throw ForbiddenException if user is not creator', async () => {
-      mockCollectionRepository.findOne.mockResolvedValue(mockCollection);
+    const result = await service.create(
+      {
+        contractAddress: 'C'.repeat(56),
+        name: 'NFTopia Genesis',
+        symbol: 'NFTG',
+        description: 'Genesis drop',
+        imageUrl: 'https://example.com/collection.png',
+      },
+      'creator-1',
+    );
 
-      await expect(
-        service.update(mockCollection.id, { name: 'New Name' }, 'other-user'),
-      ).rejects.toThrow(ForbiddenException);
-    });
+    expect(result).toEqual(collection);
+    expect(mockCollectionRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        creatorId: 'creator-1',
+        totalSupply: 0,
+        totalVolume: '0.0000000',
+      }),
+    );
   });
 
-  describe('getStats', () => {
-    it('should return collection statistics', async () => {
-      const mockNfts = [
-        { ownerId: 'owner1', lastPrice: '10.5' },
-        { ownerId: 'owner2', lastPrice: '15.0' },
-        { ownerId: 'owner1', lastPrice: '8.0' },
-      ];
+  it('rejects create when creator does not exist', async () => {
+    mockUserRepository.exists.mockResolvedValue(false);
 
-      mockCollectionRepository.findOne.mockResolvedValue(mockCollection);
-      mockNftRepository.find.mockResolvedValue(mockNfts);
-
-      const result = await service.getStats(mockCollection.id);
-
-      expect(result).toHaveProperty('totalSupply');
-      expect(result).toHaveProperty('floorPrice');
-      expect(result).toHaveProperty('owners');
-      expect(result.owners).toBe(2);
-    });
+    await expect(
+      service.create(
+        {
+          contractAddress: 'C'.repeat(56),
+          name: 'NFTopia Genesis',
+          symbol: 'NFTG',
+          imageUrl: 'https://example.com/collection.png',
+        },
+        'creator-1',
+      ),
+    ).rejects.toThrow(BadRequestException);
   });
 
-  describe('getTopCollections', () => {
-    it('should return top collections by volume', async () => {
-      const mockCollections = [mockCollection];
-      mockCollectionRepository.find.mockResolvedValue(mockCollections);
+  it('rejects create when contract address already exists', async () => {
+    mockUserRepository.exists.mockResolvedValue(true);
+    mockCollectionRepository.findOne.mockResolvedValue(makeCollection());
 
-      const result = await service.getTopCollections(10);
-
-      expect(result).toEqual(mockCollections);
-      expect(mockCollectionRepository.find).toHaveBeenCalledWith({
-        relations: ['creator'],
-        order: { totalVolume: 'DESC' },
-        take: 10,
-      });
-    });
-  });
-
-  describe('getNftsInCollection', () => {
-    it('should return paginated NFTs in collection', async () => {
-      const mockNfts = [
-        { id: 'nft1', collectionId: mockCollection.id },
-        { id: 'nft2', collectionId: mockCollection.id },
-      ];
-
-      mockCollectionRepository.findOne.mockResolvedValue(mockCollection);
-      mockNftRepository.findAndCount.mockResolvedValue([mockNfts, 2]);
-
-      const result = await service.getNftsInCollection(mockCollection.id, 1, 20);
-
-      expect(result.data).toEqual(mockNfts);
-      expect(result.total).toBe(2);
-      expect(result.page).toBe(1);
-      expect(result.limit).toBe(20);
-    });
+    await expect(
+      service.create(
+        {
+          contractAddress: 'C'.repeat(56),
+          name: 'NFTopia Genesis',
+          symbol: 'NFTG',
+          imageUrl: 'https://example.com/collection.png',
+        },
+        'creator-1',
+      ),
+    ).rejects.toThrow(BadRequestException);
   });
 });

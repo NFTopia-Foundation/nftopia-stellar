@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { NftService } from './nft.service';
 import { Nft } from './entities/nft.entity';
 import { NftMetadata } from './entities/nft-metadata.entity';
@@ -42,6 +43,10 @@ const mockSorobanService = {
   getLatestLedger: jest.fn().mockResolvedValue(100),
 };
 
+const mockEventEmitter = {
+  emit: jest.fn(),
+};
+
 describe('NftService', () => {
   let service: NftService;
 
@@ -56,6 +61,7 @@ describe('NftService', () => {
         },
         { provide: getRepositoryToken(User), useValue: mockUserRepo },
         { provide: SorobanService, useValue: mockSorobanService },
+        { provide: EventEmitter2, useValue: mockEventEmitter },
       ],
     }).compile();
 

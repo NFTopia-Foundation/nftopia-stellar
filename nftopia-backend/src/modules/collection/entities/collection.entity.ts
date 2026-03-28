@@ -12,8 +12,9 @@ import { User } from '../../../users/user.entity';
 
 @Entity('collections')
 @Index('idx_collections_creator_id', ['creatorId'])
-@Index('idx_collections_contract_address', ['contractAddress'])
-@Index('idx_collections_is_verified', ['isVerified'])
+@Index('idx_collections_contract_address', ['contractAddress'], {
+  unique: true,
+})
 @Index('idx_collections_total_volume', ['totalVolume'])
 export class Collection {
   @PrimaryGeneratedColumn('uuid')
@@ -34,10 +35,10 @@ export class Collection {
   symbol: string;
 
   @Column({ type: 'text', nullable: true })
-  description?: string;
+  description?: string | null;
 
-  @Column({ name: 'image_url', type: 'varchar', length: 500, nullable: true })
-  imageUrl?: string;
+  @Column({ name: 'image_url', type: 'varchar', length: 500 })
+  imageUrl: string;
 
   @Column({
     name: 'banner_image_url',
@@ -45,7 +46,7 @@ export class Collection {
     length: 500,
     nullable: true,
   })
-  bannerImageUrl?: string;
+  bannerImageUrl?: string | null;
 
   @Column({ name: 'creator_id', type: 'uuid' })
   creatorId: string;
@@ -64,7 +65,7 @@ export class Collection {
     scale: 7,
     nullable: true,
   })
-  floorPrice?: string;
+  floorPrice?: string | null;
 
   @Column({
     name: 'total_volume',

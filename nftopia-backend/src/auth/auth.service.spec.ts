@@ -1,7 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { JwtService } from '@nestjs/jwt';
-import { UnauthorizedException } from '@nestjs/common';
+import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { User } from '../users/user.entity';
 import { UserWallet } from './entities/user-wallet.entity';
@@ -198,5 +198,63 @@ describe('AuthService', () => {
     expect(result.refresh_token).toEqual('refresh-token');
     expect(result.user.id).toEqual('user-1');
     expect(result.user.walletAddress).toEqual(walletAddress);
+  });
+
+  it('registers with email/password and returns tokens', async () => {
+    userRepository.findOne.mockResolvedValue(null);
+    userRepository.create.mockReturnValue({
+      email: 'user@nftopia.io',
+      username: 'user1',
+      passwordHash: 'salt:hash',
+    });
+    userRepository.save.mockResolvedValue({
+      id: 'user-email-1',
+      email: 'user@nftopia.io',
+      username: 'user1',
+      passwordHash: 'salt:hash',
+      isEmailVerified: false,
+    });
+    jwtService.sign
+      .mockReturnValueOnce('access-token-email')
+      .mockReturnValueOnce('refresh-token-email');
+
+    const result = await service.registerWithEmail({
+      email: 'User@Nftopia.io',
+      password: 'A_secure1!',
+      username: 'user1',
+    });
+
+    expect(userRepository.findOne).toHaveBeenCalledWith({
+      where: { email: 'user@nftopia.io' },
+    });
+    expect(result.access_token).toBe('access-token-email');
+    expect(result.refresh_token).toBe('refresh-token-email');
+    expect(result.user.email).toBe('user@nftopia.io');
+  });
+
+  it('fails email registration when email already exists', async () => {
+    userRepository.findOne.mockResolvedValue({ id: 'existing-user' });
+
+    await expect(
+      service.registerWithEmail({
+        email: 'user@nftopia.io',
+        password: 'A_secure1!',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('rejects email login when password is invalid', async () => {
+    userRepository.findOne.mockResolvedValue({
+      id: 'user-email-2',
+      email: 'user@nftopia.io',
+      passwordHash: 'salt:invalidhash',
+    });
+
+    await expect(
+      service.loginWithEmail({
+        email: 'user@nftopia.io',
+        password: 'WrongPassword1!',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 });

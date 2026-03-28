@@ -12,6 +12,27 @@ export interface NftQueryResult<T> {
   totalPages: number;
 }
 
+export interface NftConnectionCursor {
+  createdAt: string;
+  id: string;
+}
+
+export interface NftConnectionQuery {
+  first: number;
+  after?: NftConnectionCursor;
+  ownerId?: string;
+  creatorId?: string;
+  collectionId?: string;
+  search?: string;
+  includeBurned?: boolean;
+}
+
+export interface NftConnectionResult<T> {
+  data: T[];
+  total: number;
+  hasNextPage: boolean;
+}
+
 export interface StellarMintSyncResult {
   synced: boolean;
   ledger: number;

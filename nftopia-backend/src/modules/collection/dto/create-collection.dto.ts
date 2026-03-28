@@ -1,19 +1,23 @@
 import {
-  IsNotEmpty,
   IsOptional,
   IsString,
   IsUrl,
+  IsUUID,
   Length,
+  Matches,
 } from 'class-validator';
 
 export class CreateCollectionDto {
   @IsString()
-  @IsNotEmpty()
+  @Length(56, 56)
+  @Matches(/^[A-Z2-7]{56}$/)
+  contractAddress: string;
+
+  @IsString()
   @Length(1, 255)
   name: string;
 
   @IsString()
-  @IsNotEmpty()
   @Length(1, 50)
   symbol: string;
 
@@ -21,10 +25,9 @@ export class CreateCollectionDto {
   @IsString()
   description?: string;
 
-  @IsOptional()
   @IsUrl()
   @Length(1, 500)
-  imageUrl?: string;
+  imageUrl: string;
 
   @IsOptional()
   @IsUrl()
@@ -32,7 +35,6 @@ export class CreateCollectionDto {
   bannerImageUrl?: string;
 
   @IsOptional()
-  @IsString()
-  @Length(56, 56)
-  contractAddress?: string;
+  @IsUUID()
+  creatorId?: string;
 }

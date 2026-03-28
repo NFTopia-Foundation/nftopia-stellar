@@ -6,6 +6,19 @@ import { fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { act } from "react-dom/test-utils";
 
+jest.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: jest.fn(),
+    replace: jest.fn(),
+    prefetch: jest.fn(),
+    back: jest.fn(),
+    forward: jest.fn(),
+    refresh: jest.fn(),
+  }),
+  usePathname: () => "/en",
+  useSearchParams: () => new URLSearchParams(),
+}));
+
 expect.extend(toHaveNoViolations);
 
 describe("Footer accessibility", () => {

@@ -1,0 +1,84 @@
+scalar DateTime
+
+type User {
+  id: ID!
+  walletAddress: String
+  username: String
+  profileImage: String
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+type Collection {
+  id: ID!
+  name: String
+  description: String
+  imageUrl: String
+  creatorId: ID
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+type NFT {
+  id: ID!
+  tokenId: String
+  name: String
+  description: String
+  imageUrl: String
+  ownerId: ID
+  collectionId: ID
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+type Listing {
+  id: ID!
+  nftId: ID
+  sellerId: ID
+  price: String
+  currency: String
+  status: String
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+type Auction {
+  id: ID!
+  nftId: ID
+  sellerId: ID
+  reservePrice: String
+  highestBid: String
+  endTime: DateTime
+  status: String
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+
+input CreateListingInput {
+  nftId: ID!
+  price: String!
+  currency: String
+}
+
+input PlaceBidInput {
+  auctionId: ID!
+  amount: String!
+}
+
+type Query {
+  nfts(page: Int, limit: Int, collectionId: ID, ownerId: ID): [NFT!]!
+  nft(id: ID!): NFT
+  collections(page: Int, limit: Int): [Collection!]!
+  collection(id: ID!): Collection
+  listings(page: Int, limit: Int): [Listing!]!
+  listing(id: ID!): Listing
+  auctions(page: Int, limit: Int): [Auction!]!
+  auction(id: ID!): Auction
+  currentUser: User
+  user(id: ID!): User
+}
+
+type Mutation {
+  createListing(input: CreateListingInput!): Listing!
+  placeBid(input: PlaceBidInput!): Auction!
+}

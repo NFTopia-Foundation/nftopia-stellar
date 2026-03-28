@@ -10,7 +10,11 @@ import { GraphQLSchemaFactory } from '@nestjs/graphql';
 import { json } from 'express';
 import type { Request, Response } from 'express';
 import { GraphqlGatewayModule } from './graphql/graphql.module';
-import { BaseResolver, graphqlResolvers } from './graphql/resolvers';
+import {
+  BaseResolver,
+  graphqlResolvers,
+  graphqlScalarClasses,
+} from './graphql/resolvers';
 import { GraphqlContextFactory } from './graphql/context/context.factory';
 import { GraphqlLoggingMiddleware } from './graphql/middleware/logging.middleware';
 import type { GraphqlContext } from './graphql/context/context.interface';
@@ -19,6 +23,13 @@ import {
   formatGraphqlError,
   getGraphqlConfig,
 } from './config/graphql.config';
+import { StellarErrorInterceptor } from './interceptors/stellar-error.interceptor';
+import { StellarLoggingInterceptor } from './interceptors/stellar-logging.interceptor';
+import { StellarResponseInterceptor } from './interceptors/stellar-response.interceptor';
+import { StellarTimeoutInterceptor } from './interceptors/stellar-timeout.interceptor';
+import { StellarTransformInterceptor } from './interceptors/stellar-transform.interceptor';
+import { SorobanRpcService } from './services/soroban-rpc.service';
+import { StellarAccountService } from './services/stellar-account.service';
 
 function createCorsConfig() {
   return {
@@ -42,6 +53,17 @@ async function bootstrapRestApi() {
   const app = await NestFactory.create(AppModule);
   app.useLogger(app.get(PinoLogger));
 
+  const sorobanRpcService = app.get(SorobanRpcService);
+  const stellarAccountService = app.get(StellarAccountService);
+
+  app.useGlobalInterceptors(
+    new StellarErrorInterceptor(sorobanRpcService),
+    new StellarLoggingInterceptor(sorobanRpcService),
+    new StellarTimeoutInterceptor(sorobanRpcService),
+    new StellarResponseInterceptor(sorobanRpcService),
+    new StellarTransformInterceptor(stellarAccountService),
+  );
+
   app.enableCors(createCorsConfig());
   app.useGlobalPipes(createValidationPipe());
 
@@ -54,6 +76,7 @@ async function bootstrapRestApi() {
     .addTag('nft', 'NFT operations')
     .addTag('marketplace', 'Marketplace operations')
     .addTag('users', 'User operations')
+    .addTag('search', 'Search and discovery operations')
     .addBearerAuth()
     .build();
 
@@ -83,7 +106,10 @@ async function bootstrapGraphqlGateway() {
     graphqlConfig.playgroundEnabled,
   );
 
-  const schema = await schemaFactory.create([...graphqlResolvers]);
+  const schema = await schemaFactory.create(
+    [...graphqlResolvers],
+    [...graphqlScalarClasses],
+  );
   const apolloServer = new ApolloServer<GraphqlContext>({
     schema,
     rootValue: {
