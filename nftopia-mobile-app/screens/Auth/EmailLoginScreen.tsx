@@ -4,7 +4,6 @@ import { FormInput } from '../../components/FormInput';
 import { AuthService } from '../../lib/api/AuthService';
 import { useAuthStore } from '../../lib/zustand/useAuthStore';
 
-
 export default function EmailLoginScreen({ navigation }: any) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,12 +24,13 @@ export default function EmailLoginScreen({ navigation }: any) {
 
   const handleLogin = async () => {
     if (!validate()) return;
-    
+
     setLoading(true);
     setErrors({});
     try {
       const response = await AuthService.login(email, password);
-      useAuthStore.getState().setAuth(response.accessToken, response.user);
+      // Backend returns access_token, refresh_token, user
+      useAuthStore.getState().setAuth(response.access_token, response.refresh_token, response.user);
       navigation?.navigate('MainApp');
       Alert.alert('Success', 'Logged in successfully!');
     } catch (error: any) {
@@ -51,14 +51,13 @@ export default function EmailLoginScreen({ navigation }: any) {
         </View>
       ) : null}
 
-      
       <FormInput
         label="Email Address"
         placeholder="Enter your email"
         keyboardType="email-address"
         autoCapitalize="none"
         value={email}
-        onChangeText={(text) => { setEmail(text); setErrors(prev => ({...prev, email: undefined})) }}
+        onChangeText={(text) => { setEmail(text); setErrors(prev => ({ ...prev, email: undefined })); }}
         error={errors.email}
       />
 
@@ -67,7 +66,7 @@ export default function EmailLoginScreen({ navigation }: any) {
         placeholder="Enter your password"
         secureTextEntry
         value={password}
-        onChangeText={(text) => { setPassword(text); setErrors(prev => ({...prev, password: undefined})) }}
+        onChangeText={(text) => { setPassword(text); setErrors(prev => ({ ...prev, password: undefined })); }}
         error={errors.password}
       />
 
@@ -80,9 +79,7 @@ export default function EmailLoginScreen({ navigation }: any) {
         onPress={handleLogin}
         disabled={loading}
       >
-        {loading ? (
-          <ActivityIndicator color="#ffffff" className="mr-2" />
-        ) : null}
+        {loading ? <ActivityIndicator color="#ffffff" className="mr-2" /> : null}
         <Text className="text-white font-bold text-lg">Login</Text>
       </TouchableOpacity>
 

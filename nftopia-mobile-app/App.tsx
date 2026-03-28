@@ -2,8 +2,9 @@ import "./global.css";
 import React, { useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native';
-import EmailLoginScreen from './screens/Auth/EmailLoginScreen';
-import EmailRegisterScreen from './screens/Auth/EmailRegisterScreen';
+import EmailLoginScreen from "./screens/Auth/EmailLoginScreen";
+import EmailRegisterScreen from "./screens/Auth/EmailRegisterScreen";
+
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<'Login' | 'Register'>('Login');

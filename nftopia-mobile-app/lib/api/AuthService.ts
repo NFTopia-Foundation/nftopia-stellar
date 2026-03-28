@@ -1,7 +1,26 @@
 export const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
+export interface AuthUser {
+  id: string;
+  email?: string;
+  username?: string;
+  address?: string;
+  walletAddress?: string;
+  walletProvider?: string;
+}
+
+export interface AuthResponse {
+  access_token: string;
+  refresh_token: string;
+  user: AuthUser;
+}
+
 export class AuthService {
-  static async register(data: { username?: string; email: string; password: string }) {
+  static async register(data: {
+    username?: string;
+    email: string;
+    password: string;
+  }): Promise<AuthResponse> {
     const response = await fetch(`${API_URL}/auth/register`, {
       method: 'POST',
       headers: {
@@ -15,10 +34,17 @@ export class AuthService {
       throw new Error(errorData.message || 'Registration failed');
     }
 
-    return response.json();
+    const result = await response.json();
+
+    // Backend returns { access_token, refresh_token, user }
+    return {
+      access_token: result.access_token,
+      refresh_token: result.refresh_token,
+      user: result.user,
+    };
   }
 
-  static async login(email: string, password: string) {
+  static async login(email: string, password: string): Promise<AuthResponse> {
     const response = await fetch(`${API_URL}/auth/email/login`, {
       method: 'POST',
       headers: {
@@ -32,6 +58,13 @@ export class AuthService {
       throw new Error(errorData.message || 'Login failed');
     }
 
-    return response.json();
+    const result = await response.json();
+
+    // Backend returns { access_token, refresh_token, user }
+    return {
+      access_token: result.access_token,
+      refresh_token: result.refresh_token,
+      user: result.user,
+    };
   }
 }

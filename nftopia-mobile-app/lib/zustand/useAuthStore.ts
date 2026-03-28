@@ -1,16 +1,20 @@
 import { create } from 'zustand';
+import { AuthUser } from '../api/AuthService';
 
 // Temp AuthStore until Issue `#115` is merged
 interface AuthState {
-  token: string | null;
-  user: any | null;
-  setAuth: (token: string, user: any) => void;
+  accessToken: string | null;
+  refreshToken: string | null;
+  user: AuthUser | null;
+  setAuth: (accessToken: string, refreshToken: string, user: AuthUser) => void;
   logout: () => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
-  token: null,
+  accessToken: null,
+  refreshToken: null,
   user: null,
-  setAuth: (token, user) => set({ token, user }),
-  logout: () => set({ token: null, user: null }),
+  setAuth: (accessToken, refreshToken, user) =>
+    set({ accessToken, refreshToken, user }),
+  logout: () => set({ accessToken: null, refreshToken: null, user: null }),
 }));

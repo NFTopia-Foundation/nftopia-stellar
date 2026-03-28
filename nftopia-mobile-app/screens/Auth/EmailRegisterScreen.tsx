@@ -24,7 +24,6 @@ export default function EmailRegisterScreen({ navigation }: any) {
   >("");
 
   useEffect(() => {
-    // Real-time validation for password strength
     if (!password) {
       setPasswordStrength("");
       return;
@@ -45,10 +44,7 @@ export default function EmailRegisterScreen({ navigation }: any) {
     else setPasswordStrength("Strong");
 
     if (password && confirmPassword && password !== confirmPassword) {
-      setErrors((prev) => ({
-        ...prev,
-        confirmPassword: "Passwords do not match",
-      }));
+      setErrors((prev) => ({ ...prev, confirmPassword: "Passwords do not match" }));
     } else {
       setErrors((prev) => ({ ...prev, confirmPassword: "" }));
     }
@@ -60,11 +56,7 @@ export default function EmailRegisterScreen({ navigation }: any) {
     if (!/^[a-zA-Z0-9]{3,20}$/.test(username)) {
       newErrors.username = "Username must be 3-20 alphanumeric characters";
     }
-    if (
-      !email ||
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
-      email.length > 255
-    ) {
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 255) {
       newErrors.email = "Please enter a valid email address";
     }
 
@@ -93,7 +85,8 @@ export default function EmailRegisterScreen({ navigation }: any) {
     setErrors({});
     try {
       const response = await AuthService.register({ username, email, password });
-      useAuthStore.getState().setAuth(response.accessToken, response.user);
+      // Backend returns access_token, refresh_token, user
+      useAuthStore.getState().setAuth(response.access_token, response.refresh_token, response.user);
       Alert.alert("Success", "Account created successfully!");
       navigation?.navigate('MainApp');
     } catch (error: any) {
@@ -105,14 +98,10 @@ export default function EmailRegisterScreen({ navigation }: any) {
 
   const getStrengthColor = () => {
     switch (passwordStrength) {
-      case "Weak":
-        return "text-red-500";
-      case "Medium":
-        return "text-yellow-500";
-      case "Strong":
-        return "text-green-500";
-      default:
-        return "text-gray-400";
+      case "Weak": return "text-red-500";
+      case "Medium": return "text-yellow-500";
+      case "Strong": return "text-green-500";
+      default: return "text-gray-400";
     }
   };
 
@@ -177,9 +166,7 @@ export default function EmailRegisterScreen({ navigation }: any) {
           error={errors.password}
         />
         {password ? (
-          <Text
-            className={`text-xs ml-1 -mt-3 mb-2 font-medium ${getStrengthColor()}`}
-          >
+          <Text className={`text-xs ml-1 -mt-3 mb-2 font-medium ${getStrengthColor()}`}>
             Password Strength: {passwordStrength}
           </Text>
         ) : null}
@@ -190,9 +177,7 @@ export default function EmailRegisterScreen({ navigation }: any) {
         placeholder="Confirm your password"
         secureTextEntry
         value={confirmPassword}
-        onChangeText={(text) => {
-          setConfirmPassword(text);
-        }}
+        onChangeText={(text) => { setConfirmPassword(text); }}
         error={errors.confirmPassword}
       />
 
@@ -201,9 +186,7 @@ export default function EmailRegisterScreen({ navigation }: any) {
         onPress={handleRegister}
         disabled={loading}
       >
-        {loading ? (
-          <ActivityIndicator color="#ffffff" className="mr-2" />
-        ) : null}
+        {loading ? <ActivityIndicator color="#ffffff" className="mr-2" /> : null}
         <Text className="text-white font-bold text-lg">Create Account</Text>
       </TouchableOpacity>
 
