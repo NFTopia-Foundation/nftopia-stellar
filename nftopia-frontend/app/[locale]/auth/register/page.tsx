@@ -26,11 +26,18 @@ export default function RegisterPage() {
         modalMode: "alwaysAsk", // Shows the wallet selection modal
       });
 
-      if (!starknet || !starknet.isConnected) {
+      if (!starknet) {
         throw new Error("Wallet not connected");
       }
 
-      const address = await starknet.account.address;
+      const accounts = await starknet.request({
+        type: "wallet_requestAccounts",
+      });
+      const address = accounts[0];
+
+      if (!address) {
+        throw new Error("No wallet account found");
+      }
 
       setWalletAddress(address);
       setError("");

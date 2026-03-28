@@ -50,7 +50,10 @@ const Footer = () => {
             <h3 className="text-lg font-semibold text-white">
               {t("footer.quickLinks")}
             </h3>
-            <nav className="flex flex-col space-y-2 text-sm">
+            <nav
+              aria-label="Footer quick links"
+              className="flex flex-col space-y-2 text-sm"
+            >
               <Link
                 href="/sitemap"
                 className="hover:text-gray-300 transition-colors"
@@ -77,7 +80,10 @@ const Footer = () => {
             <h3 className="text-lg font-semibold text-white">
               {t("footer.support")}
             </h3>
-            <nav className="flex flex-col space-y-2 text-sm">
+            <nav
+              aria-label="Footer support links"
+              className="flex flex-col space-y-2 text-sm"
+            >
               <Link
                 href="/contact"
                 className="hover:text-gray-300 transition-colors"
