@@ -9,7 +9,6 @@ import {
   UseGuards,
   Request,
   ParseUUIDPipe,
-  ParseIntPipe,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
@@ -29,8 +28,9 @@ export class CollectionController {
   }
 
   @Get('top')
-  async getTopCollections(@Query('limit', ParseIntPipe) limit: number = 10) {
-    return await this.collectionService.getTopCollections(limit);
+  async getTopCollections(@Query('limit') limit?: string) {
+    const parsedLimit = limit ? parseInt(limit, 10) : 10;
+    return await this.collectionService.getTopCollections(parsedLimit);
   }
 
   @Get(':id')
@@ -51,10 +51,12 @@ export class CollectionController {
   @Get(':id/nfts')
   async getNftsInCollection(
     @Param('id', ParseUUIDPipe) id: string,
-    @Query('page', ParseIntPipe) page: number = 1,
-    @Query('limit', ParseIntPipe) limit: number = 20,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
-    return await this.collectionService.getNftsInCollection(id, page, limit);
+    const parsedPage = page ? parseInt(page, 10) : 1;
+    const parsedLimit = limit ? parseInt(limit, 10) : 20;
+    return await this.collectionService.getNftsInCollection(id, parsedPage, parsedLimit);
   }
 
   @Post()
