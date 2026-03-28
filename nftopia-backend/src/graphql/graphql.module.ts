@@ -7,6 +7,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtStrategy } from '../auth/jwt.strategy';
 import { GqlAuthGuard } from '../common/guards/gql-auth.guard';
+import { CollectionModule } from '../modules/collection/collection.module';
 import { NftModule } from '../modules/nft/nft.module';
 import { SearchModule } from '../search/search.module';
 import { GraphqlContextFactory } from './context/context.factory';
@@ -46,6 +47,7 @@ const jwtAccessExpiresInSeconds = parseInt(
         expiresIn: jwtAccessExpiresInSeconds,
       },
     }),
+    CollectionModule,
     NftModule,
     SearchModule,
   ],

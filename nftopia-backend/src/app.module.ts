@@ -8,6 +8,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
+import { CollectionModule } from './modules/collection/collection.module';
 import { NftModule } from './modules/nft/nft.module';
 import { AuctionModule } from './modules/auction/auction.module';
 import { BidModule } from './modules/bid/bid.module';
@@ -89,6 +90,7 @@ import { StellarAccountService } from './services/stellar-account.service';
           }),
           UsersModule,
         ]),
+    CollectionModule,
     NftModule,
     AuctionModule,
     BidModule,
