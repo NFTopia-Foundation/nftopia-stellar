@@ -14,7 +14,7 @@ import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { OfferService } from './offer.service';
 import { CreateOfferDto, AcceptOfferDto } from './dto/offer.dto';
 import { Offer } from './entities/offer.entity';
-import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 
 @ApiTags('Marketplace Offers')
 @Controller('marketplace')
