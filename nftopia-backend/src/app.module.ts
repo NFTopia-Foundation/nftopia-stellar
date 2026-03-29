@@ -14,6 +14,7 @@ import { AuctionModule } from './modules/auction/auction.module';
 import { BidModule } from './modules/bid/bid.module';
 import { ListingModule } from './modules/listing/listing.module';
 import { OrderModule } from './modules/order/order.module';
+import { OfferModule } from './modules/offer/offer.module';
 import { LoggerModule } from 'nestjs-pino';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -96,6 +97,7 @@ import { StellarAccountService } from './services/stellar-account.service';
     BidModule,
     ListingModule,
     OrderModule,
+    OfferModule,
     CollectionModule,
     StorageModule,
     SearchModule,
