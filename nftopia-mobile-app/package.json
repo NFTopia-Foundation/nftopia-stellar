@@ -10,6 +10,7 @@
     "test": "jest"
   },
   "dependencies": {
+    "@react-native-async-storage/async-storage": "^3.0.2",
     "axios": "^1.13.6",
     "expo": "~53.0.17",
     "expo-crypto": "^55.0.10",
@@ -18,7 +19,8 @@
     "react": "19.0.0",
     "react-native": "0.79.5",
     "stellar-hd-wallet": "^1.0.2",
-    "stellar-sdk": "^12.3.0"
+    "stellar-sdk": "^12.3.0",
+    "zustand": "^5.0.12"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
