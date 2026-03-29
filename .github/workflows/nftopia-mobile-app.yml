@@ -42,6 +42,12 @@ jobs:
             exit 1
           fi
 
+      - name: Setup pnpm
+        if: steps.detect.outputs.manager == 'pnpm'
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -50,12 +56,6 @@ jobs:
           cache-dependency-path: |
             nftopia-mobile-app/pnpm-lock.yaml
             nftopia-mobile-app/package-lock.json
-
-      - name: Setup pnpm
-        if: steps.detect.outputs.manager == 'pnpm'
-        uses: pnpm/action-setup@v3
-        with:
-          version: 10
 
       - name: Install dependencies (pnpm)
         if: steps.detect.outputs.manager == 'pnpm'
