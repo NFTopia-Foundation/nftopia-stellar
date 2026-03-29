@@ -10,7 +10,11 @@ import { GraphQLSchemaFactory } from '@nestjs/graphql';
 import { json } from 'express';
 import type { Request, Response } from 'express';
 import { GraphqlGatewayModule } from './graphql/graphql.module';
-import { BaseResolver, graphqlResolvers } from './graphql/resolvers';
+import {
+  BaseResolver,
+  graphqlResolvers,
+  graphqlScalarClasses,
+} from './graphql/resolvers';
 import { GraphqlContextFactory } from './graphql/context/context.factory';
 import { GraphqlLoggingMiddleware } from './graphql/middleware/logging.middleware';
 import type { GraphqlContext } from './graphql/context/context.interface';
@@ -102,7 +106,10 @@ async function bootstrapGraphqlGateway() {
     graphqlConfig.playgroundEnabled,
   );
 
-  const schema = await schemaFactory.create([...graphqlResolvers]);
+  const schema = await schemaFactory.create(
+    [...graphqlResolvers],
+    [...graphqlScalarClasses],
+  );
   const apolloServer = new ApolloServer<GraphqlContext>({
     schema,
     rootValue: {

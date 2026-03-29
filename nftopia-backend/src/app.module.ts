@@ -8,15 +8,16 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
+import { CollectionModule } from './modules/collection/collection.module';
 import { NftModule } from './modules/nft/nft.module';
 import { AuctionModule } from './modules/auction/auction.module';
+import { BidModule } from './modules/bid/bid.module';
 import { ListingModule } from './modules/listing/listing.module';
 import { OrderModule } from './modules/order/order.module';
 import { LoggerModule } from 'nestjs-pino';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { StorageModule } from './storage/storage.module';
-import { GraphqlGatewayModule } from './graphql/graphql.module';
 import { RedisRateGuard } from './common/guards/redis-rate.guard';
 import { SearchModule } from './search/search.module';
 import { SorobanRpcService } from './services/soroban-rpc.service';
@@ -89,13 +90,15 @@ import { StellarAccountService } from './services/stellar-account.service';
           }),
           UsersModule,
         ]),
+    CollectionModule,
     NftModule,
     AuctionModule,
+    BidModule,
     ListingModule,
     OrderModule,
+    CollectionModule,
     StorageModule,
     SearchModule,
-    GraphqlGatewayModule,
   ],
   controllers: [AppController],
   providers: [

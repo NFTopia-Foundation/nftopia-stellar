@@ -8,7 +8,7 @@ import { useMarketplaceStore } from "@/features/marketplace/store/marketplaceSto
 import { useNFTStore } from "@/features/nft/store/nftStore";
 import { useUserStore } from "@/features/user/store/userStore";
 import { useAuth } from "@/lib/stores/auth-store";
-import { connect } from "get-starknet";
+import { connect, type StarknetWindowObject } from "get-starknet";
 import { KeyRound, LogIn, Wallet } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -28,7 +28,7 @@ export default function LoginPage() {
   const [walletAddress, setWalletAddress] = useState("");
   const [nonce, setNonce] = useState("");
   const [connected, setConnected] = useState(false);
-  const [signer, setSigner] = useState<any>(null);
+  const [wallet, setWallet] = useState<StarknetWindowObject | null>(null);
   const [localError, setLocalError] = useState("");
   const [walletType, setWalletType] = useState<"argentx" | "braavos" | null>(
     null
@@ -44,12 +44,18 @@ export default function LoginPage() {
         modalMode: "alwaysAsk",
       });
 
-      if (!starknet || !starknet.isConnected) {
+      if (!starknet) {
         throw new Error("Wallet not connected");
       }
 
-      const account = await starknet.account;
-      const address = account.address;
+      const accounts = await starknet.request({
+        type: "wallet_requestAccounts",
+      });
+      const address = accounts[0];
+
+      if (!address) {
+        throw new Error("No wallet account found");
+      }
 
       // Detect wallet type
       const detectedType =
@@ -64,7 +70,7 @@ export default function LoginPage() {
       }
 
       setWalletAddress(address);
-      setSigner(account);
+      setWallet(starknet);
       setWalletType(detectedType);
       setConnected(true);
     } catch (err) {
@@ -95,7 +101,7 @@ export default function LoginPage() {
       clearError();
 
       // 1. Ensure wallet is connected
-      if (!walletAddress || !signer || !walletType) {
+      if (!walletAddress || !wallet || !walletType) {
         throw new Error("Wallet not connected");
       }
 
@@ -124,17 +130,20 @@ export default function LoginPage() {
       };
 
       let signature: [string, string];
-      if (walletType === "argentx") {
-        const rawSignature = await signer.signMessage(typedData);
-        console.log(rawSignature);
-        signature = [rawSignature[2], rawSignature[3]];
-      } else if (walletType === "braavos") {
-        const rawSignature = await signer.signMessage(typedData);
-        console.log(rawSignature);
-        signature = [rawSignature[1], rawSignature[2]];
-      } else {
+      if (walletType !== "argentx" && walletType !== "braavos") {
         throw new Error("Unsupported wallet type");
       }
+
+      const rawSignature = await wallet.request({
+        type: "wallet_signTypedData",
+        params: typedData as any,
+      });
+
+      if (!Array.isArray(rawSignature) || rawSignature.length < 2) {
+        throw new Error("Invalid signature from wallet");
+      }
+
+      signature = [String(rawSignature[0]), String(rawSignature[1])];
 
       await verifySignature(walletAddress, signature, nonce, walletType, locale);
     } catch (err) {

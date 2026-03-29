@@ -15,7 +15,9 @@
     "expo-secure-store": "^55.0.9",
     "expo-status-bar": "~2.2.3",
     "react": "19.0.0",
-    "react-native": "0.79.5"
+    "react-native": "0.79.5",
+    "stellar-hd-wallet": "^1.0.2",
+    "stellar-sdk": "^12.3.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
@@ -24,6 +26,10 @@
     "jest": "^30.3.0",
     "ts-jest": "^29.4.6",
     "typescript": "~5.8.3"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node"
   },
   "private": true
 }
