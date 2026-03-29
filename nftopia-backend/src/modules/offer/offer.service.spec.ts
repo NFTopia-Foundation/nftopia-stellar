@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { OfferService } from './offer.service';
+import { CreateOfferDto } from './dto/offer.dto';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Offer, OfferStatus } from './entities/offer.entity';
 import { StellarNft } from '../../nft/entities/stellar-nft.entity';
@@ -9,8 +10,8 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 const mockOfferRepo = {
   findOne: jest.fn(),
   find: jest.fn(),
-  create: jest.fn().mockImplementation((dto) => dto),
-  save: jest.fn().mockImplementation((a) => Promise.resolve(a)),
+  create: jest.fn().mockImplementation((dto: any) => dto as Offer),
+  save: jest.fn().mockImplementation((a: Offer) => Promise.resolve(a)),
 };
 
 const mockNftRepo = {
@@ -75,16 +76,13 @@ describe('OfferService', () => {
         owner: 'owner1',
       });
 
-      const res = await service.createOffer(
-        {
-          nftId: 'C1:T1',
-          amount: 10,
-          currency: 'XLM',
-          expiresAt: new Date(Date.now() + 10000).toISOString(),
-          bidderPublicKey: 'bidder1',
-        },
-        'user1',
-      );
+      const res = await service.createOffer({
+        nftId: 'C1:T1',
+        amount: 10,
+        currency: 'XLM',
+        expiresAt: new Date(Date.now() + 10000).toISOString(),
+        bidderPublicKey: 'bidder1',
+      });
 
       expect(res.bidderId).toBe('bidder1');
       expect(mockOfferRepo.save).toHaveBeenCalled();
@@ -93,10 +91,14 @@ describe('OfferService', () => {
     it('fails if NFT does not exist', async () => {
       mockNftRepo.findOne.mockResolvedValueOnce(null);
       await expect(
-        service.createOffer(
-          { nftId: 'C1:T1', amount: 10, expiresAt: '...', bidderPublicKey: 'b' } as any,
-          'u',
-        ),
+        service.createOffer({
+          nftId: 'C1:T1',
+          amount: 10,
+          expiresAt: '...',
+          bidderPublicKey: 'b',
+          nftTokenId: 'T1',
+          currency: 'XLM',
+        } as CreateOfferDto),
       ).rejects.toThrow(NotFoundException);
     });
   });
@@ -130,7 +132,9 @@ describe('OfferService', () => {
       } as Offer;
       mockOfferRepo.findOne.mockResolvedValueOnce(offer);
 
-      await expect(service.acceptOffer('o1', 'any')).rejects.toThrow(BadRequestException);
+      await expect(service.acceptOffer('o1', 'any')).rejects.toThrow(
+        BadRequestException,
+      );
       expect(offer.status).toBe(OfferStatus.EXPIRED);
     });
   });

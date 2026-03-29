@@ -6,7 +6,6 @@ import {
   Param,
   Body,
   UseGuards,
-  Req,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
@@ -25,9 +24,8 @@ export class OfferController {
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Create a new offer for an NFT' })
   @ApiResponse({ status: 201, description: 'Offer created' })
-  async create(@Body() createOfferDto: CreateOfferDto, @Req() req: any): Promise<Offer> {
-    const bidderId = req.user.id; // User ID from JWT
-    return this.offerService.createOffer(createOfferDto, bidderId);
+  async create(@Body() createOfferDto: CreateOfferDto): Promise<Offer> {
+    return this.offerService.createOffer(createOfferDto);
   }
 
   @Get('nfts/:id/offers')
@@ -41,7 +39,10 @@ export class OfferController {
   @Put('offers/:id/accept')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Accept an offer' })
-  @ApiResponse({ status: 200, description: 'Offer accepted, returns Stellar XDR' })
+  @ApiResponse({
+    status: 200,
+    description: 'Offer accepted, returns Stellar XDR',
+  })
   async accept(
     @Param('id') id: string,
     @Body() acceptOfferDto: AcceptOfferDto,

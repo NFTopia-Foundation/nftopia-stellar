@@ -14,7 +14,9 @@ export class CreateOfferDto {
   @IsNotEmpty()
   nftId: string; // Combined contractId:tokenId or just contractId
 
-  @ApiPropertyOptional({ description: 'Specific token ID if nftId is contract' })
+  @ApiPropertyOptional({
+    description: 'Specific token ID if nftId is contract',
+  })
   @IsString()
   @IsOptional()
   nftTokenId?: string;

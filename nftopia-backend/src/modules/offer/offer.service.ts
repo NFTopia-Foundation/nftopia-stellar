@@ -32,7 +32,7 @@ export class OfferService {
     private readonly configService: ConfigService,
   ) {}
 
-  async createOffer(dto: CreateOfferDto, bidderId: string): Promise<Offer> {
+  async createOffer(dto: CreateOfferDto): Promise<Offer> {
     const { nftId, nftTokenId, amount, currency, expiresAt, bidderPublicKey } =
       dto;
 
@@ -79,7 +79,10 @@ export class OfferService {
     });
   }
 
-  async acceptOffer(offerId: string, ownerPublicKey: string): Promise<{ xdr: string; offer: Offer }> {
+  async acceptOffer(
+    offerId: string,
+    ownerPublicKey: string,
+  ): Promise<{ xdr: string; offer: Offer }> {
     const offer = await this.offerRepo.findOne({ where: { id: offerId } });
     if (!offer) throw new NotFoundException('Offer not found');
 
@@ -94,7 +97,9 @@ export class OfferService {
     }
 
     if (offer.ownerId !== ownerPublicKey) {
-      throw new ForbiddenException('Only the current owner can accept this offer');
+      throw new ForbiddenException(
+        'Only the current owner can accept this offer',
+      );
     }
 
     // Verify current balance of bidder again (escrow check)
@@ -129,8 +134,7 @@ export class OfferService {
       } else {
         // Find asset balance for wETH or others
         const asset = account.balances.find(
-          (b) =>
-            'asset_code' in b && b.asset_code === currency.toUpperCase(),
+          (b) => 'asset_code' in b && b.asset_code === currency.toUpperCase(),
         );
         balance = asset?.balance || '0';
       }
@@ -143,7 +147,9 @@ export class OfferService {
       }
     } catch (err) {
       if (err instanceof BadRequestException) throw err;
-      this.logger.warn(`Balance check failed for ${publicKey}: ${(err as Error).message}`);
+      this.logger.warn(
+        `Balance check failed for ${publicKey}: ${(err as Error).message}`,
+      );
       // In a real production app, you might want to fail harder if Horizon is down.
     }
   }
@@ -164,8 +170,9 @@ export class OfferService {
         ? Asset.native()
         : new Asset(
             offer.currency.toUpperCase(),
-            this.configService.get<string>(`${offer.currency.toUpperCase()}_ISSUER`) ||
-              'GBDEVG6LV7D6S6E5D7V5S6E5D7V5S6E5D7V5S6E5D7V5S6E5D7V5S6E5', // Placeholder
+            this.configService.get<string>(
+              `${offer.currency.toUpperCase()}_ISSUER`,
+            ) || 'GBDEVG6LV7D6S6E5D7V5S6E5D7V5S6E5D7V5S6E5D7V5S6E5D7V5S6E5', // Placeholder
           );
 
     // NFT Asset Logic
