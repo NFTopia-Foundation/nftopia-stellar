@@ -18,6 +18,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { StorageModule } from './storage/storage.module';
+
 import { RedisRateGuard } from './common/guards/redis-rate.guard';
 import { SearchModule } from './search/search.module';
 import { SorobanRpcService } from './services/soroban-rpc.service';
@@ -98,7 +99,7 @@ import { StellarAccountService } from './services/stellar-account.service';
     OrderModule,
     CollectionModule,
     StorageModule,
-    SearchModule,
+
   ],
   controllers: [AppController],
   providers: [
