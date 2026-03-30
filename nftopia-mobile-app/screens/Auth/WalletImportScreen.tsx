@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ScrollView } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { AuthStackParamList } from './AuthNavigator';
+import type { AuthStackParamList } from '@/navigation/AuthNavigator';
 import { useAuthStore } from '@/stores/authStore';
 import { StellarWalletService } from '@/src/services/stellar/wallet.service';
 

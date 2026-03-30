@@ -1,11 +1,11 @@
 import { NativeStackScreenProps, createNativeStackNavigator } from '@react-navigation/native-stack';
 import React from 'react';
-import OnboardingScreen from './OnboardingScreen';
-import WalletSelectionScreen from './WalletSelectionScreen';
-import WalletCreateScreen from './WalletCreateScreen';
-import WalletImportScreen from './WalletImportScreen';
-import EmailLoginScreen from './EmailLoginScreen';
-import EmailRegisterScreen from './EmailRegisterScreen';
+import OnboardingScreen from '../screens/Auth/OnboardingScreen';
+import WalletSelectionScreen from '../screens/Auth/WalletSelectionScreen';
+import WalletCreateScreen from '../screens/Auth/WalletCreateScreen';
+import WalletImportScreen from '../screens/Auth/WalletImportScreen';
+import EmailLoginScreen from '../screens/Auth/EmailLoginScreen';
+import EmailRegisterScreen from '../screens/Auth/EmailRegisterScreen';
 
 export type AuthStackParamList = {
   Onboarding: undefined;

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { AuthStackParamList } from './AuthNavigator';
+import type { AuthStackParamList } from '@/navigation/AuthNavigator';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Onboarding'>;
 

@@ -11,6 +11,7 @@ import { UsersModule } from './users/users.module';
 import { CollectionModule } from './modules/collection/collection.module';
 import { NftModule } from './modules/nft/nft.module';
 import { AuctionModule } from './modules/auction/auction.module';
+import { AdminModule } from './admin/admin.module';
 import { BidModule } from './modules/bid/bid.module';
 import { ListingModule } from './modules/listing/listing.module';
 import { OrderModule } from './modules/order/order.module';
@@ -89,6 +90,7 @@ import { StellarAccountService } from './services/stellar-account.service';
             }),
           }),
           UsersModule,
+          AdminModule,
         ]),
     CollectionModule,
     NftModule,
