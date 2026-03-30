@@ -27,12 +27,16 @@ const mockConfigService = {
 
 // Mock Stellar SDK
 jest.mock('stellar-sdk', () => {
-  const mockAsset = jest.fn().mockImplementation((code, issuer) => ({
+  const mockAsset = jest.fn().mockImplementation((code: string, issuer: string) => ({
     code,
     issuer,
     isNative: () => false,
   }));
-  (mockAsset as any).native = jest.fn(() => ({ isNative: () => true }));
+  
+  const mockAssetStatic = mockAsset as jest.MockedFunction<typeof mockAsset> & {
+    native: jest.Mock;
+  };
+  mockAssetStatic.native = jest.fn(() => ({ isNative: () => true }));
 
   return {
     Asset: mockAsset,
