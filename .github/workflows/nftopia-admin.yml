@@ -76,17 +76,17 @@ jobs:
       - name: Lint
         run: |
           if [ "${{ steps.detect.outputs.manager }}" = "pnpm" ]; then
-            pnpm run lint --if-present
+            pnpm run lint
           else
-            npm run lint --if-present
+            npm run lint
           fi
 
       - name: Run tests (if available)
         run: |
           if [ "${{ steps.detect.outputs.manager }}" = "pnpm" ]; then
-            pnpm run test --if-present
+            pnpm run test
           else
-            npm run test --if-present
+            npm run test
           fi
 
       - name: Build Vite app
