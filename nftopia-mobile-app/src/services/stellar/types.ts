@@ -4,6 +4,11 @@ export interface Wallet {
   mnemonic?: string;
 }
 
+export interface WalletCreateResult {
+  wallet: Wallet;
+  mnemonic: string;
+}
+
 export interface EncryptedWallet {
   data: string;
   iv: string;
