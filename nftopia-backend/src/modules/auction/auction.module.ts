@@ -11,5 +11,6 @@ import { NftMetadata } from '../../nft/entities/nft-metadata.entity';
   imports: [TypeOrmModule.forFeature([Auction, Bid, StellarNft, NftMetadata])],
   providers: [AuctionService],
   controllers: [AuctionController],
+  exports: [AuctionService],
 })
 export class AuctionModule {}

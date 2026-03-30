@@ -10,5 +10,6 @@ import { NftMetadata } from '../../nft/entities/nft-metadata.entity';
   imports: [TypeOrmModule.forFeature([Listing, StellarNft, NftMetadata])],
   providers: [ListingService],
   controllers: [ListingController],
+  exports: [ListingService],
 })
 export class ListingModule {}
