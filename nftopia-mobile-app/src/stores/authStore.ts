@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { Wallet } from '../services/stellar/types';
 import { SecureStorage } from '../services/stellar/secureStorage';
 import { AuthState, User } from './types';
@@ -34,7 +34,7 @@ export const useAuthStore = create<AuthState>()(
         try {
           // TODO: replace with real auth service call when available
           // const { user, token } = await authService.loginWithEmail(email, password);
-          // await AsyncStorage.setItem(AUTH_TOKEN_KEY, token);
+          // await SecureStore.setItemAsync(AUTH_TOKEN_KEY, token);
           // set({ user, isAuthenticated: true });
           throw new Error('Email login not yet implemented');
         } catch (err) {
@@ -65,7 +65,7 @@ export const useAuthStore = create<AuthState>()(
         try {
           // TODO: replace with real auth service call when available
           // const { user, token } = await authService.register(email, password, username);
-          // await AsyncStorage.setItem(AUTH_TOKEN_KEY, token);
+          // await SecureStore.setItemAsync(AUTH_TOKEN_KEY, token);
           // set({ user, isAuthenticated: true });
           throw new Error('Email registration not yet implemented');
         } catch (err) {
@@ -79,7 +79,7 @@ export const useAuthStore = create<AuthState>()(
       logout: async () => {
         set({ isLoading: true, error: null });
         try {
-          await AsyncStorage.removeItem(AUTH_TOKEN_KEY);
+          await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
           await secureStorage.deleteWallet();
         } catch {
           // Ignore storage errors on logout to ensure state is always cleared
@@ -92,7 +92,7 @@ export const useAuthStore = create<AuthState>()(
       checkAuth: async () => {
         set({ isLoading: true, error: null });
         try {
-          const token = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
+          const token = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
           if (token) {
             // TODO: validate token with auth service when available
             // const user = await authService.validateToken(token);
@@ -120,7 +120,11 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'nftopia-auth-storage',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => ({
+        getItem: async (key: string) => await SecureStore.getItemAsync(key),
+        setItem: async (key: string, value: string) => await SecureStore.setItemAsync(key, value),
+        removeItem: async (key: string) => await SecureStore.deleteItemAsync(key),
+      })),
       // Only persist non-sensitive state; credentials are managed by SecureStorage
       partialize: (state) => ({
         user: state.user,
