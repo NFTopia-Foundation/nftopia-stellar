@@ -49,15 +49,6 @@ jobs:
           fi
 
       # ----------------------------------
-      # Setup pnpm if needed (Must be before Setup Node for caching)
-      # ----------------------------------
-      - name: Setup pnpm
-        if: steps.detect.outputs.manager == 'pnpm'
-        uses: pnpm/action-setup@v3
-        with:
-          version: 10
-
-      # ----------------------------------
       # Setup Node
       # ----------------------------------
       - name: Setup Node
@@ -68,6 +59,15 @@ jobs:
           cache-dependency-path: |
             nftopia-backend/pnpm-lock.yaml
             nftopia-backend/package-lock.json
+
+      # ----------------------------------
+      # Setup pnpm if needed
+      # ----------------------------------
+      - name: Setup pnpm
+        if: steps.detect.outputs.manager == 'pnpm'
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10
 
       # ----------------------------------
       # Install Dependencies
@@ -108,9 +108,9 @@ jobs:
       - name: Run tests (if available)
         run: |
           if [ "${{ steps.detect.outputs.manager }}" = "pnpm" ]; then
-            pnpm run test
+            pnpm run test --if-present
           else
-            npm run test
+            npm run test --if-present
           fi
 
       # ----------------------------------

@@ -42,12 +42,6 @@ jobs:
             exit 1
           fi
 
-      - name: Setup pnpm
-        if: steps.detect.outputs.manager == 'pnpm'
-        uses: pnpm/action-setup@v3
-        with:
-          version: 10
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -56,6 +50,12 @@ jobs:
           cache-dependency-path: |
             nftopia-mobile-app/pnpm-lock.yaml
             nftopia-mobile-app/package-lock.json
+
+      - name: Setup pnpm
+        if: steps.detect.outputs.manager == 'pnpm'
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10
 
       - name: Install dependencies (pnpm)
         if: steps.detect.outputs.manager == 'pnpm'
@@ -76,17 +76,17 @@ jobs:
       - name: Lint (if available)
         run: |
           if [ "${{ steps.detect.outputs.manager }}" = "pnpm" ]; then
-            pnpm run lint
+            pnpm run lint --if-present
           else
-            npm run lint
+            npm run lint --if-present
           fi
 
       - name: Run tests (if available)
         run: |
           if [ "${{ steps.detect.outputs.manager }}" = "pnpm" ]; then
-            pnpm run test
+            pnpm run test --if-present
           else
-            npm run test
+            npm run test --if-present
           fi
 
       - name: Validate Expo config
