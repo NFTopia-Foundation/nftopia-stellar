@@ -1,23 +1,11 @@
-import { useContract } from '@starknet-react/core';
-
-const GAS_ESTIMATOR_ADDRESS = "0x000";
-const GAS_ESTIMATOR_ABI = "";
-
+export const BASE_FEE_STROOPS = 100; // 0.00001 XLM
+export const BASE_FEE_XLM = "0.00001";
+ 
 export function useGasEstimation() {
-  // const { contract: estimator } = useContract({
-  //   address: GAS_ESTIMATOR_ADDRESS,
-  //   abi: GAS_ESTIMATOR_ABI,
-  // });
-
-  const estimateAuctionBid = async (nftId: string, bidAmount: bigint) => {
-    try {
-      // const { wei, strk } = await estimator.estimate_auction_bid(nftId, bidAmount);
-      // return { weiEstimate: wei, strkEstimate: strk };
-    } catch (error) {
-      console.error('Estimation failed:', error);
-      return null;
-    }
+  return {
+    fee: BASE_FEE_STROOPS,
+    feeXLM: BASE_FEE_XLM,
+    loading: false,
+    error: null,
   };
-
-  return { estimateAuctionBid };
 }

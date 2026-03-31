@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/navbar";
 import Footer from "@/components/Footer";
 import { CircuitBackground } from "@/components/circuit-background";
-import { StarknetProvider } from "@/components/StarknetProvider";
+import { StellarWalletProvider } from "@/components/StellarWalletProvider";
 import { StoreProvider } from "@/lib/stores/store-provider";
 import { Toast } from "@/components/ui/toast";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -20,7 +20,7 @@ const NotFound = () => {
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#0f0c38] via-[#181359] to-[#241970] text-white relative contain-layout">
       <StoreProvider>
-        <StarknetProvider>
+        <StellarWalletProvider>
           <main className="relative z-10 pt-16 md:pt-20">
             <Navbar />
             <CircuitBackground />
@@ -81,7 +81,7 @@ const NotFound = () => {
             <Footer />
           </main>
           <Toast />
-        </StarknetProvider>
+        </StellarWalletProvider>
       </StoreProvider>
     </div>
   );
