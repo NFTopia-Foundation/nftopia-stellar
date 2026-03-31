@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from "axios";
-import { AuthResponse, AuthError } from "./types";
+import { EmailAuthResponse, ApiAuthError } from "./types";
 import { tokenStorage } from "./tokenStorage";
 
 // error handling function
@@ -7,10 +7,10 @@ function handleError(error: unknown): never {
   if (axios.isAxiosError(error)) {
     const message = error.response?.data?.message ?? error.message;
     const statusCode = error.response?.status;
-    const authError: AuthError = { message, statusCode };
+    const authError: ApiAuthError = { message, statusCode };
     throw authError;
   }
-  throw { message: "Something went wrong. Please try again." } as AuthError;
+  throw { message: "Something went wrong. Please try again." } as ApiAuthError;
 }
 
 // AuthService class for API Calls
@@ -25,9 +25,9 @@ export class AuthService {
   }
 
   // Login with email and password
-  async emailLogin(email: string, password: string): Promise<AuthResponse> {
+  async emailLogin(email: string, password: string): Promise<EmailAuthResponse> {
     try {
-      const { data } = await this.api.post<AuthResponse>(
+      const { data } = await this.api.post<EmailAuthResponse>(
         "/api/v1/auth/email/login",
         { email, password },
       );
@@ -46,9 +46,9 @@ export class AuthService {
     email: string,
     password: string,
     username: string,
-  ): Promise<AuthResponse> {
+  ): Promise<EmailAuthResponse> {
     try {
-      const { data } = await this.api.post<AuthResponse>(
+      const { data } = await this.api.post<EmailAuthResponse>(
         "/api/v1/auth/email/register",
         { email, password, username },
       );
@@ -63,9 +63,9 @@ export class AuthService {
   }
 
   // Refresh access token using refresh token
-  async refreshToken(refreshToken: string): Promise<AuthResponse> {
+  async refreshToken(refreshToken: string): Promise<EmailAuthResponse> {
     try {
-      const { data } = await this.api.post<AuthResponse>(
+      const { data } = await this.api.post<EmailAuthResponse>(
         "/api/v1/auth/refresh",
         { refreshToken },
       );

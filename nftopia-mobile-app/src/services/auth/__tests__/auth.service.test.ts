@@ -1,6 +1,6 @@
 import { AuthService } from "../auth.service";
 import { tokenStorage } from "../tokenStorage";
-import { AuthResponse } from "../types";
+import { EmailAuthResponse } from "../types";
 
 // Tests for AuthService using Jest
 // tests cover emailLogin, emailRegister, refreshToken, and logout methods
@@ -9,7 +9,7 @@ jest.mock("../tokenStorage");
 
 const mockedTokenStorage = tokenStorage as jest.Mocked<typeof tokenStorage>;
 
-const fakeResponse: AuthResponse = {
+const fakeResponse: EmailAuthResponse = {
   tokens: {
     accessToken: "access-abc",
     refreshToken: "refresh-xyz",
