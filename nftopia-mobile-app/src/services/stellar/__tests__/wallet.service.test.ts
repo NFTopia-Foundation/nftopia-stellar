@@ -17,6 +17,9 @@ jest.mock('stellar-hd-wallet', () => {
   return {
     __esModule: true,
     default: {
+      generateMnemonic: jest.fn().mockReturnValue(
+        'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
+      ),
       fromMnemonic: jest.fn().mockReturnValue({
         getKeypair: jest.fn().mockReturnValue(mockKeypair),
       }),
@@ -51,10 +54,10 @@ describe('StellarWalletService', () => {
 
   describe('createWallet', () => {
     it('creates a wallet with valid public and secret keys', async () => {
-      const wallet = await service.createWallet();
-      expect(wallet.publicKey).toBeTruthy();
-      expect(wallet.secretKey).toBeTruthy();
-      expect(service.isValidSecretKey(wallet.secretKey)).toBe(true);
+      const result = await service.createWallet();
+      expect(result.wallet.publicKey).toBeTruthy();
+      expect(result.wallet.secretKey).toBeTruthy();
+      expect(service.isValidSecretKey(result.wallet.secretKey)).toBe(true);
     });
 
     it('saves the wallet to storage', async () => {
