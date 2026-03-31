@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -47,16 +49,16 @@ export class BidGateway
 
   private readonly logger = new Logger(BidGateway.name);
 
-  afterInit() {
+  afterInit(): void {
     this.logger.log('BidGateway WebSocket server initialised');
   }
 
-  handleConnection(client: Socket) {
-    this.logger.debug(`Client connected: ${client.id}`);
+  handleConnection(client: Socket): void {
+    this.logger.debug(`Client connected: ${String(client.id)}`);
   }
 
-  handleDisconnect(client: Socket) {
-    this.logger.debug(`Client disconnected: ${client.id}`);
+  handleDisconnect(client: Socket): void {
+    this.logger.debug(`Client disconnected: ${String(client.id)}`);
   }
 
   // ─── Room management ──────────────────────────────────────────────────────
@@ -65,10 +67,10 @@ export class BidGateway
   handleJoinAuction(
     @MessageBody() data: { auctionId: string },
     @ConnectedSocket() client: Socket,
-  ) {
+  ): { event: string; data: { auctionId: string } } {
     const room = `auction:${data.auctionId}`;
     void client.join(room);
-    this.logger.debug(`${client.id} joined room ${room}`);
+    this.logger.debug(`${String(client.id)} joined room ${room}`);
     return { event: 'joined', data: { auctionId: data.auctionId } };
   }
 
@@ -76,10 +78,10 @@ export class BidGateway
   handleLeaveAuction(
     @MessageBody() data: { auctionId: string },
     @ConnectedSocket() client: Socket,
-  ) {
+  ): { event: string; data: { auctionId: string } } {
     const room = `auction:${data.auctionId}`;
     void client.leave(room);
-    this.logger.debug(`${client.id} left room ${room}`);
+    this.logger.debug(`${String(client.id)} left room ${room}`);
     return { event: 'left', data: { auctionId: data.auctionId } };
   }
 
@@ -90,7 +92,7 @@ export class BidGateway
    * Socket.IO clients subscribed to the relevant auction room.
    */
   @OnEvent(BID_PLACED_EVENT)
-  handleBidPlacedEvent(payload: BidPlacedEvent) {
+  handleBidPlacedEvent(payload: BidPlacedEvent): void {
     const room = `auction:${payload.auctionId}`;
     this.server.to(room).emit('bid-placed', {
       auctionId: payload.auctionId,

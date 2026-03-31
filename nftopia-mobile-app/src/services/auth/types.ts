@@ -1,3 +1,31 @@
+// --- Email auth types ---
+export interface AuthCredentials {
+  email: string;
+  password: string;
+}
+
+export interface RegisterCredentials extends AuthCredentials {
+  username: string;
+}
+
+export interface AuthTokens {
+  accessToken: string;
+  refreshToken: string;
+}
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  username: string;
+}
+
+// API-level error shape returned by the backend on failure
+export interface ApiAuthError {
+  message: string;
+  statusCode?: number;
+}
+
+// --- Wallet auth types ---
 export interface User {
   id: string;
   email?: string;
@@ -7,6 +35,7 @@ export interface User {
   walletProvider?: string;
 }
 
+// Matches the backend's actual response shape (snake_case keys)
 export interface AuthResponse {
   access_token: string;
   refresh_token: string;

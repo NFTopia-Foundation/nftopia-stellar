@@ -1,5 +1,6 @@
 import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
 import { UserWallet } from '../auth/entities/user-wallet.entity';
+import { UserRole } from '../common/enums/user-role.enum';
 
 @Entity('users')
 export class User {
@@ -29,6 +30,16 @@ export class User {
 
   @Column({ type: 'varchar', length: 500, nullable: true })
   avatarUrl?: string;
+
+  @Column({
+    type: 'enum',
+    enum: UserRole,
+    default: UserRole.USER,
+  })
+  role: UserRole;
+
+  @Column({ name: 'is_banned', type: 'boolean', default: false })
+  isBanned: boolean;
 
   @Column({
     name: 'wallet_address',

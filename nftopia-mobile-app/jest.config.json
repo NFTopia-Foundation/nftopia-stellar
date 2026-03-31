@@ -1,0 +1,15 @@
+{
+  "testEnvironment": "node",
+  "transform": {
+    "^.+\\.tsx?$": ["ts-jest", { "tsconfig": { "strict": false } }]
+  },
+  "moduleFileExtensions": ["ts", "tsx", "js", "jsx", "json"],
+  "testMatch": ["**/src/services/auth/__tests__/**/*.test.ts"],
+  "collectCoverageFrom": [
+    "src/services/auth/**/*.ts",
+    "!src/services/auth/__tests__/**"
+  ],
+  "moduleNameMapper": {
+    "^expo-secure-store$": "<rootDir>/src/services/auth/__mocks__/expo-secure-store.ts"
+  }
+}
