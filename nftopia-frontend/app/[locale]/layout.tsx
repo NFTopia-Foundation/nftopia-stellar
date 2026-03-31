@@ -6,7 +6,7 @@ import "../globals.css";
 import Footer from "@/components/Footer";
 import { CircuitBackground } from "@/components/circuit-background";
 import { WebVitals } from "@/components/web-vitals";
-import { StarknetProvider } from "@/components/StarknetProvider";
+import { StellarWalletProvider } from "@/components/StellarWalletProvider";
 import { StoreProvider } from "@/lib/stores/store-provider";
 import { Toast } from "@/components/ui/toast";
 import { usePathname } from "next/navigation";
@@ -82,7 +82,7 @@ export default function LocaleLayout({ children, params }: LocaleLayoutProps) {
       </head>
       <body className={inter.className}>
         <StoreProvider>
-          <StarknetProvider>
+          <StellarWalletProvider>
             {isCreatorDashboard ? (
               <ClientBody>
                 <WebVitals />
@@ -102,7 +102,7 @@ export default function LocaleLayout({ children, params }: LocaleLayoutProps) {
               </div>
             )}
             <Toast />
-          </StarknetProvider>
+          </StellarWalletProvider>
         </StoreProvider>
       </body>
     </html>

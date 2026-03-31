@@ -1,6 +1,6 @@
 import { Keypair } from 'stellar-sdk';
 import StellarHDWallet from 'stellar-hd-wallet';
-import { Wallet, WalletError, WalletErrorCode } from './types';
+import { Wallet, WalletCreateResult, WalletError, WalletErrorCode } from './types';
 import {
   isValidSecretKey,
   isValidMnemonic,
@@ -16,14 +16,17 @@ export class StellarWalletService {
     this.storage = storage ?? new SecureStorage();
   }
 
-  async createWallet(password?: string): Promise<Wallet> {
-    const keypair = Keypair.random();
+  async createWallet(password?: string): Promise<WalletCreateResult> {
+    const mnemonic = StellarHDWallet.generateMnemonic();
+    const hdWallet = StellarHDWallet.fromMnemonic(mnemonic);
+    const keypair = hdWallet.getKeypair(0);
     const wallet: Wallet = {
       publicKey: keypair.publicKey(),
       secretKey: keypair.secret(),
+      mnemonic,
     };
     await this.storage.saveWallet(wallet, password);
-    return wallet;
+    return { wallet, mnemonic };
   }
 
   async importFromSecretKey(secretKey: string, password?: string): Promise<Wallet> {
@@ -87,3 +90,5 @@ export class StellarWalletService {
     return isValidMnemonic(phrase);
   }
 }
+
+export const stellarWalletService = new StellarWalletService();
