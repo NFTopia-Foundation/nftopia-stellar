@@ -108,7 +108,7 @@ jobs:
       - name: Run tests (if available)
         run: |
           if [ "${{ steps.detect.outputs.manager }}" = "pnpm" ]; then
-            pnpm run test --if-present
+            pnpm run --if-present test
           else
             npm run test --if-present
           fi
