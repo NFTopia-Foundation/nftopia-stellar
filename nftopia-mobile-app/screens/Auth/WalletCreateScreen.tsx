@@ -39,7 +39,7 @@ export default function WalletCreateScreen({ navigation }: Props) {
       // Store user data
       setUser({
         id: Date.now().toString(),
-        walletAddress: wallet.publicKey,
+        walletAddress: wallet.wallet.publicKey,
         walletType: 'stellar',
         createdAt: new Date(),
       });
