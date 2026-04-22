@@ -1,73 +1,88 @@
-# React + TypeScript + Vite
+# NFTopia Admin
+**Operations Dashboard Shell**
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+![React](https://img.shields.io/badge/React-19-149eca)
+![Vite](https://img.shields.io/badge/Vite-8-646cff)
+![Tailwind](https://img.shields.io/badge/Tailwind-4-06b6d4)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6)
 
-Currently, two official plugins are available:
+NFTopia Admin is the internal dashboard workspace for platform operations. It is intended to host moderation tools, collection management workflows, marketplace controls, and operational analytics for the wider NFTopia ecosystem.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+At the moment, this app is a clean React + Vite + Tailwind foundation rather than a fully wired admin product. The current UI confirms that the frontend shell, styling system, and build pipeline are in place and ready for actual admin modules.
 
-## React Compiler
+## 🌟 Current Status
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **React 19 + Vite 8** project is configured and running.
+- **Tailwind CSS v4** is integrated and verified in the main app shell.
+- **TypeScript build pipeline** and **ESLint** are already set up.
+- No backend integration, routing, auth, or admin-specific data modules have been implemented yet.
 
-## Expanding the ESLint configuration
+## 📋 Table of Contents
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+1. [Purpose](#-purpose)
+2. [Current Implementation](#-current-implementation)
+3. [Project Structure](#-project-structure)
+4. [Quick Start](#-quick-start)
+5. [Available Scripts](#-available-scripts)
+6. [Recommended Next Modules](#-recommended-next-modules)
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## 🎯 Purpose
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+This workspace is the right place to build internal tools for:
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+- collection review and takedown workflows
+- user moderation and support operations
+- listing, bid, and order monitoring
+- marketplace analytics dashboards
+- feature flags and operational controls
+
+## 🧱 Current Implementation
+
+The current `src/App.tsx` renders a branded placeholder page that explicitly states the admin app is configured and ready for module development. That makes this workspace useful as a starting point, but not yet production-ready as an operations console.
+
+## 📁 Project Structure
+
+```text
+nftopia-admin/
+├── public/               # Static assets
+├── src/
+│   ├── App.tsx           # Current placeholder dashboard shell
+│   ├── App.css           # App-level styling
+│   ├── index.css         # Global styles and Tailwind layers
+│   ├── main.tsx          # React bootstrap entry
+│   └── assets/           # Local app assets
+├── package.json          # Scripts and dependencies
+├── vite.config.ts        # Vite configuration
+└── eslint.config.js      # ESLint flat config
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 🚀 Quick Start
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+cd nftopia-admin
+npm install
+npm run dev
 ```
+
+The Vite dev server will print the local URL in the terminal.
+
+## 🛠️ Available Scripts
+
+| Command | Description |
+| --- | --- |
+| `npm run dev` | Start the Vite development server |
+| `npm run build` | Run TypeScript build and create a production bundle |
+| `npm run preview` | Preview the production bundle locally |
+| `npm run lint` | Run ESLint against the workspace |
+
+## 🧭 Recommended Next Modules
+
+Suggested first implementation targets for this workspace:
+
+1. Admin authentication and role gating.
+2. Collection moderation table with status filters.
+3. Marketplace incident view for listings, bids, and disputes.
+4. User and wallet lookup tied to backend admin endpoints.
+5. Search and analytics panels backed by the NFTopia backend.
+
+Until those are added, treat this app as a prepared UI shell.

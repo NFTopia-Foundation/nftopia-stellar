@@ -1,117 +1,172 @@
-# NFTopia Frontend Web
+# NFTopia Frontend
+**Localized Stellar Marketplace Web App**
 
-NFTopia Frontend Web is the **user interface** for the NFTopia platform, built with **Next.js**. It provides a seamless experience for creators and collectors to interact with NFTs on the Starknet blockchain.
+![Next.js](https://img.shields.io/badge/Next.js-13-black)
+![Tailwind](https://img.shields.io/badge/TailwindCSS-3-06b6d4)
+![Apollo](https://img.shields.io/badge/Apollo-GraphQL-311c87)
+![Stellar](https://img.shields.io/badge/Stellar-Wallets-111827)
+![PWA](https://img.shields.io/badge/PWA-Enabled-2563eb)
+![Jest](https://img.shields.io/badge/Jest-Tested-c21325)
 
-## 🔗 Figma Design
+NFTopia Frontend is the browser-based marketplace and creator interface for the NFTopia platform. It is built with Next.js and combines locale-aware routing, Stellar wallet connectivity, GraphQL consumption, responsive layouts, PWA support, and creator-facing flows such as minting and collection management.
 
-[View UI/UX Design](https://www.figma.com/design/Cg75Fx3YzfP2KzyiYa0vLU/NFTopia?node-id=0-1&t=6ky2MmrZqKyqspAB-1)
+## 🌟 Key Features
 
-## ✨ Features
+- **Locale-based app routing** under `app/[locale]`
+- **Responsive marketplace UI** with Tailwind and reusable component primitives
+- **Stellar wallet integration** centered on Freighter and Albedo flows
+- **GraphQL client layer** for typed queries and mutations
+- **PWA support** through `next-pwa`
+- **Translation validation** for EN, FR, ES, and DE locale files
+- **Jest-based frontend tests** and accessibility-oriented checks
 
-- **NFT Minting Interface**
-- **Gallery View with Filters**
-- **Starknet Wallet Integration** (ArgentX, Braavos)
-- **Marketplace Preview**
-- **Responsive Design**
+## 📋 Table of Contents
 
-## 🛠️ Tech Stack
+1. [Architecture](#-architecture)
+2. [Route Map](#-route-map)
+3. [Quick Start](#-quick-start)
+4. [Environment Variables](#-environment-variables)
+5. [Available Scripts](#-available-scripts)
+6. [Project Structure](#-project-structure)
+7. [Wallet and Integration Notes](#-wallet-and-integration-notes)
+8. [Testing and QA](#-testing-and-qa)
+9. [Repository Notes](#-repository-notes)
 
-| Component        | Technology               |
-| ---------------- | ------------------------ |
-| Framework        | Next.js 14               |
-| Styling          | Tailwind CSS + shadcn/ui |
-| State Management | Zustand                  |
-| Blockchain       | Starknet.js              |
+## 🏗️ Architecture
+
+```text
+┌─────────────────────────────────────────────────────────────────────┐
+│                         NFTopia Frontend                           │
+├─────────────────────────────────────────────────────────────────────┤
+│ Next.js App Router                                                 │
+│  app/[locale]/page.tsx        app/[locale]/marketplace             │
+│  app/[locale]/auth            app/[locale]/creator-dashboard       │
+├─────────────────────────────────────────────────────────────────────┤
+│ UI Layer                                                            │
+│  components/  features/  hooks/  stores/                           │
+├─────────────────────────────────────────────────────────────────────┤
+│ Integration Layer                                                   │
+│  lib/graphql   lib/stellar   lib/firebase   lib/config             │
+├─────────────────────────────────────────────────────────────────────┤
+│ External Systems                                                    │
+│  NFTopia backend REST + GraphQL   Stellar wallets   Soroban RPC    │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+## 🗺️ Route Map
+
+Current top-level route areas include:
+
+- `app/[locale]/page.tsx` for the main landing experience
+- `app/[locale]/marketplace` for marketplace browsing
+- `app/[locale]/creator-dashboard` for creator-oriented flows
+- `app/[locale]/auth` for authentication and wallet callbacks
+- `app/[locale]/add-nft-to-collection` for collection workflows
+- `app/[locale]/TestImageUpload` and `test-responsive` for internal testing surfaces
+- `app/offline` for offline/PWA support
 
 ## 🚀 Quick Start
 
-### Prerequisites
+```bash
+cd nftopia-frontend
+npm install
+```
 
-- Node.js v18+
-- pnpm
-- Starknet wallet
+Create `.env.local` with the values your environment needs:
 
-### Installation
+```env
+NEXT_PUBLIC_BASE_URL=http://localhost:5000
+NEXT_PUBLIC_API_URL=http://localhost:3000/api/v1
+NEXT_PUBLIC_GRAPHQL_URL=http://localhost:3001/graphql
+NEXT_PUBLIC_STELLAR_NETWORK=testnet
+NEXT_PUBLIC_SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
+
+# Required if you use Firebase-backed upload flows
+NEXT_PUBLIC_FIREBASE_API_KEY=
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
+NEXT_PUBLIC_FIREBASE_APP_ID=
+NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=
+```
+
+Run the dev server:
 
 ```bash
-git clone https://github.com/NFTopia-Foundation/nftopia.git
-cd apps/frontend
-pnpm install
-cp .env.example .env.local
-pnpm dev
+npm run dev
 ```
 
-## 📂 Project Structure
+The app starts on `http://localhost:5000`.
+
+## ⚙️ Environment Variables
+
+The frontend currently reads these runtime values directly from code:
+
+| Variable | Purpose |
+| --- | --- |
+| `NEXT_PUBLIC_BASE_URL` | Canonical site URL for metadata generation |
+| `NEXT_PUBLIC_API_URL` | REST base URL used by the app config |
+| `NEXT_PUBLIC_GRAPHQL_URL` | GraphQL endpoint for Apollo client |
+| `NEXT_PUBLIC_STELLAR_NETWORK` | Stellar network selector |
+| `NEXT_PUBLIC_SOROBAN_RPC_URL` | Soroban RPC endpoint |
+| `NEXT_PUBLIC_FIREBASE_*` | Firebase client configuration for upload-related flows |
+
+## 🛠️ Available Scripts
+
+| Command | Description |
+| --- | --- |
+| `npm run dev` | Start the Next.js dev server on port `5000` |
+| `npm run build` | Create a production build |
+| `npm run start` | Run the production build |
+| `npm run lint` | Run Next lint |
+| `npm run test` | Run Jest tests |
+| `npm run graphql:codegen` | Generate GraphQL TypeScript artifacts |
+| `npm run graphql:codegen:watch` | Watch GraphQL schema and regenerate types |
+| `npm run validate-translations` | Validate locale file completeness |
+| `npm run analyze` | Build with bundle analysis enabled |
+
+## 📁 Project Structure
 
 ```text
-src/
-├── app/
-├── components/
+nftopia-frontend/
+├── app/                     # App Router pages and layouts
+├── components/              # Shared UI and wallet components
+├── features/                # Feature-oriented modules
+├── hooks/                   # React hooks
 ├── lib/
-└── stores/
+│   ├── config.ts            # Base REST and GraphQL configuration
+│   ├── graphql/             # Apollo client and generated types
+│   ├── stellar/             # Wallet and network integration
+│   └── firebase/            # Firebase client configuration
+├── locales/                 # EN, FR, ES, DE translation files
+├── stores/                  # Zustand stores
+├── scripts/                 # Translation validation helpers
+├── QA-RESPONSIVENESS-CHECKLIST.md
+└── RESPONSIVE_DESIGN_GUIDE.md
 ```
 
-## 📝 QA & Responsiveness Checklist
+## 🔌 Wallet and Integration Notes
 
-For a comprehensive checklist covering responsive design, accessibility, and cross-device QA, see:
+- The active wallet integration is Stellar-focused, with Freighter and Albedo support in the codebase.
+- WalletConnect is present only as a placeholder message right now.
+- The GraphQL client defaults to `http://localhost:3001/graphql` if not overridden.
+- The REST config defaults to `http://localhost:9000` in code, so `NEXT_PUBLIC_API_URL` should be set explicitly for local development.
 
-[QA-RESPONSIVENESS-CHECKLIST.md](./QA-RESPONSIVENESS-CHECKLIST.md)
+## 🧪 Testing and QA
 
-## 🤝 Contributing
-
-1. **Fork the repository**
-2. **Create feature branch**
-   ```bash
-   git checkout -b feature/your-feature
-   ```
-3. Submit PR
-
-- Ensure your code passes all tests
-- Include relevant documentation updates
-- Reference any related issues
-
-## ClientBody Component
-
-A flexible layout wrapper for client-side apps, supporting theme switching, responsive design, global state, accessibility, and smooth transitions.
-
-### Usage
-
-```tsx
-import { ClientBody } from "@/components/layout/ClientBody";
-
-<ClientBody
-  header={<Header />}
-  footer={<Footer />}
-  sidebar={<Sidebar />}
-  showSidebar={true}
-  loading={false}
->
-  <MainContent />
-</ClientBody>;
+```bash
+npm run test
+npm run validate-translations
 ```
 
-### Features
+Useful companion docs in this workspace:
 
-- Theme switching (dark/light, Zustand integration)
-- Responsive (Tailwind breakpoints, mobile-first)
-- Smooth transitions (sidebar, layout)
-- Global state (sidebar, loading, etc.)
-- Accessibility (focus, ARIA, keyboard nav)
-- Header/footer/children composition
-- Scroll lock when sidebar is open
-- Loading state and skeleton screens
+- `QA-RESPONSIVENESS-CHECKLIST.md`
+- `RESPONSIVE_DESIGN_GUIDE.md`
+- `i18n-README.md`
 
-### Testing
+## 📌 Repository Notes
 
-- Jest + React Testing Library for logic, state, and user interactions
-- axe-core for accessibility (100% score)
-- Storybook stories for all variants
-- Chromatic for visual regression
-
-### Performance
-
-- Render time < 16ms (React Profiler)
-- Theme switch animation < 300ms
-- Bundle size < 5KB gzipped (see `npm run analyze`)
-
----
+- Some translation copy and older implementation artifacts still mention Starknet. The active wallet, network, and backend integration code is now aligned around Stellar and Soroban.
+- The project supports four locale folders: EN, FR, ES, and DE.

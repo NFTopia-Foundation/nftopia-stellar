@@ -2,147 +2,232 @@
   <img src="nftopia-frontend/public/nftopia-04.svg" alt="NFTopia" width="420" />
 </p>
 
-# NFTopia Monorepo
+# NFTopia
+**Stellar NFT Marketplace Monorepo**
 
-NFTopia is a multi-app, cross-platform project for creating, managing, and trading NFTs. This monorepo includes:
-- A Next.js web frontend
-- A Nest.js backend API (Stellar/Soroban integration)
-- A React Native mobile app (Expo)
-- Soroban (Stellar) smart contracts for on-chain NFT operations
+![Next.js](https://img.shields.io/badge/Next.js-Web-black)
+![NestJS](https://img.shields.io/badge/NestJS-API-e0234e)
+![Expo](https://img.shields.io/badge/Expo-Mobile-1b1f23)
+![Soroban](https://img.shields.io/badge/Soroban-Smart%20Contracts-0f766e)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Data-336791)
+![Redis](https://img.shields.io/badge/Redis-Cache-d82c20)
 
-This README provides a project-level overview, setup instructions, and development guidance across all components.
+NFTopia is a full-stack NFT platform built around Stellar and Soroban. This monorepo contains the public web marketplace, the NestJS API and integration layer, the Expo mobile app, a lightweight admin surface, and a Soroban smart-contract workspace. The goal is to deliver creator tooling, marketplace flows, wallet-based authentication, decentralized asset storage, and on-chain settlement from a single repository.
 
-## Overview
-- Purpose: Deliver a full-stack NFT platform with secure minting, marketplace features, and rich user experiences.
-- Chains: Primary chain is Stellar with Soroban smart contracts. Migration is underway to Stellar across all apps.
-- Apps: Web (Next.js), Backend (Nest.js), Mobile (Expo RN), On-chain Contracts (Rust + Soroban).
+## 🌟 Key Features
 
-## Repository Structure
+- **Multi-Surface Product** - Separate web, mobile, admin, backend, and contract workspaces with a shared marketplace domain.
+- **Stellar-Native Authentication** - Supports Stellar wallet challenge and signature verification alongside email/password auth in the backend.
+- **Marketplace Core** - NFT minting, collections, listings, auctions, bids, orders, and search are implemented in the service layer.
+- **Hybrid Data Plane** - PostgreSQL, Redis, Meilisearch, IPFS, and Arweave are used together for persistence, cache, discovery, and asset storage.
+- **Localized Web UX** - The frontend uses locale-based routing and translation validation for EN, FR, ES, and DE.
+- **Soroban Contract Workspace** - Rust contracts cover collection creation, marketplace settlement, and transaction orchestration.
+
+## 📋 Table of Contents
+
+1. [System Architecture](#-system-architecture)
+2. [Repository Structure](#-repository-structure)
+3. [Apps and Services](#-apps-and-services)
+4. [Quick Start](#-quick-start)
+5. [Development Workflow](#-development-workflow)
+6. [API and Integration Surfaces](#-api-and-integration-surfaces)
+7. [Testing and Quality](#-testing-and-quality)
+8. [Security and Operational Notes](#-security-and-operational-notes)
+9. [Repository Notes](#-repository-notes)
+10. [Contributing](#-contributing)
+
+## 🏗️ System Architecture
+
+```text
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                            NFTopia Platform Stack                            │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ Client Layer                                                                 │
+│  ┌───────────────────────┐  ┌───────────────────────┐  ┌──────────────────┐ │
+│  │ nftopia-frontend      │  │ nftopia-mobile-app   │  │ nftopia-admin    │ │
+│  │ Next.js marketplace   │  │ Expo React Native    │  │ Vite admin shell │ │
+│  │ Locale routing + PWA  │  │ Wallet create/import │  │ Ops UI scaffold  │ │
+│  └────────────┬──────────┘  └────────────┬──────────┘  └────────┬─────────┘ │
+│               │                          │                      │           │
+├───────────────▼──────────────────────────▼──────────────────────▼───────────┤
+│ Service Layer: nftopia-backend                                               │
+│  REST API (/api/v1) | Swagger (/api/docs) | GraphQL gateway (:3001/graphql) │
+│  Auth | NFTs | Collections | Listings | Auctions | Bids | Orders | Search   │
+├───────────────┬──────────────────────────┬───────────────────────┬──────────┤
+│               │                          │                       │          │
+│               ▼                          ▼                       ▼          │
+│      PostgreSQL persistence         Redis cache/rate limit   Meilisearch   │
+│      users, NFTs, collections       session/cache guards     discovery      │
+│      listings, bids, orders         app-level TTL storage    fuzzy search   │
+│                                                                          │
+├───────────────┬───────────────────────────────────────────────┬────────────┤
+│               ▼                                               ▼            │
+│      IPFS / Arweave asset storage                     Stellar / Soroban     │
+│      metadata, files, fallback storage               contract execution     │
+│      and retrieval                                   collection + market    │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
+
+## 📁 Repository Structure
+
+```text
 nftopia-stellar/
-├── nftopia-frontend/     # Next.js web app (i18n, wallet, marketplace UI)
-├── nftopia-backend/      # Nest.js API (auth, NFTs, collections, Stellar/Soroban)
-├── nftopia-mobile-app/   # Expo React Native app (Stellar wallet integration)
-└── nftopia-stellar/      # Soroban (Stellar) smart contracts (Rust)
+├── nftopia-admin/          # React + Vite admin dashboard scaffold
+├── nftopia-backend/        # NestJS API, GraphQL sidecar, storage, search
+├── nftopia-frontend/       # Next.js marketplace, wallet UX, localization
+├── nftopia-mobile-app/     # Expo mobile app with auth and wallet flows
+├── nftopia-stellar/        # Soroban contract workspace and deployment scripts
+└── README.md               # Monorepo overview
 ```
 
-## Tech Stack
-- Frontend: `Next.js`, `Tailwind`, `zustand`
-- Backend: `Nest.js`, `TypeORM`, `PostgreSQL`, `BullMQ`, `JWT`, `stellar-sdk`
-- Mobile: `React Native` + `Expo`, NativeWind
-- On-chain (Stellar): `Rust`, `Soroban`, `soroban-sdk`
+## 🧩 Apps and Services
 
-## Prerequisites
-- Node.js v18+
-- pnpm (recommended) or npm
-- PostgreSQL 14+ (backend)
-- Redis (backend queues)
-- Stellar wallet for web testing (Freighter). Mobile can deep-link to Stellar wallets (e.g., xBull, Lobstr).
-- Rust 1.75+, Soroban CLI (contracts)
+| Workspace | Role | Current State |
+| --- | --- | --- |
+| `nftopia-frontend` | Public web marketplace and creator UI | Actively structured around Stellar wallet flows, PWA support, and i18n |
+| `nftopia-backend` | Core API, GraphQL gateway, data layer, storage integrations | Primary service plane for marketplace operations |
+| `nftopia-mobile-app` | Native mobile UX for onboarding, wallet import, and app navigation | Solid navigation/auth foundation with Stellar wallet services |
+| `nftopia-admin` | Internal operations dashboard | UI scaffold is ready, feature modules still need implementation |
+| `nftopia-stellar` | Soroban smart-contract workspace | Collection, settlement, and transaction packages exist; NFT package is still scaffold-level |
 
-## Environment Configuration
-- Frontend: `apps/frontend/.env.local` (see `nftopia-frontend/.env.example` if present)
-- Backend: `apps/backend/.env` (copy from `nftopia-backend/.env.example`)
-  - Required: `SOROBAN_RPC_URL`, `STELLAR_NETWORK`, `SOROBAN_NFT_CONTRACT_ID`, `SOROBAN_MARKETPLACE_CONTRACT_ID`, `SOROBAN_AUCTION_CONTRACT_ID`, `STELLAR_ACCOUNT_PUBLIC_KEY`, `STELLAR_SECRET_KEY`, `JWT_SECRET`, DB vars
-- Mobile: `nftopia-mobile-app/.env` (copy from `.env.example`)
-- Soroban: `nftopia-stellar/.env` (copy `.env.example`)
+## 🚀 Quick Start
 
-## Quick Start
+### Prerequisites
 
-### Frontend (Next.js)
-- Directory: `nftopia-frontend`
-- Commands:
-  - Install: `pnpm install`
-  - Dev: `pnpm dev` (defaults to port `5000`)
-  - Build: `pnpm build`
-  - Start: `pnpm start`
-  - Tests: `pnpm test`
-  - Validate i18n: `pnpm validate-translations`
-- Features:
-  - i18n with EN/FR/ES/DE
-  - Stellar wallet connection (Freighter)
-  - Creator dashboard with minting UI and file upload
+- Node.js 18+
+- npm 10+ or pnpm 10+
+- Docker and Docker Compose
+- Rust toolchain with `wasm32-unknown-unknown`
+- Soroban CLI for contract deployment
 
-### Backend (Nest.js)
-- Directory: `nftopia-backend`
-- Setup:
-  - Ensure PostgreSQL and Redis are running
-  - Install: `pnpm install`
-  - Copy env: `cp .env.example .env` and configure values
-- Commands:
-  - Dev: `pnpm start:dev` (typical Nest script; alternatively `pnpm start` if configured)
-  - Tests: `pnpm test`
-- Highlights:
-  - JWT-based authentication and challenge/nonce signing (Stellar SEP-0010-style)
-  - NFT mint endpoints (upload to Firebase, metadata to IPFS via NFT.Storage)
-  - Collections, transactions, auctions, stats
-  - Event listeners/log processing for Soroban contracts (marketplace, auction, transaction)
+### 1. Start the backend dependencies
 
-#### Common API Endpoints
-- Mint NFT via file upload:
-  - `POST /nfts/mint/:userId/:collectionId`
-  - Multipart form with `file`; JSON fields: `title`, `description`, `price`, `currency`
-- Mint NFT from image URL (JWT required):
-  - `POST /nfts/mint/from-url?collectionId=<id>`
-  - JSON body: `{ "title": "...", "description": "...", "imageUrl": "...", "price": 1.23, "currency": "XLM" }`
+```bash
+cd nftopia-backend
+cp .env.example .env
 
-### Mobile App (Expo React Native)
-- Directory: `nftopia-mobile-app`
-- Commands:
-  - Install: `pnpm install`
-  - Start: `pnpm start`
-  - Android: `pnpm android`
-  - iOS: `pnpm ios`
-- Features:
-  - Wallet connectivity via Stellar-compatible wallets (e.g., Freighter web, deep-links to xBull/Lobstr)
-  - Mobile-optimized minting and marketplace browsing
+# docker-compose.yml expects these values explicitly
+printf '\nDB_USER=postgres\nDB_PASSWORD=postgres\nDB_NAME=nftopia\nDB_HOST=localhost\nDB_PORT=5433\n' >> .env
 
-### Soroban Contracts (Stellar)
-- Directory: `nftopia-stellar`
-- Purpose: On-chain contracts for NFT minting, management, marketplace escrow, royalties, and analytics hooks.
-- Setup:
-  - Install Rust and WASM target: `rustup target add wasm32-unknown-unknown`
-  - Soroban CLI: `cargo install --locked --git https://github.com/stellar/rs-soroban-cli`
-  - Env: copy `.env.example` to `.env`
-- Build: `cargo build --target wasm32-unknown-unknown --release`
-- Local RPC:
-  - `soroban rpc serve --network testnet --hostname 127.0.0.1 --port 8000`
-- Deploy example:
-  - `soroban contract deploy --wasm target/wasm32-unknown-unknown/release/<contract>.wasm --source WALLET_SECRET_SEED --network testnet --rpc-url $SOROBAN_RPC_URL`
-- Test suite:
-  - Per-contract: `cargo test`
-  - Workspace: `cargo test --all`
+# align DATABASE_URL with the compose port mapping
+sed -i 's|localhost:5432|localhost:5433|' .env
 
-## Authentication Flow (Web)
-- Connect Stellar wallet (Freighter or compatible)
-- Backend issues a challenge/nonce
-- User signs the challenge/nonce with their Stellar key
-- Backend verifies signature and issues JWT
+docker compose up -d
+npm install
+npm run start:dev
+```
 
-## Internationalization
-- Locales: EN, FR, ES, DE
-- Validation script: `pnpm validate-translations`
-- Locale routing: `/[locale]/...`
+REST API: `http://localhost:3000/api/v1`
 
-## Testing & QA
-- Frontend: `jest`, React Testing Library; run `pnpm test`
-- Backend: `jest`; run `pnpm test`
-- Soroban: `cargo test` per contract or `--all` for workspace
+Swagger: `http://localhost:3000/api/docs`
 
-## Development Tips
-- Keep envs in sync with backend validation (`src/config/validation.ts`)
-- Ensure Soroban RPC and contract IDs are configured (`SOROBAN_*`, `STELLAR_*`)
-- Use the provided scripts and avoid modifying unrelated modules
+GraphQL: `http://localhost:3001/graphql`
 
-## Contributing
-- Fork and branch: `git checkout -b feat/your-feature`
-- Follow Conventional Commits
-- Add tests for changes
-- Open PRs with clear scope and benchmarks if applicable
+### 2. Start the web frontend
 
-## License
-MIT License. See individual package LICENSE files where applicable.
+```bash
+cd ../nftopia-frontend
+npm install
+cat > .env.local <<'EOF'
+NEXT_PUBLIC_BASE_URL=http://localhost:5000
+NEXT_PUBLIC_API_URL=http://localhost:3000/api/v1
+NEXT_PUBLIC_GRAPHQL_URL=http://localhost:3001/graphql
+NEXT_PUBLIC_STELLAR_NETWORK=testnet
+NEXT_PUBLIC_SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
+EOF
 
-## Support
-- Discord: `discord.gg/nftopia`
-- Issues: open in the appropriate subproject directory
+npm run dev
+```
+
+Web app: `http://localhost:5000`
+
+### 3. Start the mobile app
+
+```bash
+cd ../nftopia-mobile-app
+npm install
+npm start
+```
+
+Then run `npm run android`, `npm run ios`, or open the Expo QR flow.
+
+### 4. Start the admin dashboard
+
+```bash
+cd ../nftopia-admin
+npm install
+npm run dev
+```
+
+### 5. Build or test the Soroban workspace
+
+```bash
+cd ../nftopia-stellar
+rustup target add wasm32-unknown-unknown
+cargo build --workspace
+cargo test --workspace
+```
+
+## 🔄 Development Workflow
+
+1. Bring up the backend first, because the web and mobile clients depend on its REST and GraphQL surfaces.
+2. Start the frontend on port `5000` for browser-based wallet and creator flows.
+3. Start the mobile app separately with Expo when validating onboarding and secure wallet flows.
+4. Use the admin app as an internal surface for future moderation and operations modules.
+5. Build and test contracts independently from the app layer when evolving Soroban logic.
+
+## 🔌 API and Integration Surfaces
+
+| Surface | Default URL | Purpose |
+| --- | --- | --- |
+| REST API | `http://localhost:3000/api/v1` | Primary application API for auth, NFTs, collections, auctions, listings, orders, users, and search |
+| Swagger | `http://localhost:3000/api/docs` | Interactive REST documentation generated from Nest decorators |
+| GraphQL | `http://localhost:3001/graphql` | Secondary query surface and health endpoint |
+| Search | REST `search` controller | NFT and profile discovery backed by Meilisearch |
+| Soroban RPC | Configured via env | Backend and frontend contract interaction |
+
+## 🧪 Testing and Quality
+
+```bash
+# Backend
+cd nftopia-backend && npm test
+
+# Frontend
+cd ../nftopia-frontend && npm test
+
+# Mobile
+cd ../nftopia-mobile-app && npm test
+
+# Contracts
+cd ../nftopia-stellar && cargo test --workspace
+```
+
+Additional quality scripts:
+
+- Frontend i18n validation: `npm run validate-translations`
+- Frontend GraphQL types: `npm run graphql:codegen`
+- Backend linting: `npm run lint`
+- Admin linting: `npm run lint`
+
+## 🔐 Security and Operational Notes
+
+- The backend supports Stellar wallet challenge verification and JWT-based protected routes.
+- Redis-backed guards are used for application-level rate limiting and cache TTL handling.
+- Pino logging redacts sensitive request headers such as authorization and cookies.
+- Asset storage is designed with IPFS-first configuration and optional Arweave fallback.
+- The backend currently uses TypeORM `synchronize: true`, which is convenient for development but should be replaced with an explicit migration workflow before production rollout.
+
+## 📌 Repository Notes
+
+- Some UI copy and translation strings in the web and mobile projects still reference legacy Starknet terminology. The active integration code is Stellar/Soroban-focused.
+- `nftopia-admin` is intentionally lightweight right now; it is a prepared shell rather than a completed operations suite.
+- `nftopia-stellar/contracts/nft_contract` is present but still scaffolded compared with the more developed `collection_factory`, `marketplace_settlement`, and `transaction_contract` packages.
+
+## 🤝 Contributing
+
+1. Create a feature branch.
+2. Keep changes scoped to the workspace you are modifying.
+3. Run the local test or lint command for that workspace before opening a PR.
+4. Update the relevant README when setup, architecture, or operational behavior changes.
+
+For deeper setup details, use the workspace-level READMEs in each project folder.
