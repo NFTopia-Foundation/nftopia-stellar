@@ -23,6 +23,7 @@ import { RedisRateGuard } from './common/guards/redis-rate.guard';
 import { SearchModule } from './search/search.module';
 import { SorobanRpcService } from './services/soroban-rpc.service';
 import { StellarAccountService } from './services/stellar-account.service';
+import { CollectionFactoryModule } from './modules/collection-factory/collection-factory.module';
 
 @Module({
   imports: [
@@ -101,6 +102,7 @@ import { StellarAccountService } from './services/stellar-account.service';
     CollectionModule,
     StorageModule,
     SearchModule,
+    CollectionFactoryModule,
   ],
   controllers: [AppController],
   providers: [

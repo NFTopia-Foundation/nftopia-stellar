@@ -163,7 +163,8 @@ describe('CollectionController', () => {
   describe('create', () => {
     it('should create a new collection', async () => {
       const createDto = {
-        contractAddress: 'GABCDEFGHIJKLMNOPQRSTUVWXYZ234567890ABCDEFGHIJKLMNOPQR',
+        contractAddress:
+          'GABCDEFGHIJKLMNOPQRSTUVWXYZ234567890ABCDEFGHIJKLMNOPQR',
         name: 'Test Collection',
         symbol: 'TEST',
         description: 'Test description',
