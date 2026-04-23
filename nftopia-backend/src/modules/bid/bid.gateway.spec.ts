@@ -5,6 +5,8 @@ import { BidGateway } from './bid.gateway';
 import { BidSorobanStatus } from '../auction/entities/bid.entity';
 import type { BidPlacedEvent } from './interfaces/bid.interface';
 
+type RoomLike = ReturnType<Server['to']>;
+
 const makeMockRoom = () => ({ emit: jest.fn() });
 
 const makeMockServer = (room: ReturnType<typeof makeMockRoom>): jest.Mocked<Server> =>
@@ -47,7 +49,7 @@ describe('BidGateway', () => {
     }).compile();
 
     gateway = module.get<BidGateway>(BidGateway);
-    (gateway as any).server = mockServer;
+    Object.assign(gateway, { server: mockServer });
 
     jest.spyOn(Logger.prototype, 'log').mockImplementation(() => {});
     jest.spyOn(Logger.prototype, 'debug').mockImplementation(() => {});
@@ -213,7 +215,8 @@ describe('BidGateway', () => {
     it('does not expose stellarPublicKey in the broadcast payload', () => {
       const payload = makeBidPayload();
       gateway.handleBidPlacedEvent(payload);
-      const broadcasted = mockRoom.emit.mock.calls[0][1] as Record<string, unknown>;
+      const callArgs = mockRoom.emit.mock.calls[0] as unknown as [string, Record<string, unknown>];
+      const broadcasted = callArgs[1];
       expect(broadcasted).not.toHaveProperty('stellarPublicKey');
     });
 
@@ -229,8 +232,8 @@ describe('BidGateway', () => {
     it('routes different auction events to their respective rooms', () => {
       const room2 = makeMockRoom();
       mockServer.to
-        .mockReturnValueOnce(mockRoom as any)
-        .mockReturnValueOnce(room2 as any);
+        .mockReturnValueOnce(mockRoom as unknown as RoomLike)
+        .mockReturnValueOnce(room2 as unknown as RoomLike);
 
       gateway.handleBidPlacedEvent(makeBidPayload({ auctionId: 'auction-A' }));
       gateway.handleBidPlacedEvent(makeBidPayload({ auctionId: 'auction-B' }));
