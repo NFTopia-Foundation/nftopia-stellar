@@ -75,7 +75,14 @@ impl NftContract {
         royalty_override: Option<RoyaltyInfo>,
     ) -> Result<u64, ContractError> {
         caller.require_auth();
-        token::mint(&env, &caller, to, metadata_uri, attributes, royalty_override)
+        token::mint(
+            &env,
+            &caller,
+            to,
+            metadata_uri,
+            attributes,
+            royalty_override,
+        )
     }
 
     pub fn batch_mint(
@@ -188,11 +195,7 @@ impl NftContract {
         metadata::set_token_uri(&env, &caller, token_id, uri)
     }
 
-    pub fn set_base_uri(
-        env: Env,
-        caller: Address,
-        base_uri: String,
-    ) -> Result<(), ContractError> {
+    pub fn set_base_uri(env: Env, caller: Address, base_uri: String) -> Result<(), ContractError> {
         caller.require_auth();
         metadata::set_base_uri(&env, &caller, base_uri)
     }

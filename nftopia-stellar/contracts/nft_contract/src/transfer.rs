@@ -27,12 +27,7 @@ pub fn approve(
     Ok(())
 }
 
-pub fn set_approval_for_all(
-    env: &Env,
-    owner: &Address,
-    operator: &Address,
-    approved: bool,
-) {
+pub fn set_approval_for_all(env: &Env, owner: &Address, operator: &Address, approved: bool) {
     env.storage().persistent().set(
         &DataKey::OperatorApproval(owner.clone(), operator.clone()),
         &approved,

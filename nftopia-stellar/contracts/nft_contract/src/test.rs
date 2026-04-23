@@ -1,5 +1,5 @@
-use crate::{NftContract, NftContractClient};
 use crate::types::{CollectionConfig, RoyaltyInfo, TokenAttribute};
+use crate::{NftContract, NftContractClient};
 use soroban_sdk::{Address, Env, String, Vec, testutils::Address as _};
 
 fn make_config(env: &Env) -> CollectionConfig {
@@ -266,8 +266,20 @@ fn test_supply_limit() {
     client.initialize(&admin, &config, &None);
 
     let user = Address::generate(&env);
-    client.mint(&admin, &user, &String::from_str(&env, "uri1"), &Vec::new(&env), &None);
-    client.mint(&admin, &user, &String::from_str(&env, "uri2"), &Vec::new(&env), &None);
+    client.mint(
+        &admin,
+        &user,
+        &String::from_str(&env, "uri1"),
+        &Vec::new(&env),
+        &None,
+    );
+    client.mint(
+        &admin,
+        &user,
+        &String::from_str(&env, "uri2"),
+        &Vec::new(&env),
+        &None,
+    );
 
     let result = client.try_mint(
         &admin,
