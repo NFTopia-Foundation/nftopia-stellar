@@ -1,34 +1,34 @@
 {
   "wallet": {
     "connect": {
-      "label": "Connect Stellar Wallet"
+      "label": "Connect Starknet Wallet"
     },
     "disconnect": {
-      "label": "Disconnect Stellar Wallet"
+      "label": "Disconnect Starknet Wallet"
     },
     "address": {
-      "label": "Your Stellar account address"
+      "label": "Your Starknet account address"
     }
   },
   "network": {
     "mainnet": {
-      "label": "Stellar Mainnet"
+      "label": "Starknet Mainnet"
     },
     "testnet": {
-      "label": "Stellar Testnet"
+      "label": "Starknet Testnet"
     }
   },
   "explorer": {
     "tx": {
-      "label": "View on Stellar Explorer"
+      "label": "View on Starknet Explorer"
     },
     "account": {
-      "label": "View Stellar Account"
+      "label": "View Starknet Account"
     }
   },
   "onboarding": {
-    "welcome": "Welcome to Stellar NFT Admin",
-    "walletHelp": "Connect your Stellar wallet to get started"
+    "welcome": "Welcome to Starknet NFT Admin",
+    "walletHelp": "Connect your Starknet wallet to get started"
   },
   "nav": {
     "dashboard": "Dashboard",

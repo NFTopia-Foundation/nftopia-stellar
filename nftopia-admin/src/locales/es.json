@@ -1,34 +1,34 @@
 {
   "wallet": {
     "connect": {
-      "label": "Conectar Billetera Stellar"
+      "label": "Conectar Cartera Starknet"
     },
     "disconnect": {
-      "label": "Desconectar Billetera Stellar"
+      "label": "Desconectar Cartera Starknet"
     },
     "address": {
-      "label": "Tu dirección de cuenta Stellar"
+      "label": "Tu dirección de cuenta Starknet"
     }
   },
   "network": {
     "mainnet": {
-      "label": "Red Principal Stellar"
+      "label": "Red Principal Starknet"
     },
     "testnet": {
-      "label": "Red de Pruebas Stellar"
+      "label": "Red de Pruebas Starknet"
     }
   },
   "explorer": {
     "tx": {
-      "label": "Ver en Explorador Stellar"
+      "label": "Ver en Explorador Starknet"
     },
     "account": {
-      "label": "Ver Cuenta Stellar"
+      "label": "Ver Cuenta Starknet"
     }
   },
   "onboarding": {
-    "welcome": "Bienvenido al Admin NFT de Stellar",
-    "walletHelp": "Conecta tu billetera Stellar para comenzar"
+    "welcome": "Bienvenido al Admin NFT de Starknet",
+    "walletHelp": "Conecta tu cartera Starknet para comenzar"
   },
   "nav": {
     "dashboard": "Panel",
