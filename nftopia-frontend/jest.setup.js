@@ -23,6 +23,14 @@ jest.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
+jest.mock("next/link", () => {
+  const React = require("react");
+
+  return React.forwardRef(({ href, children, ...props }, ref) =>
+    React.createElement("a", { ref, href, ...props }, children)
+  );
+});
+
 // Mock window.matchMedia for all tests (jsdom does not implement it by default)
 if (typeof window !== "undefined" && !window.matchMedia) {
   window.matchMedia = function (query) {
