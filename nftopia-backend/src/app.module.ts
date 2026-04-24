@@ -24,6 +24,7 @@ import { SearchModule } from './search/search.module';
 import { SorobanRpcService } from './services/soroban-rpc.service';
 import { StellarAccountService } from './services/stellar-account.service';
 import { CollectionFactoryModule } from './modules/collection-factory/collection-factory.module';
+import { SocialModule } from './modules/social/social.module';
 
 @Module({
   imports: [
@@ -103,6 +104,7 @@ import { CollectionFactoryModule } from './modules/collection-factory/collection
     StorageModule,
     SearchModule,
     CollectionFactoryModule,
+    SocialModule,
   ],
   controllers: [AppController],
   providers: [
