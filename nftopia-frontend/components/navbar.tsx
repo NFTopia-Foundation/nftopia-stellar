@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Button } from "@/components/ui/button";
 import { ModernSearchInput } from "@/components/ui/modern-search-input";
 import {
   Menu,
@@ -19,7 +18,6 @@ import {
 } from "lucide-react";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { WalletConnector } from "@/components/wallet/WalletConnector";
-import { WalletModal } from "@/components/wallet/WalletModal";
 import { UserDropdown } from "./user-dropdown";
 import { useAuth } from "@/lib/stores/auth-store";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -28,7 +26,6 @@ import { LanguageSwitcher, MobileLanguageSwitcher } from "./LanguageSwitcher";
 export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const [mobileWalletOpen, setMobileWalletOpen] = useState(false);
   const hamburgerButtonRef = useRef<HTMLButtonElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLDivElement>(null);
@@ -331,21 +328,7 @@ export function Navbar() {
                       {t("navigation.dashboard")}
                     </Link>
                   ) : (
-                    <>
-                      <Button
-                        className="w-full rounded-full px-6 py-3 bg-gradient-to-r from-[#4e3bff] to-[#9747ff] text-white hover:opacity-90"
-                        onClick={() => {
-                          closeMenu();
-                          setMobileWalletOpen(true);
-                        }}
-                      >
-                        {t("connectWallet.connect")}
-                      </Button>
-                      <WalletModal
-                        open={mobileWalletOpen}
-                        onClose={() => setMobileWalletOpen(false)}
-                      />
-                    </>
+                    <WalletConnector forceVisible fullWidth />
                   )
                 )}
               </div>
