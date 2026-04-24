@@ -82,6 +82,6 @@ export class AuctionController {
     @Req() req: ExpressRequest & { user?: { userId?: string } },
   ) {
     const callerId = req.user?.userId;
-    return this.auctionService.settleAuction(id, callerId as string);
+    return this.auctionService.settleAuction(id, callerId);
   }
 }
