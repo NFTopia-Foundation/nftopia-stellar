@@ -9,9 +9,7 @@ import { CreateListingDto } from './dto/create-listing.dto';
 const mockListingRepo = {
   findOne: jest.fn(),
   find: jest.fn(),
-  create: jest
-    .fn()
-    .mockImplementation((dto: CreateListingDto) => dto as unknown as Listing),
+  create: jest.fn().mockImplementation((dto: CreateListingDto) => dto),
   save: jest.fn().mockImplementation((a: Listing) => Promise.resolve(a)),
   createQueryBuilder: jest.fn(() => ({
     where: jest.fn().mockReturnThis(),
@@ -51,7 +49,7 @@ describe('ListingService', () => {
       nftContractId: 'C',
       nftTokenId: 'T',
       price: 1,
-    } as CreateListingDto;
+    };
     const res = await service.create(dto, 'seller1');
     expect(mockListingRepo.create).toHaveBeenCalled();
     expect(mockListingRepo.save).toHaveBeenCalled();
@@ -61,10 +59,7 @@ describe('ListingService', () => {
   it('prevents duplicate listing', async () => {
     mockListingRepo.findOne.mockResolvedValueOnce({ id: 'exists' });
     await expect(
-      service.create(
-        { nftContractId: 'C', nftTokenId: 'T', price: 1 } as CreateListingDto,
-        's',
-      ),
+      service.create({ nftContractId: 'C', nftTokenId: 'T', price: 1 }, 's'),
     ).rejects.toThrow();
   });
 

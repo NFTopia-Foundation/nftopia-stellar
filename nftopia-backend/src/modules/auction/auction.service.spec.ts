@@ -6,14 +6,11 @@ import { Bid } from './entities/bid.entity';
 import { StellarNft } from '../../nft/entities/stellar-nft.entity';
 import { AuctionStatus } from './interfaces/auction.interface';
 import { CreateAuctionDto } from './dto/create-auction.dto';
-import { PlaceBidDto } from './dto/place-bid.dto';
 
 const mockAuctionRepo = {
   findOne: jest.fn(),
   find: jest.fn(),
-  create: jest
-    .fn()
-    .mockImplementation((dto: Partial<Auction>) => dto as unknown as Auction),
+  create: jest.fn().mockImplementation((dto: Partial<Auction>) => dto),
   save: jest.fn().mockImplementation((a: Auction) => Promise.resolve(a)),
   createQueryBuilder: jest.fn(() => ({
     where: jest.fn().mockReturnThis(),
@@ -25,9 +22,7 @@ const mockAuctionRepo = {
 const mockBidRepo = {
   find: jest.fn(),
   findOne: jest.fn(),
-  create: jest
-    .fn()
-    .mockImplementation((dto: Partial<Bid>) => dto as unknown as Bid),
+  create: jest.fn().mockImplementation((dto: Partial<Bid>) => dto),
   save: jest.fn().mockResolvedValue(undefined),
 };
 
@@ -86,7 +81,7 @@ describe('AuctionService', () => {
           nftTokenId: 'T',
           startPrice: 1,
           endTime: new Date().toISOString(),
-        } as unknown as CreateAuctionDto,
+        },
         's',
       ),
     ).rejects.toThrow();
@@ -100,7 +95,7 @@ describe('AuctionService', () => {
       currentPrice: 1,
     } as unknown as Auction;
     mockAuctionRepo.findOne.mockResolvedValueOnce(auction);
-    const dto = { amount: 2 } as unknown as PlaceBidDto;
+    const dto = { amount: 2 };
     const bid = await service.placeBid('a1', 'b1', dto);
     expect(mockBidRepo.save).toHaveBeenCalled();
     expect(mockAuctionRepo.save).toHaveBeenCalled();
@@ -115,9 +110,7 @@ describe('AuctionService', () => {
       currentPrice: 5,
     } as unknown as Auction;
     mockAuctionRepo.findOne.mockResolvedValueOnce(auction);
-    await expect(
-      service.placeBid('a1', 'b1', { amount: 3 } as unknown as PlaceBidDto),
-    ).rejects.toThrow();
+    await expect(service.placeBid('a1', 'b1', { amount: 3 })).rejects.toThrow();
   });
 
   it('cancels only by seller', async () => {
@@ -174,12 +167,12 @@ describe('AuctionService', () => {
       bidderId: 'b1',
       amount: 20,
       bidder: { address: 'addr1' },
-    } as unknown as Bid);
+    });
     mockNftRepo.findOne.mockResolvedValueOnce({
       contractId: 'C',
       tokenId: 'T',
       owner: 'old',
-    } as unknown as StellarNft);
+    });
     const res = await service.settleAuction('a1');
     expect(res.settled).toBe(true);
     expect(mockNftRepo.save).toHaveBeenCalled();

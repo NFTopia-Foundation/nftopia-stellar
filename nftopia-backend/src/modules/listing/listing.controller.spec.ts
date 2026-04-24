@@ -27,7 +27,7 @@ describe('ListingController', () => {
 
   it('listings list', async () => {
     mockService.findAll.mockResolvedValueOnce([]);
-    const q: ListingQueryDto = {} as ListingQueryDto;
+    const q: ListingQueryDto = {};
     const res = await controller.list(q);
     expect(mockService.findAll).toHaveBeenCalledWith(q);
     expect(res).toEqual([]);

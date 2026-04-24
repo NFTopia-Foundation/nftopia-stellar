@@ -131,7 +131,7 @@ export class StellarErrorInterceptor implements NestInterceptor {
     return {
       status:
         typeof error.status === 'number'
-          ? (error.status as HttpStatus)
+          ? error.status
           : HttpStatus.INTERNAL_SERVER_ERROR,
       code: error.code || 'STELLAR_UNKNOWN_ERROR',
     };

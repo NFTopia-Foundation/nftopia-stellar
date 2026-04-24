@@ -56,7 +56,7 @@ function makeAuction(overrides: Partial<Auction> = {}): Auction {
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
-  } as Auction;
+  };
 }
 
 function makeBid(overrides: Partial<Bid> = {}): Bid {

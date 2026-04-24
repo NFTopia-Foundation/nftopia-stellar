@@ -12,7 +12,7 @@ describe('AppController', () => {
   };
 
   beforeEach(async () => {
-    moduleRef = (await Test.createTestingModule({
+    moduleRef = await Test.createTestingModule({
       controllers: [AppController],
       providers: [
         AppService,
@@ -24,9 +24,7 @@ describe('AppController', () => {
           },
         },
       ],
-    }).compile()) as TestingModule & {
-      get<TInput = any>(typeOrToken: any): TInput;
-    };
+    }).compile();
 
     appController = moduleRef.get<AppController>(AppController);
     cacheManager = moduleRef.get<Cache>(CACHE_MANAGER);

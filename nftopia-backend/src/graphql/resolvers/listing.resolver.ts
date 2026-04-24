@@ -60,7 +60,7 @@ export class ListingResolver {
     const result = await this.listingService.findConnection({
       first,
       after,
-      status: filter?.status as ListingStatus | undefined,
+      status: filter?.status,
       sellerId: filter?.sellerId,
       nftContractId: nftParts?.contractId,
       nftTokenId: nftParts?.tokenId,

@@ -4,7 +4,6 @@ import {
   Catch,
   ArgumentsHost,
   HttpException,
-  HttpStatus,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { PinoLogger } from 'nestjs-pino';
@@ -36,7 +35,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     // Manejo especial para errores de validación (BadRequestException)
     if (
-      status === (HttpStatus.BAD_REQUEST as number) &&
+      status === 400 &&
       typeof exceptionResponse === 'object' &&
       exceptionResponse !== null
     ) {
