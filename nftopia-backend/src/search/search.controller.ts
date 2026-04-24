@@ -1,5 +1,5 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { SearchQueryDto } from './dto/search-query.dto';
 import { SearchService } from './search.service';
 
@@ -15,5 +15,18 @@ export class SearchController {
   })
   async search(@Query() query: SearchQueryDto) {
     return this.searchService.search(query);
+  }
+
+  @Get('nfts')
+  @ApiOperation({
+    summary: 'Search NFTs with fuzzy matching, filters, and sorting',
+  })
+  @ApiQuery({
+    name: 'q',
+    required: false,
+    description: 'Search query string for fuzzy matching against NFT fields',
+  })
+  async searchNfts(@Query() query: SearchQueryDto) {
+    return this.searchService.search({ ...query, type: 'nfts' });
   }
 }

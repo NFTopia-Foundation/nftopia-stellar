@@ -43,4 +43,16 @@ describe('SearchController', () => {
 
     expect(mockSearchService.search).toHaveBeenCalledWith(query);
   });
+
+  it('forces type to nfts on the /search/nfts endpoint', async () => {
+    const query = { q: 'nebula', limit: 5 };
+
+    await controller.searchNfts(query);
+
+    expect(mockSearchService.search).toHaveBeenCalledWith({
+      q: 'nebula',
+      limit: 5,
+      type: 'nfts',
+    });
+  });
 });

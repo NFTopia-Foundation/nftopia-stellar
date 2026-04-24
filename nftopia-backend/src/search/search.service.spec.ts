@@ -123,4 +123,124 @@ describe('SearchService', () => {
       facets: ['collectionId', 'ownerId', 'creatorId', 'attributeFacets'],
     });
   });
+
+  it('uses empty query defaults when called with no params', async () => {
+    const result = await service.search({});
+
+    expect(result.query).toBe('');
+    expect(result.type).toBe('all');
+    expect(result.page).toBe(1);
+    expect(result.limit).toBe(20);
+
+    expect(mockNftIndex.search).toHaveBeenCalledWith('', expect.objectContaining({
+      page: 1,
+      hitsPerPage: 20,
+    }));
+    expect(mockProfileIndex.search).toHaveBeenCalledWith('', expect.objectContaining({
+      page: 1,
+      hitsPerPage: 20,
+    }));
+  });
+
+  it('includes ownerId filter when ownerId is provided', async () => {
+    await service.search({
+      q: 'ape',
+      type: 'nfts',
+      ownerId: '11111111-1111-1111-1111-111111111111',
+    });
+
+    expect(mockNftIndex.search).toHaveBeenCalledWith('ape', expect.objectContaining({
+      filter: expect.arrayContaining([
+        'ownerId = "11111111-1111-1111-1111-111111111111"',
+      ]),
+    }));
+  });
+
+  it('includes creatorId filter when creatorId is provided', async () => {
+    await service.search({
+      q: 'ape',
+      type: 'nfts',
+      creatorId: '22222222-2222-2222-2222-222222222222',
+    });
+
+    expect(mockNftIndex.search).toHaveBeenCalledWith('ape', expect.objectContaining({
+      filter: expect.arrayContaining([
+        'creatorId = "22222222-2222-2222-2222-222222222222"',
+      ]),
+    }));
+  });
+
+  it('combines collectionId, ownerId, and trait filters', async () => {
+    await service.search({
+      q: 'rare',
+      type: 'nfts',
+      collectionId: '33333333-3333-3333-3333-333333333333',
+      ownerId: '11111111-1111-1111-1111-111111111111',
+      traitType: 'Background',
+      traitValue: 'Blue',
+    });
+
+    expect(mockNftIndex.search).toHaveBeenCalledWith('rare', expect.objectContaining({
+      filter: [
+        'isBurned = false',
+        'collectionId = "33333333-3333-3333-3333-333333333333"',
+        'ownerId = "11111111-1111-1111-1111-111111111111"',
+        'attributeFacets = "Background:Blue"',
+      ],
+    }));
+  });
+
+  it('queries only profile index when type is profiles', async () => {
+    await service.search({ q: 'alice', type: 'profiles' });
+
+    expect(mockProfileIndex.search).toHaveBeenCalledWith('alice', expect.any(Object));
+    expect(mockNftIndex.search).not.toHaveBeenCalled();
+  });
+
+  it('queries only nft index when type is nfts', async () => {
+    await service.search({ q: 'nebula', type: 'nfts' });
+
+    expect(mockNftIndex.search).toHaveBeenCalledWith('nebula', expect.any(Object));
+    expect(mockProfileIndex.search).not.toHaveBeenCalled();
+  });
+
+  it('falls back to createdAt:desc when username sort is used on nft index', async () => {
+    await service.search({
+      q: 'test',
+      type: 'nfts',
+      sort: 'username:asc',
+    });
+
+    expect(mockNftIndex.search).toHaveBeenCalledWith('test', expect.objectContaining({
+      sort: ['createdAt:desc'],
+    }));
+  });
+
+  it('removes an nft document by id', async () => {
+    await service.removeNft('nft-42');
+
+    expect(mockNftIndex.deleteDocument).toHaveBeenCalledWith('nft-42');
+  });
+
+  it('indexes a user as a profile document', async () => {
+    await service.indexUser({
+      id: 'user-1',
+      address: 'GABCDEF',
+      username: 'alice',
+      bio: 'NFT collector',
+      avatarUrl: 'https://example.com/avatar.png',
+      walletAddress: 'GABCDEF',
+      walletPublicKey: 'GABCDEF',
+      walletProvider: 'freighter',
+    } as never);
+
+    expect(mockProfileIndex.addDocuments).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: 'user-1',
+        username: 'alice',
+        bio: 'NFT collector',
+        entityType: 'profile',
+      }),
+    ]);
+  });
 });
