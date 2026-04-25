@@ -102,9 +102,9 @@ describe('SearchService', () => {
 
   it('builds NFT filters correctly', () => {
     const query: SearchQueryDto = {
-  collectionId: 'col1',
-  ownerId: 'user1',
-};
+      collectionId: 'col1',
+      ownerId: 'user1',
+    };
 
     const filters = service['buildNftFilters'](query);
 
