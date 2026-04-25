@@ -4,10 +4,9 @@ import { BREAKPOINTS, getBreakpointQuery } from "@/utils/breakpoints";
 
 export const ResponsiveDemo: React.FC = () => {
   const isMobile = useMobile(); // default: 640px
-  const isTablet =
-    useMediaQuery(getBreakpointQuery("md", "min")) &&
-    !useMediaQuery(getBreakpointQuery("lg", "min"));
+  const isMd = useMediaQuery(getBreakpointQuery("md", "min"));
   const isDesktop = useMediaQuery(getBreakpointQuery("lg", "min"));
+  const isTablet = isMd && !isDesktop;
 
   return (
     <div

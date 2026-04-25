@@ -12,12 +12,11 @@ export function UserDropdown() {
   const { showSuccess, showError } = useToast();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
+  const { t, locale } = useTranslation();
 
   if (!isAuthenticated || !user) {
     return null;
   }
-
-  const { t, locale } = useTranslation();
 
   const handleLogout = async () => {
     const confirmed = window.confirm(
