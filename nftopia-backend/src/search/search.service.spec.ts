@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SearchService } from './search.service';
 import { SEARCH_CLIENT } from './search.constants';
+import { SearchQueryDto } from './dto/search-query.dto';
 
 const mockNftIndex = {
   addDocuments: jest.fn(),
@@ -100,10 +101,10 @@ describe('SearchService', () => {
   });
 
   it('builds NFT filters correctly', () => {
-    const query = {
-      collectionId: 'col1',
-      ownerId: 'user1',
-    } as any;
+    const query: SearchQueryDto = {
+  collectionId: 'col1',
+  ownerId: 'user1',
+};
 
     const filters = service['buildNftFilters'](query);
 
