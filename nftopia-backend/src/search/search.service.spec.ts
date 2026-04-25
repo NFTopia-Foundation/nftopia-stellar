@@ -99,6 +99,19 @@ describe('SearchService', () => {
     ]);
   });
 
+  it('builds NFT filters correctly', () => {
+    const query = {
+      collectionId: 'col1',
+      ownerId: 'user1',
+    } as any;
+
+    const filters = service['buildNftFilters'](query);
+
+    expect(filters).toContain('collectionId = "col1"');
+    expect(filters).toContain('ownerId = "user1"');
+    expect(filters).toContain('isBurned = false');
+  });
+
   it('builds filtered nft searches with sort and facets', async () => {
     await service.search({
       q: 'nebula',
