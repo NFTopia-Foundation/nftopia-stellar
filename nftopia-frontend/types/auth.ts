@@ -1,30 +1,39 @@
 import { WalletProvider, StellarNetwork } from "./stellar";
 
-export interface BaseUser {
+
+// --- Updated for unified auth context ---
+export interface User {
   id: string;
   email?: string;
   username?: string;
+  address?: string;
   walletAddress?: string;
-  linkedWallets?: LinkedWallet[];
+  walletProvider?: string;
 }
 
+
 export interface LinkedWallet {
-  address: string;
-  provider: WalletProvider;
-  linkedAt: string;
+  id: string;
+  walletAddress: string;
+  walletProvider: string;
   isPrimary: boolean;
+  lastUsedAt: string;
 }
+
+// For backward compatibility, export UserWallet as LinkedWallet
+export type UserWallet = LinkedWallet;
 
 export interface AuthSession {
   token: string;
-  user: BaseUser;
+  user: User;
   authMethod: "email" | "wallet";
   expiresAt: number;
 }
 
+
 export interface WalletAuthResult {
   token: string;
-  user: BaseUser;
+  user: User;
   isNewUser: boolean;
 }
 
@@ -32,6 +41,7 @@ export interface EmailAuthCredentials {
   email: string;
   password: string;
 }
+
 
 export interface WalletRegistrationPayload {
   walletAddress: string;
