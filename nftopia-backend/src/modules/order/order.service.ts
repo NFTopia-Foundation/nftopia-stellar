@@ -1,3 +1,4 @@
+// ...existing code...
 import {
   Injectable,
   NotFoundException,
@@ -88,6 +89,16 @@ export class OrderService {
       volume: stats.volume ?? '0',
       count: Number(stats.count ?? 0),
       averagePrice: stats.averagePrice ?? '0',
+    };
+  }
+
+  // Placeholder for sales analytics
+  getSalesAnalytics() {
+    // TODO: Implement real analytics logic
+    return {
+      volume: '0',
+      count: 0,
+      averagePrice: '0',
     };
   }
 }
