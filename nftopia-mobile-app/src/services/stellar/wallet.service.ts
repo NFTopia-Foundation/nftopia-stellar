@@ -1,5 +1,5 @@
 import { Keypair } from 'stellar-sdk';
-import StellarHDWallet from 'stellar-hd-wallet';
+import * as bip39 from 'bip39';
 import { Wallet, WalletCreateResult, WalletError, WalletErrorCode } from './types';
 import {
   isValidSecretKey,
@@ -17,9 +17,12 @@ export class StellarWalletService {
   }
 
   async createWallet(password?: string): Promise<WalletCreateResult> {
-    const mnemonic = StellarHDWallet.generateMnemonic();
-    const hdWallet = StellarHDWallet.fromMnemonic(mnemonic);
-    const keypair = hdWallet.getKeypair(0);
+    const mnemonic = bip39.generateMnemonic();
+    // Derive seed from mnemonic
+    const seed = await bip39.mnemonicToSeed(mnemonic);
+    // Use first 32 bytes of seed for Stellar keypair
+    const rawSeed = seed.slice(0, 32);
+    const keypair = Keypair.fromRawEd25519Seed(rawSeed);
     const wallet: Wallet = {
       publicKey: keypair.publicKey(),
       secretKey: keypair.secret(),
@@ -43,8 +46,13 @@ export class StellarWalletService {
   async importFromMnemonic(mnemonic: string, password?: string): Promise<Wallet> {
     assertValidMnemonic(mnemonic);
     try {
-      const hdWallet = StellarHDWallet.fromMnemonic(mnemonic);
-      const keypair = hdWallet.getKeypair(0);
+      // Validate mnemonic
+      if (!bip39.validateMnemonic(mnemonic)) {
+        throw new WalletError('Invalid mnemonic', WalletErrorCode.INVALID_MNEMONIC);
+      }
+      const seed = await bip39.mnemonicToSeed(mnemonic);
+      const rawSeed = seed.slice(0, 32);
+      const keypair = Keypair.fromRawEd25519Seed(rawSeed);
       const wallet: Wallet = {
         publicKey: keypair.publicKey(),
         secretKey: keypair.secret(),
