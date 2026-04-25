@@ -6,7 +6,7 @@ import { SearchService } from './search.service';
 @ApiTags('search')
 @Controller('search')
 export class SearchController {
-  constructor(private readonly searchService: SearchService) {}
+  constructor(private readonly searchService: SearchService) { }
 
   @Get()
   @ApiOperation({
@@ -15,5 +15,16 @@ export class SearchController {
   })
   async search(@Query() query: SearchQueryDto) {
     return this.searchService.search(query);
+  }
+
+  @Get('nfts')
+  @ApiOperation({
+    summary: 'Search NFTs only',
+  })
+  async searchNfts(@Query() query: SearchQueryDto) {
+    return this.searchService.search({
+      ...query,
+      type: 'nfts',
+    });
   }
 }
