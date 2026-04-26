@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Linking } from 'react-native';
+import AuthButton from './components/AuthButton';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '@/navigation/AuthNavigator';
 
@@ -37,18 +38,22 @@ export default function OnboardingScreen({ navigation }: Props) {
       </View>
       
       <View style={styles.footer}>
-        <TouchableOpacity
-          style={styles.primaryButton}
+        <AuthButton
+          title="Get Started"
           onPress={() => navigation.navigate('WalletSelection')}
-        >
-          <Text style={styles.primaryButtonText}>Get Started</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={styles.secondaryButton}
+          variant="primary"
+        />
+        <AuthButton
+          title="Sign In with Email"
           onPress={() => navigation.navigate('EmailLogin')}
+          variant="secondary"
+          textStyle={{ color: '#333' }}
+        />
+        <TouchableOpacity
+          onPress={() => Linking.openURL('https://nftopia.app/learn-more')}
+          style={styles.learnMoreLink}
         >
-          <Text style={styles.secondaryButtonText}>Sign In with Email</Text>
+          <Text style={styles.learnMoreText}>Learn More</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -60,6 +65,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#ffffff',
     paddingHorizontal: 24,
+  },
+  learnMoreLink: {
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  learnMoreText: {
+    color: '#007aff',
+    fontSize: 15,
+    textDecorationLine: 'underline',
+    fontWeight: '500',
   },
   content: {
     flex: 1,
