@@ -7,7 +7,6 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { ScheduleModule } from '@nestjs/schedule';
 import { ContractEventIndexerJob } from './jobs';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
