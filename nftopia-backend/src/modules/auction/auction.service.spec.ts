@@ -85,8 +85,7 @@ describe('AuctionService', () => {
     const result = await service.create(dto, 'seller-1');
     expect(mockAuctionRepo.create).toHaveBeenCalled();
     expect(mockAuctionRepo.save).toHaveBeenCalled();
-    expect(result).toHaveProperty('success', true);
-    expect(result).toHaveProperty('auctionId', expect.any(Number));
+    expect((result as Auction).sellerId).toBe('seller-1'); // ← Keep original
   });
 
   it('prevents duplicate active auction', async () => {
@@ -116,7 +115,7 @@ describe('AuctionService', () => {
     const bid = await service.placeBid('a1', 'b1', dto);
     expect(mockBidRepo.save).toHaveBeenCalled();
     expect(mockAuctionRepo.save).toHaveBeenCalled();
-    expect(bid).toHaveProperty('success', true);
+    expect((bid as Bid).amount).toBe(2); // ← Keep original
   });
 
   it('rejects low bids', async () => {
