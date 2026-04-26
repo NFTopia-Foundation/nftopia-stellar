@@ -7,6 +7,8 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { ScheduleModule } from '@nestjs/schedule';
+import { ContractEventIndexerJob } from './jobs';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { CollectionModule } from './modules/collection/collection.module';
@@ -25,6 +27,7 @@ import { SearchModule } from './search/search.module';
 import { SorobanRpcService } from './services/soroban-rpc.service';
 import { StellarAccountService } from './services/stellar-account.service';
 import { CollectionFactoryModule } from './modules/collection-factory/collection-factory.module';
+import { StellarModule } from './modules/stellar/stellar.module';
 
 @Module({
   imports: [
@@ -105,9 +108,11 @@ import { CollectionFactoryModule } from './modules/collection-factory/collection
     StorageModule,
     SearchModule,
     CollectionFactoryModule,
+    StellarModule,
   ],
   controllers: [AppController],
   providers: [
+    ContractEventIndexerJob,
     AppService,
     SorobanRpcService,
     StellarAccountService,

@@ -16,4 +16,15 @@ export class SearchController {
   async search(@Query() query: SearchQueryDto) {
     return this.searchService.search(query);
   }
+
+  @Get('nfts')
+  @ApiOperation({
+    summary: 'Search NFTs only',
+  })
+  async searchNfts(@Query() query: SearchQueryDto) {
+    return this.searchService.search({
+      ...query,
+      type: 'nfts',
+    });
+  }
 }

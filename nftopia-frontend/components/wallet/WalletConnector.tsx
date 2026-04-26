@@ -8,11 +8,18 @@ import { WalletModal } from "./WalletModal";
 import { WalletNetworkStatus } from "./WalletNetworkStatus";
 import { useTranslation } from "@/hooks/useTranslation";
 import { getExplorerUrl } from "@/lib/stellar/network";
+import { useToast } from "@/lib/stores";
 
-export function WalletConnector() {
+interface WalletConnectorProps {
+  forceVisible?: boolean;
+  fullWidth?: boolean;
+}
+
+export function WalletConnector({ forceVisible = false, fullWidth = false }: WalletConnectorProps) {
   const { t } = useTranslation();
-  const { address, connected, provider, network } = useWalletStore();
+  const { address, connected, provider, network, connecting } = useWalletStore();
   const { disconnect } = useStellarWallet();
+  const { showSuccess, showError } = useToast();
   const [modalOpen, setModalOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -26,9 +33,14 @@ export function WalletConnector() {
 
   const copyAddress = async () => {
     if (!address) return;
-    await navigator.clipboard.writeText(address);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(address);
+      setCopied(true);
+      showSuccess(t("connectWallet.copySuccess") || "Wallet address copied");
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      showError(t("connectWallet.copyError") || "Failed to copy wallet address");
+    }
   };
 
   const truncatedAddress = address
@@ -36,14 +48,19 @@ export function WalletConnector() {
     : "";
 
   if (!connected) {
+    const connectButtonClass = forceVisible
+      ? "flex w-full justify-center"
+      : "hidden xl:flex";
+
     return (
       <>
         <button
           onClick={() => setModalOpen(true)}
-          className="hidden xl:flex items-center gap-2 rounded-full px-6 py-2 bg-gradient-to-r from-[#4e3bff] to-[#9747ff] text-white hover:opacity-90 transition-opacity font-medium text-sm"
+          className={`${connectButtonClass} items-center gap-2 rounded-full px-6 py-2 bg-gradient-to-r from-[#4e3bff] to-[#9747ff] text-white hover:opacity-90 transition-opacity font-medium text-sm`}
+          disabled={connecting}
         >
           <Wallet className="h-4 w-4" />
-          {t("connectWallet.connect")}
+          {connecting ? t("connectWallet.connecting") || "Connecting..." : t("connectWallet.connect")}
         </button>
         <WalletModal open={modalOpen} onClose={() => setModalOpen(false)} />
       </>
@@ -54,10 +71,11 @@ export function WalletConnector() {
     <div className="relative" onClick={(e) => e.stopPropagation()}>
       <button
         onClick={() => setDropdownOpen((v) => !v)}
-        className="flex items-center gap-2 rounded-full pl-3 pr-4 py-2 bg-[#4e3bff]/20 border border-[#4e3bff]/40 text-white hover:bg-[#4e3bff]/30 transition-colors text-sm"
+        className={`flex items-center gap-2 rounded-full pl-3 pr-4 py-2 bg-[#4e3bff]/20 border border-[#4e3bff]/40 text-white hover:bg-[#4e3bff]/30 transition-colors text-sm ${fullWidth ? "w-full justify-between" : ""}`}
       >
         <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-        <span className="font-mono font-medium">{truncatedAddress}</span>
+        <span className="font-mono font-medium hidden sm:inline">{truncatedAddress}</span>
+        <span className="font-mono font-medium sm:hidden">{address ? `${address.slice(0, 4)}...` : ""}</span>
         <ChevronDown className={`h-3.5 w-3.5 text-purple-300 transition-transform ${dropdownOpen ? "rotate-180" : ""}`} />
       </button>
 

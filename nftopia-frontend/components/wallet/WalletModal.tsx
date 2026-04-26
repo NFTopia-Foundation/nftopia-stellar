@@ -7,6 +7,7 @@ import { useStellarWallet } from "./hooks/useStellarWallet";
 import { detectInstalledWallets } from "@/lib/stellar/wallet/detection";
 import { useTranslation } from "@/hooks/useTranslation";
 import Image from "next/image";
+import { useToast } from "@/lib/stores";
 
 interface WalletModalProps {
   open: boolean;
@@ -16,9 +17,11 @@ interface WalletModalProps {
 
 export function WalletModal({ open, onClose, onConnected }: WalletModalProps) {
   const { t } = useTranslation();
+  const { showError } = useToast();
   const { connect, connecting, error, connected, address, clearError } = useStellarWallet();
   const [wallets, setWallets] = useState<WalletInfo[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<WalletProvider | null>(null);
+  const [lastError, setLastError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -32,6 +35,19 @@ export function WalletModal({ open, onClose, onConnected }: WalletModalProps) {
       onClose();
     }
   }, [connected, address, open, onConnected, onClose]);
+
+  useEffect(() => {
+    if (open && error && error !== lastError) {
+      showError(error);
+      setLastError(error);
+    }
+  }, [open, error, lastError, showError]);
+
+  useEffect(() => {
+    if (!open || !error) {
+      setLastError(null);
+    }
+  }, [open, error]);
 
   const handleConnect = async (provider: WalletProvider) => {
     setSelectedProvider(provider);

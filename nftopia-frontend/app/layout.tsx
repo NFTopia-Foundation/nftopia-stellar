@@ -1,6 +1,7 @@
 import { Inter } from "next/font/google";
 import "./globals.css";
 import ApolloWrapper from "@/lib/graphql/apollo-wrapper";
+import { AuthProvider } from "@/lib/context/AuthContext";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -78,7 +79,9 @@ export default function RootLayout({
         <meta name="msapplication-config" content="/browserconfig.xml" />
       </head>
       <body className={inter.className}>
-        <ApolloWrapper>{children}</ApolloWrapper>
+        <AuthProvider>
+          <ApolloWrapper>{children}</ApolloWrapper>
+        </AuthProvider>
       </body>
     </html>
   );

@@ -32,6 +32,7 @@ import { User } from '../../users/user.entity';
 import { PlaceBidDto } from './dto/place-bid.dto';
 import { BidQueryDto } from './dto/bid-query.dto';
 import { StellarSignatureStrategy } from '../../auth/strategies/stellar.strategy';
+import { MarketplaceSettlementClient } from '../stellar/marketplace-settlement.client';
 import {
   BID_PLACED_EVENT,
   BID_CACHE_PREFIX,
@@ -62,6 +63,7 @@ export class BidService {
     private readonly eventEmitter: EventEmitter2,
     private readonly stellarStrategy: StellarSignatureStrategy,
     private readonly configService: ConfigService,
+    private readonly settlementClient: MarketplaceSettlementClient,
   ) {}
 
   // ─── Public API ──────────────────────────────────────────────────────────────
@@ -70,7 +72,20 @@ export class BidService {
     auctionId: string,
     bidderId: string,
     dto: PlaceBidDto,
-  ): Promise<Bid> {
+  ): Promise<Bid | { success: boolean; result: any }> {
+    const enableOnchain = this.configService.get<boolean>(
+      'ENABLE_ONCHAIN_SETTLEMENT',
+    );
+    if (enableOnchain) {
+      // On-chain: call contract to place bid
+      const result = await this.settlementClient.placeBid(
+        Number(auctionId),
+        bidderId,
+        String(dto.amount),
+      );
+      return { success: true, result };
+    }
+
     await this.enforceRateLimit(bidderId);
 
     const auction = await this.loadActiveAuction(auctionId);

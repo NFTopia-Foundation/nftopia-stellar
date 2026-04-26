@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { StellarNetwork, StellarWalletState, WalletProvider } from "@/types/stellar";
+import { StellarNetwork, WalletProvider } from "@/types/stellar";
 import { connectFreighter, getFreighterAddress, isFreighterConnected } from "@/lib/stellar/wallet/freighter";
 import { connectAlbedo } from "@/lib/stellar/wallet/albedo";
 import { defaultNetwork } from "@/lib/stellar/client";
 import { getHorizonServer } from "@/lib/stellar/client";
+import { useWalletStore } from "@/stores/walletStore";
 
 const WALLET_STORAGE_KEY = "stellar_wallet_connection";
 
@@ -16,14 +17,18 @@ interface PersistedWallet {
 }
 
 export function useStellarWallet() {
-  const [state, setState] = useState<StellarWalletState>({
-    address: null,
-    provider: null,
-    network: defaultNetwork,
-    connected: false,
-    connecting: false,
-    error: null,
-  });
+  const {
+    address,
+    provider,
+    network,
+    connected,
+    connecting,
+    error,
+    setConnected,
+    setDisconnected,
+    setConnecting,
+    setError,
+  } = useWalletStore();
 
   const [balances, setBalances] = useState<{ asset: string; balance: string }[]>([]);
 
@@ -41,13 +46,7 @@ export function useStellarWallet() {
           if (stillConnected) {
             const currentAddress = await getFreighterAddress();
             if (currentAddress === persisted.address) {
-              setState((s) => ({
-                ...s,
-                address: persisted.address,
-                provider: persisted.provider,
-                network: persisted.network,
-                connected: true,
-              }));
+              setConnected(persisted.address, persisted.provider, persisted.network);
               return;
             }
           }
@@ -64,12 +63,12 @@ export function useStellarWallet() {
 
   // Fetch balances when address changes
   useEffect(() => {
-    if (!state.address) {
+    if (!address) {
       setBalances([]);
       return;
     }
-    fetchBalances(state.address, state.network);
-  }, [state.address, state.network]);
+    fetchBalances(address, network);
+  }, [address, network]);
 
   const fetchBalances = async (address: string, network: StellarNetwork) => {
     try {
@@ -90,66 +89,59 @@ export function useStellarWallet() {
   };
 
   const connect = useCallback(async (provider: WalletProvider) => {
-    setState((s) => ({ ...s, connecting: true, error: null }));
+    setConnecting(true);
+    setError(null);
+
     try {
-      let address: string;
+      let nextAddress: string;
 
       switch (provider) {
         case "freighter":
-          address = await connectFreighter();
+          nextAddress = await connectFreighter();
           break;
         case "albedo":
-          address = await connectAlbedo();
+          nextAddress = await connectAlbedo();
           break;
         default:
           throw new Error(`Provider "${provider}" is not yet supported`);
       }
 
       const persisted: PersistedWallet = {
-        address,
+        address: nextAddress,
         provider,
         network: defaultNetwork,
       };
       sessionStorage.setItem(WALLET_STORAGE_KEY, JSON.stringify(persisted));
 
-      setState((s) => ({
-        ...s,
-        address,
-        provider,
-        connected: true,
-        connecting: false,
-        error: null,
-      }));
+      setConnected(nextAddress, provider, defaultNetwork);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to connect wallet";
-      setState((s) => ({ ...s, connecting: false, error: message }));
+      setError(message);
     }
-  }, []);
+  }, [setConnected, setConnecting, setError]);
 
   const disconnect = useCallback(() => {
     sessionStorage.removeItem(WALLET_STORAGE_KEY);
-    setState({
-      address: null,
-      provider: null,
-      network: defaultNetwork,
-      connected: false,
-      connecting: false,
-      error: null,
-    });
+    setDisconnected();
     setBalances([]);
-  }, []);
+  }, [setDisconnected]);
 
   const clearError = useCallback(() => {
-    setState((s) => ({ ...s, error: null }));
-  }, []);
+    setError(null);
+  }, [setError]);
 
   return {
-    ...state,
+    address,
+    provider,
+    network,
+    connected,
+    connecting,
+    error,
     balances,
     connect,
     disconnect,
     clearError,
     refetchBalances: () =>
-      state.address ? fetchBalances(state.address, state.network) : undefined,
+      address ? fetchBalances(address, network) : undefined,
   };
 }

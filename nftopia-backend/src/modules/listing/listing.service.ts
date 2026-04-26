@@ -7,11 +7,14 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ConfigService } from '@nestjs/config';
 import { Listing } from './entities/listing.entity';
 import { CreateListingDto } from './dto/create-listing.dto';
 import { ListingStatus } from './interfaces/listing.interface';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { StellarNft } from '../../nft/entities/stellar-nft.entity';
+import { MarketplaceSettlementClient } from '../stellar/marketplace-settlement.client';
+import { CreateSaleParams } from '../shared/contracts/marketplace-settlement.types';
 
 type ListingCursorPayload = {
   createdAt: string;
@@ -27,11 +30,45 @@ export class ListingService {
     private readonly listingRepo: Repository<Listing>,
     @InjectRepository(StellarNft)
     private readonly nftRepo: Repository<StellarNft>,
+    private readonly configService: ConfigService,
+    private readonly settlementClient: MarketplaceSettlementClient,
   ) {}
 
   async create(dto: CreateListingDto, sellerId: string) {
     if (dto.price <= 0) throw new BadRequestException('Price must be positive');
 
+    // Feature flag: use contract if enabled
+    const enableOnchain = this.configService.get<boolean>(
+      'ENABLE_ONCHAIN_SETTLEMENT',
+    );
+    if (enableOnchain) {
+      // Call contract to create sale
+      const params: CreateSaleParams = {
+        seller: sellerId,
+        nftContract: dto.nftContractId,
+        tokenId: dto.nftTokenId,
+        price: String(dto.price),
+        currency: dto.currency || 'XLM',
+        durationSeconds: dto.expiresAt
+          ? Math.floor((new Date(dto.expiresAt).getTime() - Date.now()) / 1000)
+          : 0,
+      };
+      await this.settlementClient.createSale(params);
+      // Optionally, sync to DB or return contract result
+      // For GraphQL compatibility, return a Listing object (mock or DB-backed)
+      return this.listingRepo.create({
+        nftContractId: dto.nftContractId,
+        nftTokenId: dto.nftTokenId,
+        sellerId,
+        price: dto.price,
+        currency: dto.currency || 'XLM',
+        expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : undefined,
+        status: ListingStatus.ACTIVE,
+        // Optionally, add a field for contract saleId if needed
+      });
+    }
+
+    // Legacy DB logic
     // prevent duplicate active listing for same nft
     const existing = await this.listingRepo.findOne({
       where: {
@@ -199,6 +236,28 @@ export class ListingService {
   }
 
   async buy(id: string, buyerId: string) {
+    const enableOnchain = this.configService.get<boolean>(
+      'ENABLE_ONCHAIN_SETTLEMENT',
+    );
+    if (enableOnchain) {
+      // On-chain: call contract to execute sale
+      // You may want to fetch the sale details from contract or DB for mapping
+      // For now, assume id is the contract saleId
+      const resultRaw: unknown = await this.settlementClient.executeSale(
+        Number(id),
+        buyerId,
+        undefined,
+      );
+      let result: Record<string, unknown>;
+      if (typeof resultRaw === 'object' && resultRaw !== null) {
+        result = resultRaw as Record<string, unknown>;
+      } else {
+        result = { txHash: String(resultRaw) };
+      }
+      return { success: true, result };
+    }
+
+    // Legacy DB logic
     const listing = await this.findOne(id);
     const ls = listing.status as ListingStatus;
     if (ls !== ListingStatus.ACTIVE)
@@ -217,7 +276,6 @@ export class ListingService {
     listing.status = ListingStatus.SOLD;
     await this.listingRepo.save(listing);
 
-    // Payment/on-chain transfer not implemented — placeholder for Soroban integration
     return { success: true, listingId: id, buyer: buyerId };
   }
 

@@ -23,11 +23,13 @@ export class AuctionController {
 
   @Get()
   async list(@Query() query: AuctionQueryDto) {
+    await Promise.resolve();
     return this.auctionService.findAll(query);
   }
 
   @Get('active')
   async active(@Query() query: AuctionQueryDto) {
+    await Promise.resolve();
     return this.auctionService.findAll({
       ...query,
       status: AuctionStatus.ACTIVE,
@@ -36,11 +38,13 @@ export class AuctionController {
 
   @Get(':id')
   async get(@Param('id') id: string) {
+    await Promise.resolve();
     return this.auctionService.findOne(id);
   }
 
   @Get(':id/bids')
   async bids(@Param('id') id: string) {
+    await Promise.resolve();
     return this.auctionService.getBids(id);
   }
 
@@ -50,6 +54,7 @@ export class AuctionController {
     @Body() dto: CreateAuctionDto,
     @Req() req: ExpressRequest & { user?: { userId?: string } },
   ) {
+    await Promise.resolve();
     const sellerId = req.user?.userId;
     return this.auctionService.create(dto, sellerId as string);
   }
@@ -61,6 +66,7 @@ export class AuctionController {
     @Body() dto: PlaceBidDto,
     @Req() req: ExpressRequest & { user?: { userId?: string } },
   ) {
+    await Promise.resolve();
     const bidderId = req.user?.userId;
     return this.auctionService.placeBid(id, bidderId as string, dto);
   }
@@ -71,6 +77,7 @@ export class AuctionController {
     @Param('id') id: string,
     @Req() req: ExpressRequest & { user?: { userId?: string } },
   ) {
+    await Promise.resolve();
     const userId = req.user?.userId;
     return this.auctionService.cancelAuction(id, userId as string);
   }
@@ -81,6 +88,7 @@ export class AuctionController {
     @Param('id') id: string,
     @Req() req: ExpressRequest & { user?: { userId?: string } },
   ) {
+    await Promise.resolve();
     const callerId = req.user?.userId;
     return this.auctionService.settleAuction(id, callerId as string);
   }
