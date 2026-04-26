@@ -6,7 +6,7 @@ import { SearchService } from './search.service';
 @ApiTags('search')
 @Controller('search')
 export class SearchController {
-  constructor(private readonly searchService: SearchService) { }
+  constructor(private readonly searchService: SearchService) {}
 
   @Get()
   @ApiOperation({

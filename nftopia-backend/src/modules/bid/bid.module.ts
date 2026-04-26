@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { StellarModule } from '../stellar/stellar.module';
 
 import { Bid } from '../auction/entities/bid.entity';
 import { Auction } from '../auction/entities/auction.entity';
@@ -11,7 +12,7 @@ import { BidEventListener } from './listeners/bid-event.listener';
 import { StellarSignatureStrategy } from '../../auth/strategies/stellar.strategy';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Bid, Auction, User])],
+  imports: [TypeOrmModule.forFeature([Bid, Auction, User]), StellarModule],
   providers: [
     BidService,
     BidGateway,

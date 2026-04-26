@@ -6,6 +6,8 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { ScheduleModule } from '@nestjs/schedule';
+import { ContractEventIndexerJob } from './jobs';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { CollectionModule } from './modules/collection/collection.module';
@@ -27,6 +29,7 @@ import { CollectionFactoryModule } from './modules/collection-factory/collection
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     LoggerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
@@ -106,6 +109,7 @@ import { CollectionFactoryModule } from './modules/collection-factory/collection
   ],
   controllers: [AppController],
   providers: [
+    ContractEventIndexerJob,
     AppService,
     SorobanRpcService,
     StellarAccountService,
