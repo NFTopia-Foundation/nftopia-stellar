@@ -107,7 +107,7 @@ import { StellarModule } from './modules/stellar/stellar.module';
     StorageModule,
     SearchModule,
     CollectionFactoryModule,
-    StellarModule
+    StellarModule,
   ],
   controllers: [AppController],
   providers: [
