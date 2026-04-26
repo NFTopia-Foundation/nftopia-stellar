@@ -39,7 +39,7 @@
     "lib": [
       "es2017"
     ],
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "allowSyntheticDefaultImports": true
   },
   "extends": "expo/tsconfig.base"

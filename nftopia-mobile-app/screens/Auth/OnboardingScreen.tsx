@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Image } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Linking } from 'react-native';
 import AuthButton from './components/AuthButton';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '@/navigation/AuthNavigator';
@@ -64,17 +64,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#ffffff',
-    learnMoreLink: {
-      marginTop: 8,
-      alignItems: 'center',
-    },
-    learnMoreText: {
-      color: '#007aff',
-      fontSize: 15,
-      textDecorationLine: 'underline',
-      fontWeight: '500',
-    },
     paddingHorizontal: 24,
+  },
+  learnMoreLink: {
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  learnMoreText: {
+    color: '#007aff',
+    fontSize: 15,
+    textDecorationLine: 'underline',
+    fontWeight: '500',
   },
   content: {
     flex: 1,
