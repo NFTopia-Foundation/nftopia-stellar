@@ -3,7 +3,7 @@
     "version": "0.1.0",
     "private": true,
     "scripts": {
-        "dev": "next dev -p 5000",
+        "dev": "next dev ",
         "build": "next build",
         "start": "next start",
         "lint": "next lint",
@@ -33,6 +33,7 @@
         "bufferutil": "^4.0.9",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
+        "date-fns": "^4.1.0",
         "encoding": "^0.1.13",
         "eslint": "8.49.0",
         "eslint-config-next": "13.5.1",

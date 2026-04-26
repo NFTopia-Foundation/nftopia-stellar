@@ -1,5 +1,3 @@
-// src/components/nft/NftCard.tsx
-
 import Image from "next/image";
 import { Nft } from "@/types/nft";
 import { formatDistanceToNow } from "date-fns";
