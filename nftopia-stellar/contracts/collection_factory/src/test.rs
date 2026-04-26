@@ -1,7 +1,9 @@
 use crate::collection::{NftCollection, NftCollectionClient};
 use crate::factory::{CollectionFactory, CollectionFactoryClient};
 use crate::types::CollectionConfig;
-use soroban_sdk::{Address, Env, String, Vec, BytesN, testutils::Address as _};
+use soroban_sdk::TryFromVal;
+use soroban_sdk::testutils::Events;
+use soroban_sdk::{Address, Env, String, Symbol, Vec, symbol_short, testutils::Address as _};
 // no_std: no vec import, no catch_unwind import
 
 #[test]
@@ -9,7 +11,10 @@ fn test_factory_logic() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let admin = Address::from_account_id(&env, &BytesN::from_array(&env, &[0; 32]));
+    let admin = Address::from_string(&String::from_str(
+        &env,
+        "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+    ));
     let _creator = Address::generate(&env);
 
     // Register Factory
@@ -27,7 +32,10 @@ fn test_collection_logic() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let admin = Address::from_account_id(&env, &BytesN::from_array(&env, &[0; 32]));
+    let admin = Address::from_string(&String::from_str(
+        &env,
+        "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+    ));
     let user1 = Address::generate(&env);
     let user2 = Address::generate(&env);
 
@@ -53,7 +61,15 @@ fn test_collection_logic() {
     let uri = String::from_str(&env, "ipfs://hash");
     let attributes = Vec::new(&env);
 
-    collection_client.mint(&user1, &user1, &token_id, &uri, &attributes);
+    collection_client.mint(&admin, &user1, &token_id, &uri, &attributes);
+    // Assert event emission for mint
+    assert!(env.events().all().iter().any(|e| e.1.iter().any(|t| {
+        if let Ok(sym) = Symbol::try_from_val(&env, &t) {
+            sym == symbol_short!("mint")
+        } else {
+            false
+        }
+    })));
 
     assert_eq!(collection_client.owner_of(&token_id), Some(user1.clone()));
     assert_eq!(collection_client.balance_of(&user1, &token_id), 1);
@@ -77,8 +93,11 @@ fn test_unauthorized_mint() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let admin = Address::from_account_id(&env, &BytesN::from_array(&env, &[0; 32]));
-    let user = Address::generate(&env);
+    let admin = Address::from_string(&String::from_str(
+        &env,
+        "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+    ));
+    let _user = Address::generate(&env);
 
     let collection_id = env.register(NftCollection, ());
     let collection_client = NftCollectionClient::new(&env, &collection_id);
@@ -109,7 +128,10 @@ fn test_batch_minting() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let admin = Address::from_account_id(&env, &BytesN::from_array(&env, &[0; 32]));
+    let admin = Address::from_string(&String::from_str(
+        &env,
+        "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+    ));
     let user1 = Address::generate(&env);
     let user2 = Address::generate(&env);
 
@@ -138,7 +160,15 @@ fn test_batch_minting() {
     ];
     for (to, token_id, uri) in &tokens {
         let attributes = Vec::new(&env);
-        collection_client.mint(to, to, token_id, uri, &attributes);
+        collection_client.mint(&admin, to, token_id, uri, &attributes);
+        // Assert event emission for mint
+        assert!(env.events().all().iter().any(|e| e.1.iter().any(|t| {
+            if let Ok(sym) = Symbol::try_from_val(&env, &t) {
+                sym == symbol_short!("mint")
+            } else {
+                false
+            }
+        })));
     }
 
     // Assert ownership and balances
@@ -156,7 +186,10 @@ fn test_burn_authorized() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let admin = Address::from_account_id(&env, &BytesN::from_array(&env, &[0; 32]));
+    let admin = Address::from_string(&String::from_str(
+        &env,
+        "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+    ));
     let user1 = Address::generate(&env);
 
     let collection_id = env.register(NftCollection, ());
@@ -179,7 +212,14 @@ fn test_burn_authorized() {
     let token_id = 1u32;
     let uri = String::from_str(&env, "ipfs://burn1");
     let attributes = Vec::new(&env);
-    collection_client.mint(&user1, &user1, &token_id, &uri, &attributes);
+    collection_client.mint(&admin, &user1, &token_id, &uri, &attributes);
+    assert!(env.events().all().iter().any(|e| e.1.iter().any(|t| {
+        if let Ok(sym) = Symbol::try_from_val(&env, &t) {
+            sym == symbol_short!("mint")
+        } else {
+            false
+        }
+    })));
 
     // Assert pre-burn state
     assert_eq!(collection_client.owner_of(&token_id), Some(user1.clone()));
@@ -200,7 +240,10 @@ fn test_access_control_roles() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let admin = Address::from_account_id(&env, &BytesN::from_array(&env, &[0; 32]));
+    let admin = Address::from_string(&String::from_str(
+        &env,
+        "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+    ));
     let minter = Address::generate(&env);
     let _user = Address::generate(&env);
 
@@ -246,7 +289,10 @@ fn test_access_control_roles() {
 fn test_event_emissions_happy() {
     let env = Env::default();
     env.mock_all_auths();
-    let admin = Address::from_account_id(&env, &BytesN::from_array(&env, &[0; 32]));
+    let admin = Address::from_string(&String::from_str(
+        &env,
+        "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+    ));
     let user = Address::generate(&env);
     let collection_id = env.register(NftCollection, ());
     let collection_client = NftCollectionClient::new(&env, &collection_id);
@@ -264,18 +310,40 @@ fn test_event_emissions_happy() {
     let token_id = 1u32;
     let uri = String::from_str(&env, "ipfs://event1");
     let attributes = Vec::new(&env);
-    collection_client.mint(&user, &user, &token_id, &uri, &attributes);
+    collection_client.mint(&admin, &user, &token_id, &uri, &attributes);
+    assert!(env.events().all().iter().any(|e| e.1.iter().any(|t| {
+        if let Ok(sym) = Symbol::try_from_val(&env, &t) {
+            sym == symbol_short!("mint")
+        } else {
+            false
+        }
+    })));
     collection_client.transfer(&user, &admin, &token_id);
+    assert!(env.events().all().iter().any(|e| e.1.iter().any(|t| {
+        if let Ok(sym) = Symbol::try_from_val(&env, &t) {
+            sym == symbol_short!("transfer")
+        } else {
+            false
+        }
+    })));
     collection_client.burn(&admin, &token_id);
-    // Event emission checks (pseudo, as Soroban testutils may require event log inspection)
-    // assert!(env.events().iter().any(|e| ...));
+    assert!(env.events().all().iter().any(|e| e.1.iter().any(|t| {
+        if let Ok(sym) = Symbol::try_from_val(&env, &t) {
+            sym == symbol_short!("burn")
+        } else {
+            false
+        }
+    })));
 }
 
 #[test]
 fn test_storage_state_happy() {
     let env = Env::default();
     env.mock_all_auths();
-    let admin = Address::from_account_id(&env, &BytesN::from_array(&env, &[0; 32]));
+    let admin = Address::from_string(&String::from_str(
+        &env,
+        "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+    ));
     let user = Address::generate(&env);
     let collection_id = env.register(NftCollection, ());
     let collection_client = NftCollectionClient::new(&env, &collection_id);
@@ -295,7 +363,14 @@ fn test_storage_state_happy() {
     let token_id = 1u32;
     let uri = String::from_str(&env, "ipfs://storage1");
     let attributes = Vec::new(&env);
-    collection_client.mint(&user, &user, &token_id, &uri, &attributes);
+    collection_client.mint(&admin, &user, &token_id, &uri, &attributes);
+    assert!(env.events().all().iter().any(|e| e.1.iter().any(|t| {
+        if let Ok(sym) = Symbol::try_from_val(&env, &t) {
+            sym == symbol_short!("mint")
+        } else {
+            false
+        }
+    })));
     // After mint
     assert_eq!(collection_client.total_supply(), 1);
     assert_eq!(collection_client.owner_of(&token_id), Some(user.clone()));
@@ -312,7 +387,10 @@ fn test_storage_state_happy() {
 fn test_invalid_params_empty_name() {
     let env = Env::default();
     env.mock_all_auths();
-    let admin = Address::from_account_id(&env, &BytesN::from_array(&env, &[0; 32]));
+    let admin = Address::from_string(&String::from_str(
+        &env,
+        "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+    ));
     let collection_id = env.register(NftCollection, ());
     let collection_client = NftCollectionClient::new(&env, &collection_id);
     let config = CollectionConfig {
@@ -334,7 +412,10 @@ fn test_invalid_params_empty_name() {
 fn test_invalid_params_excessive_royalty() {
     let env = Env::default();
     env.mock_all_auths();
-    let admin = Address::from_account_id(&env, &BytesN::from_array(&env, &[0; 32]));
+    let admin = Address::from_string(&String::from_str(
+        &env,
+        "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+    ));
     let collection_id = env.register(NftCollection, ());
     let collection_client = NftCollectionClient::new(&env, &collection_id);
     let config = CollectionConfig {
@@ -356,7 +437,10 @@ fn test_invalid_params_excessive_royalty() {
 fn test_invalid_params_zero_max_supply() {
     let env = Env::default();
     env.mock_all_auths();
-    let admin = Address::from_account_id(&env, &BytesN::from_array(&env, &[0; 32]));
+    let admin = Address::from_string(&String::from_str(
+        &env,
+        "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+    ));
     let collection_id = env.register(NftCollection, ());
     let collection_client = NftCollectionClient::new(&env, &collection_id);
     let config = CollectionConfig {
@@ -567,7 +651,7 @@ fn test_edge_unicode_metadata() {
     let token_id = 1u32;
     let uri = String::from_str(&env, "ipfs://ユニコード");
     let attributes = Vec::new(&env);
-    let user = Address::generate(&env);
+    let _user = Address::generate(&env);
     let user = Address::generate(&env);
     collection_client.mint(&admin, &user, &token_id, &uri, &attributes);
     assert_eq!(collection_client.owner_of(&token_id), Some(user.clone()));

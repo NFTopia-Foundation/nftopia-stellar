@@ -14,14 +14,14 @@ impl NftCollection {
             panic_with_error!(&env, ContractError::AlreadyInitialized);
         }
         // Validation: name must not be empty
-        if config.name.len() == 0 {
+        if config.name.is_empty() {
             panic_with_error!(&env, ContractError::InvalidAmount); // Or define a new error
         }
         // Validation: max_supply must not be zero if Some
-        if let Some(max) = config.max_supply {
-            if max == 0 {
-                panic_with_error!(&env, ContractError::InvalidAmount);
-            }
+        if let Some(max) = config.max_supply
+            && max == 0
+        {
+            panic_with_error!(&env, ContractError::InvalidAmount);
         }
         // Validation: royalty_percentage must not exceed 10000
         if config.royalty_percentage > 10000 {

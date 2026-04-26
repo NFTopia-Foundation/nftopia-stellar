@@ -14,7 +14,7 @@ fn make_config(env: &Env) -> CollectionConfig {
     }
 }
 
-fn setup(env: &Env) -> (NftContractClient, Address) {
+fn setup(env: &Env) -> (NftContractClient<'_>, Address) {
     let admin = Address::generate(env);
     let contract_id = env.register(NftContract, ());
     let client = NftContractClient::new(env, &contract_id);
