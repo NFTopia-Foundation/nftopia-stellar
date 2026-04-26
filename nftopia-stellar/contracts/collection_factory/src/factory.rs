@@ -109,12 +109,16 @@ impl CollectionFactory {
             .set(&DataKey::FactoryAdmin, &new_admin);
     }
 
-    pub fn withdraw_fees(env: Env, _to: Address) -> Result<(), ContractError> {
+    pub fn withdraw_fees(env: Env, to: Address) -> Result<(), ContractError> {
         let admin: Address = env
             .storage()
             .instance()
             .get(&DataKey::FactoryAdmin)
             .unwrap();
+        // Only admin can withdraw
+        if !to.eq(&admin) {
+            panic_with_error!(&env, ContractError::NotAuthorized);
+        }
         admin.require_auth();
 
         // Fee collection logic would go here

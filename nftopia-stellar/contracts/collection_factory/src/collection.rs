@@ -13,7 +13,20 @@ impl NftCollection {
         if env.storage().instance().has(&DataKey::CollectionConfig) {
             panic_with_error!(&env, ContractError::AlreadyInitialized);
         }
-
+        // Validation: name must not be empty
+        if config.name.len() == 0 {
+            panic_with_error!(&env, ContractError::InvalidAmount); // Or define a new error
+        }
+        // Validation: max_supply must not be zero if Some
+        if let Some(max) = config.max_supply {
+            if max == 0 {
+                panic_with_error!(&env, ContractError::InvalidAmount);
+            }
+        }
+        // Validation: royalty_percentage must not exceed 10000
+        if config.royalty_percentage > 10000 {
+            panic_with_error!(&env, ContractError::InvalidRoyalty);
+        }
         env.storage().instance().set(&DataKey::FactoryAdmin, &admin);
         env.storage()
             .instance()
@@ -35,19 +48,21 @@ impl NftCollection {
 
     pub fn mint(
         env: Env,
+        minter: Address,
         to: Address,
         token_id: u32,
         uri: String,
         attributes: Vec<(String, String)>,
     ) -> Result<(), ContractError> {
+        minter.require_auth();
         let admin: Address = env
             .storage()
             .instance()
             .get(&DataKey::FactoryAdmin)
             .unwrap();
-        // Allow only admin or designated minters
-        if !Self::is_minter(&env, &admin) {
-            return Err(ContractError::NotMinter);
+        // Allow only admin or designated minters (the caller)
+        if !Self::is_minter(&env, &minter) {
+            panic_with_error!(&env, ContractError::NotMinter);
         }
 
         if env
