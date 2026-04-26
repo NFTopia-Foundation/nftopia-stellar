@@ -35,6 +35,8 @@ export type AuthStore = {
   loading: boolean;
   isAuthenticated: boolean;
   error: string | null;
+  accessToken: string | null;
+  refreshTokenValue: string | null;
   setUser: (user: User | null) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
@@ -48,6 +50,7 @@ export type AuthStore = {
     locale: string
   ) => Promise<void>;
   logout: () => Promise<void>;
+  refreshToken: () => Promise<string>;
 };
 
 // Collection Store Types

@@ -78,7 +78,7 @@ export default function ProfilePage() {
     }
   };
 
-  const isAlreadyLinked = linkedWallets.some((w) => w.address === address);
+  const isAlreadyLinked = linkedWallets.some((w) => w.walletAddress === address);
 
   return (
     <div className="p-6 lg:p-8 min-h-screen bg-background">
@@ -130,7 +130,7 @@ export default function ProfilePage() {
           {linkedWallets.length > 0 ? (
             <div className="space-y-3 mb-5">
               {linkedWallets.map((w) => (
-                <LinkedWalletRow key={w.address} wallet={w} />
+                <LinkedWalletRow key={w.walletAddress} wallet={w} />
               ))}
             </div>
           ) : (
@@ -195,7 +195,7 @@ export default function ProfilePage() {
 }
 
 function LinkedWalletRow({ wallet }: { wallet: LinkedWallet }) {
-  const network = wallet.address.startsWith("G") ? "mainnet" : "testnet";
+  const network = wallet.walletAddress.startsWith("G") ? "mainnet" : "testnet";
 
   return (
     <div className="flex items-center justify-between p-3 rounded-lg bg-muted/40 border border-border">
@@ -206,7 +206,7 @@ function LinkedWalletRow({ wallet }: { wallet: LinkedWallet }) {
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <p className="text-sm font-mono text-foreground truncate">
-              {wallet.address.slice(0, 6)}…{wallet.address.slice(-6)}
+              {wallet.walletAddress.slice(0, 6)}…{wallet.walletAddress.slice(-6)}
             </p>
             {wallet.isPrimary && (
               <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300">
@@ -215,12 +215,12 @@ function LinkedWalletRow({ wallet }: { wallet: LinkedWallet }) {
             )}
           </div>
           <p className="text-xs text-muted-foreground capitalize">
-            {wallet.provider} · Linked {new Date(wallet.linkedAt).toLocaleDateString()}
+            {wallet.walletProvider} · Linked {new Date(wallet.lastUsedAt).toLocaleDateString()}
           </p>
         </div>
       </div>
       <a
-        href={getExplorerUrl(network as "testnet" | "mainnet", undefined, wallet.address)}
+        href={getExplorerUrl(network as "testnet" | "mainnet", undefined, wallet.walletAddress)}
         target="_blank"
         rel="noopener noreferrer"
         className="text-purple-400 hover:text-purple-300 transition-colors ml-2"

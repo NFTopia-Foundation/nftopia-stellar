@@ -18,6 +18,26 @@ export enum OrderStatus {
 }
 
 export class CreateOrderDto {
+  // For trade contract integration
+  @IsString()
+  @IsOptional()
+  nftContractId?: string;
+
+  @IsString()
+  @IsOptional()
+  nftTokenId?: string;
+
+  @IsString()
+  @IsOptional()
+  requestedNftContract?: string;
+
+  @IsString()
+  @IsOptional()
+  requestedNftTokenId?: string;
+
+  @IsString()
+  @IsOptional()
+  expiresAt?: string;
   @IsUUID()
   nftId: string;
 
