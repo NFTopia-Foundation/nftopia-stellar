@@ -1,5 +1,4 @@
 #![cfg(test)]
-#![allow(unused_variables)]
 
 use soroban_sdk::{testutils::Address as _, Address, Bytes, Env, Symbol};
 
@@ -10,31 +9,11 @@ use crate::{
     types::{Asset, AuctionType},
 };
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-fn setup() -> (Env, Address, Address, MarketplaceSettlementClient<'static>) {
-    let env = Env::default();
-    env.mock_all_auths();
-    let id = env.register(MarketplaceSettlement, ());
-    let client = MarketplaceSettlementClient::new(&env, &id);
-    let admin = Address::generate(&env);
-    client.initialize(&admin);
-    // SAFETY: env, id, and client are all owned by the caller's stack frame.
-    let client: MarketplaceSettlementClient<'static> = unsafe { core::mem::transmute(client) };
-    (env, id, admin, client)
-}
-
-fn asset(env: &Env) -> Asset {
+fn mk_asset(env: &Env) -> Asset {
     Asset {
         contract: Address::generate(env),
         symbol: Symbol::new(env, "XLM"),
     }
-}
-
-fn reg_royalty(env: &Env, contract_id: &Address, nft: &Address, token_id: u64, creator: &Address) {
-    env.as_contract(contract_id, || {
-        let _ = RoyaltyDistributor::set_royalty_info(env, nft, token_id, creator, 500, creator);
-    });
 }
 
 fn advance(env: &Env, secs: u64) {
@@ -56,31 +35,49 @@ fn advance(env: &Env, secs: u64) {
 
 #[test]
 fn test_initialize_success() {
-    let (_env, _cid, _admin, _client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
+    let client = MarketplaceSettlementClient::new(&env, &cid);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
 }
 
 #[test]
 fn test_accumulated_fees_start_zero() {
-    let (env, _cid, _admin, client) = setup();
-    assert_eq!(client.get_accumulated_fees(&asset(&env)), 0i128);
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
+    let client = MarketplaceSettlementClient::new(&env, &cid);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+    assert_eq!(client.get_accumulated_fees(&mk_asset(&env)), 0i128);
 }
 
 // ─── Sale – Happy Paths ──────────────────────────────────────────────────────
 
 #[test]
 fn test_create_sale_success() {
-    let (env, cid, _admin, client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
+    let client = MarketplaceSettlementClient::new(&env, &cid);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
     let seller = Address::generate(&env);
     let nft = Address::generate(&env);
     let creator = Address::generate(&env);
-    reg_royalty(&env, &cid, &nft, 1, &creator);
+    env.as_contract(&cid, || {
+        let _ = RoyaltyDistributor::set_royalty_info(&env, &nft, 1, &creator, 500, &creator);
+    });
 
     let id = client.create_sale(
         &seller,
         &nft,
         &1u64,
         &1_000_000i128,
-        &asset(&env),
+        &mk_asset(&env),
         &86400u64,
     );
     assert_eq!(id, 1u64);
@@ -88,12 +85,20 @@ fn test_create_sale_success() {
 
 #[test]
 fn test_get_sale_after_create() {
-    let (env, cid, _admin, client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
+    let client = MarketplaceSettlementClient::new(&env, &cid);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
     let seller = Address::generate(&env);
     let nft = Address::generate(&env);
     let creator = Address::generate(&env);
-    let cur = asset(&env);
-    reg_royalty(&env, &cid, &nft, 1, &creator);
+    let cur = mk_asset(&env);
+    env.as_contract(&cid, || {
+        let _ = RoyaltyDistributor::set_royalty_info(&env, &nft, 1, &creator, 500, &creator);
+    });
 
     let id = client.create_sale(&seller, &nft, &1u64, &500_000i128, &cur, &3600u64);
     let sale = client.get_sale(&id);
@@ -103,18 +108,26 @@ fn test_get_sale_after_create() {
 
 #[test]
 fn test_cancel_sale_by_seller() {
-    let (env, cid, _admin, client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
+    let client = MarketplaceSettlementClient::new(&env, &cid);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
     let seller = Address::generate(&env);
     let nft = Address::generate(&env);
     let creator = Address::generate(&env);
-    reg_royalty(&env, &cid, &nft, 1, &creator);
+    env.as_contract(&cid, || {
+        let _ = RoyaltyDistributor::set_royalty_info(&env, &nft, 1, &creator, 500, &creator);
+    });
 
     let id = client.create_sale(
         &seller,
         &nft,
         &1u64,
         &1_000_000i128,
-        &asset(&env),
+        &mk_asset(&env),
         &86400u64,
     );
     client.cancel_transaction(&id, &Symbol::new(&env, "sale"), &seller);
@@ -124,32 +137,48 @@ fn test_cancel_sale_by_seller() {
 
 #[test]
 fn test_create_sale_zero_price_fails() {
-    let (env, cid, _admin, client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
+    let client = MarketplaceSettlementClient::new(&env, &cid);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
     let seller = Address::generate(&env);
     let nft = Address::generate(&env);
     let creator = Address::generate(&env);
-    reg_royalty(&env, &cid, &nft, 1, &creator);
+    env.as_contract(&cid, || {
+        let _ = RoyaltyDistributor::set_royalty_info(&env, &nft, 1, &creator, 500, &creator);
+    });
 
     assert!(client
-        .try_create_sale(&seller, &nft, &1u64, &0i128, &asset(&env), &86400u64)
+        .try_create_sale(&seller, &nft, &1u64, &0i128, &mk_asset(&env), &86400u64)
         .is_err());
 }
 
 #[test]
 fn test_cancel_sale_non_seller_fails() {
-    let (env, cid, _admin, client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
+    let client = MarketplaceSettlementClient::new(&env, &cid);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
     let seller = Address::generate(&env);
     let attacker = Address::generate(&env);
     let nft = Address::generate(&env);
     let creator = Address::generate(&env);
-    reg_royalty(&env, &cid, &nft, 1, &creator);
+    env.as_contract(&cid, || {
+        let _ = RoyaltyDistributor::set_royalty_info(&env, &nft, 1, &creator, 500, &creator);
+    });
 
     let id = client.create_sale(
         &seller,
         &nft,
         &1u64,
         &1_000_000i128,
-        &asset(&env),
+        &mk_asset(&env),
         &86400u64,
     );
     assert!(client
@@ -159,19 +188,27 @@ fn test_cancel_sale_non_seller_fails() {
 
 #[test]
 fn test_execute_sale_wrong_payment_fails() {
-    let (env, cid, _admin, client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
+    let client = MarketplaceSettlementClient::new(&env, &cid);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
     let seller = Address::generate(&env);
     let buyer = Address::generate(&env);
     let nft = Address::generate(&env);
     let creator = Address::generate(&env);
-    reg_royalty(&env, &cid, &nft, 1, &creator);
+    env.as_contract(&cid, || {
+        let _ = RoyaltyDistributor::set_royalty_info(&env, &nft, 1, &creator, 500, &creator);
+    });
 
     let id = client.create_sale(
         &seller,
         &nft,
         &1u64,
         &1_000_000i128,
-        &asset(&env),
+        &mk_asset(&env),
         &86400u64,
     );
     assert!(client.try_execute_sale(&id, &buyer, &999_999i128).is_err());
@@ -179,14 +216,29 @@ fn test_execute_sale_wrong_payment_fails() {
 
 #[test]
 fn test_execute_expired_sale_fails() {
-    let (env, cid, _admin, client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
+    let client = MarketplaceSettlementClient::new(&env, &cid);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
     let seller = Address::generate(&env);
     let buyer = Address::generate(&env);
     let nft = Address::generate(&env);
     let creator = Address::generate(&env);
-    reg_royalty(&env, &cid, &nft, 1, &creator);
+    env.as_contract(&cid, || {
+        let _ = RoyaltyDistributor::set_royalty_info(&env, &nft, 1, &creator, 500, &creator);
+    });
 
-    let id = client.create_sale(&seller, &nft, &1u64, &1_000_000i128, &asset(&env), &60u64);
+    let id = client.create_sale(
+        &seller,
+        &nft,
+        &1u64,
+        &1_000_000i128,
+        &mk_asset(&env),
+        &60u64,
+    );
     advance(&env, 120);
     assert!(client
         .try_execute_sale(&id, &buyer, &1_000_000i128)
@@ -195,7 +247,12 @@ fn test_execute_expired_sale_fails() {
 
 #[test]
 fn test_get_nonexistent_sale_fails() {
-    let (_env, _cid, _admin, client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
+    let client = MarketplaceSettlementClient::new(&env, &cid);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
     assert!(client.try_get_sale(&9999u64).is_err());
 }
 
@@ -203,11 +260,19 @@ fn test_get_nonexistent_sale_fails() {
 
 #[test]
 fn test_create_english_auction_success() {
-    let (env, cid, _admin, client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
+    let client = MarketplaceSettlementClient::new(&env, &cid);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
     let seller = Address::generate(&env);
     let nft = Address::generate(&env);
     let creator = Address::generate(&env);
-    reg_royalty(&env, &cid, &nft, 1, &creator);
+    env.as_contract(&cid, || {
+        let _ = RoyaltyDistributor::set_royalty_info(&env, &nft, 1, &creator, 500, &creator);
+    });
 
     let id = client.create_auction(
         &seller,
@@ -218,18 +283,26 @@ fn test_create_english_auction_success() {
         &3600u64,
         &1_000i128,
         &AuctionType::English,
-        &asset(&env),
+        &mk_asset(&env),
     );
     assert_eq!(id, 1u64);
 }
 
 #[test]
 fn test_create_dutch_auction_success() {
-    let (env, cid, _admin, client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
+    let client = MarketplaceSettlementClient::new(&env, &cid);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
     let seller = Address::generate(&env);
     let nft = Address::generate(&env);
     let creator = Address::generate(&env);
-    reg_royalty(&env, &cid, &nft, 1, &creator);
+    env.as_contract(&cid, || {
+        let _ = RoyaltyDistributor::set_royalty_info(&env, &nft, 1, &creator, 500, &creator);
+    });
 
     let id = client.create_auction(
         &seller,
@@ -240,19 +313,27 @@ fn test_create_dutch_auction_success() {
         &7200u64,
         &1_000i128,
         &AuctionType::Dutch,
-        &asset(&env),
+        &mk_asset(&env),
     );
     assert!(id > 0);
 }
 
 #[test]
 fn test_place_bid_updates_highest_bidder() {
-    let (env, cid, _admin, client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
+    let client = MarketplaceSettlementClient::new(&env, &cid);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
     let seller = Address::generate(&env);
     let bidder = Address::generate(&env);
     let nft = Address::generate(&env);
     let creator = Address::generate(&env);
-    reg_royalty(&env, &cid, &nft, 1, &creator);
+    env.as_contract(&cid, || {
+        let _ = RoyaltyDistributor::set_royalty_info(&env, &nft, 1, &creator, 500, &creator);
+    });
 
     let id = client.create_auction(
         &seller,
@@ -263,11 +344,9 @@ fn test_place_bid_updates_highest_bidder() {
         &3600u64,
         &1_000i128,
         &AuctionType::English,
-        &asset(&env),
+        &mk_asset(&env),
     );
-
     client.place_bid(&id, &bidder, &105_000i128, &None);
-
     let auction = client.get_auction(&id);
     assert_eq!(auction.highest_bid, 105_000i128);
     assert_eq!(auction.highest_bidder, Some(bidder));
@@ -275,11 +354,19 @@ fn test_place_bid_updates_highest_bidder() {
 
 #[test]
 fn test_get_dutch_auction_price() {
-    let (env, cid, _admin, client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
+    let client = MarketplaceSettlementClient::new(&env, &cid);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
     let seller = Address::generate(&env);
     let nft = Address::generate(&env);
     let creator = Address::generate(&env);
-    reg_royalty(&env, &cid, &nft, 1, &creator);
+    env.as_contract(&cid, || {
+        let _ = RoyaltyDistributor::set_royalty_info(&env, &nft, 1, &creator, 500, &creator);
+    });
 
     let id = client.create_auction(
         &seller,
@@ -290,9 +377,8 @@ fn test_get_dutch_auction_price() {
         &7200u64,
         &1_000i128,
         &AuctionType::Dutch,
-        &asset(&env),
+        &mk_asset(&env),
     );
-
     let price = client.get_dutch_auction_price(&id);
     assert!(price > 0);
 }
@@ -301,11 +387,19 @@ fn test_get_dutch_auction_price() {
 
 #[test]
 fn test_create_auction_zero_price_fails() {
-    let (env, cid, _admin, client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
+    let client = MarketplaceSettlementClient::new(&env, &cid);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
     let seller = Address::generate(&env);
     let nft = Address::generate(&env);
     let creator = Address::generate(&env);
-    reg_royalty(&env, &cid, &nft, 1, &creator);
+    env.as_contract(&cid, || {
+        let _ = RoyaltyDistributor::set_royalty_info(&env, &nft, 1, &creator, 500, &creator);
+    });
 
     assert!(client
         .try_create_auction(
@@ -317,19 +411,27 @@ fn test_create_auction_zero_price_fails() {
             &3600u64,
             &1_000i128,
             &AuctionType::English,
-            &asset(&env),
+            &mk_asset(&env),
         )
         .is_err());
 }
 
 #[test]
 fn test_bid_below_starting_price_fails() {
-    let (env, cid, _admin, client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
+    let client = MarketplaceSettlementClient::new(&env, &cid);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
     let seller = Address::generate(&env);
     let bidder = Address::generate(&env);
     let nft = Address::generate(&env);
     let creator = Address::generate(&env);
-    reg_royalty(&env, &cid, &nft, 1, &creator);
+    env.as_contract(&cid, || {
+        let _ = RoyaltyDistributor::set_royalty_info(&env, &nft, 1, &creator, 500, &creator);
+    });
 
     let id = client.create_auction(
         &seller,
@@ -340,9 +442,8 @@ fn test_bid_below_starting_price_fails() {
         &3600u64,
         &1_000i128,
         &AuctionType::English,
-        &asset(&env),
+        &mk_asset(&env),
     );
-
     assert!(client
         .try_place_bid(&id, &bidder, &50_000i128, &None)
         .is_err());
@@ -350,12 +451,20 @@ fn test_bid_below_starting_price_fails() {
 
 #[test]
 fn test_bid_on_expired_auction_fails() {
-    let (env, cid, _admin, client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
+    let client = MarketplaceSettlementClient::new(&env, &cid);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
     let seller = Address::generate(&env);
     let bidder = Address::generate(&env);
     let nft = Address::generate(&env);
     let creator = Address::generate(&env);
-    reg_royalty(&env, &cid, &nft, 1, &creator);
+    env.as_contract(&cid, || {
+        let _ = RoyaltyDistributor::set_royalty_info(&env, &nft, 1, &creator, 500, &creator);
+    });
 
     let id = client.create_auction(
         &seller,
@@ -366,9 +475,8 @@ fn test_bid_on_expired_auction_fails() {
         &60u64,
         &1_000i128,
         &AuctionType::English,
-        &asset(&env),
+        &mk_asset(&env),
     );
-
     advance(&env, 120);
     assert!(client
         .try_place_bid(&id, &bidder, &110_000i128, &None)
@@ -377,13 +485,21 @@ fn test_bid_on_expired_auction_fails() {
 
 #[test]
 fn test_bid_below_increment_fails() {
-    let (env, cid, _admin, client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
+    let client = MarketplaceSettlementClient::new(&env, &cid);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
     let seller = Address::generate(&env);
     let b1 = Address::generate(&env);
     let b2 = Address::generate(&env);
     let nft = Address::generate(&env);
     let creator = Address::generate(&env);
-    reg_royalty(&env, &cid, &nft, 1, &creator);
+    env.as_contract(&cid, || {
+        let _ = RoyaltyDistributor::set_royalty_info(&env, &nft, 1, &creator, 500, &creator);
+    });
 
     let id = client.create_auction(
         &seller,
@@ -394,16 +510,20 @@ fn test_bid_below_increment_fails() {
         &3600u64,
         &10_000i128,
         &AuctionType::English,
-        &asset(&env),
+        &mk_asset(&env),
     );
-
     client.place_bid(&id, &b1, &110_000i128, &None);
     assert!(client.try_place_bid(&id, &b2, &110_001i128, &None).is_err());
 }
 
 #[test]
 fn test_get_nonexistent_auction_fails() {
-    let (_env, _cid, _admin, client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
+    let client = MarketplaceSettlementClient::new(&env, &cid);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
     assert!(client.try_get_auction(&9999u64).is_err());
 }
 
@@ -412,7 +532,12 @@ fn test_get_nonexistent_auction_fails() {
 #[test]
 fn test_update_fee_config_by_admin() {
     use crate::types::FeeConfig;
-    let (env, cid, admin, client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
+    let client = MarketplaceSettlementClient::new(&env, &cid);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
 
     let cfg = FeeConfig {
         platform_fee_bps: 300,
@@ -429,7 +554,12 @@ fn test_update_fee_config_by_admin() {
 #[test]
 fn test_update_fee_config_non_admin_fails() {
     use crate::types::FeeConfig;
-    let (env, cid, admin, client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
+    let client = MarketplaceSettlementClient::new(&env, &cid);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
     let attacker = Address::generate(&env);
 
     let cfg = FeeConfig {
@@ -446,17 +576,23 @@ fn test_update_fee_config_non_admin_fails() {
 
 #[test]
 fn test_get_user_volume_starts_zero() {
-    let (env, cid, _admin, client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
+    let client = MarketplaceSettlementClient::new(&env, &cid);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
     let user = Address::generate(&env);
-    let vol = client.get_user_volume(&user);
-    assert_eq!(vol, 0i128);
+    assert_eq!(client.get_user_volume(&user), 0i128);
 }
 
 // ─── Royalty Distributor ─────────────────────────────────────────────────────
 
 #[test]
 fn test_set_and_get_royalty_info() {
-    let (env, cid, _admin, _client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
     let nft = Address::generate(&env);
     let creator = Address::generate(&env);
 
@@ -470,7 +606,9 @@ fn test_set_and_get_royalty_info() {
 
 #[test]
 fn test_royalty_exceeds_max_fails() {
-    let (env, cid, _admin, _client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
     let nft = Address::generate(&env);
     let creator = Address::generate(&env);
 
@@ -484,8 +622,11 @@ fn test_royalty_exceeds_max_fails() {
 
 #[test]
 fn test_get_royalty_not_found_fails() {
-    let (env, cid, _admin, _client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
     let nft = Address::generate(&env);
+
     env.as_contract(&cid, || {
         assert_eq!(
             RoyaltyDistributor::get_royalty_info(&env, &nft, 99),
@@ -498,21 +639,28 @@ fn test_get_royalty_not_found_fails() {
 
 #[test]
 fn test_initiate_dispute_success() {
-    let (env, cid, _admin, client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
+    let client = MarketplaceSettlementClient::new(&env, &cid);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
     let seller = Address::generate(&env);
     let nft = Address::generate(&env);
     let creator = Address::generate(&env);
-    reg_royalty(&env, &cid, &nft, 1, &creator);
+    env.as_contract(&cid, || {
+        let _ = RoyaltyDistributor::set_royalty_info(&env, &nft, 1, &creator, 500, &creator);
+    });
 
     let tx_id = client.create_sale(
         &seller,
         &nft,
         &1u64,
         &1_000_000i128,
-        &asset(&env),
+        &mk_asset(&env),
         &86400u64,
     );
-
     let reason = Bytes::from_slice(&env, b"item not received");
     let dispute_id = client.initiate_dispute(&tx_id, &reason, &None, &seller);
     assert!(dispute_id > 0);
@@ -520,21 +668,28 @@ fn test_initiate_dispute_success() {
 
 #[test]
 fn test_double_dispute_fails() {
-    let (env, cid, _admin, client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
+    let client = MarketplaceSettlementClient::new(&env, &cid);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
     let seller = Address::generate(&env);
     let nft = Address::generate(&env);
     let creator = Address::generate(&env);
-    reg_royalty(&env, &cid, &nft, 1, &creator);
+    env.as_contract(&cid, || {
+        let _ = RoyaltyDistributor::set_royalty_info(&env, &nft, 1, &creator, 500, &creator);
+    });
 
     let tx_id = client.create_sale(
         &seller,
         &nft,
         &1u64,
         &1_000_000i128,
-        &asset(&env),
+        &mk_asset(&env),
         &86400u64,
     );
-
     let reason = Bytes::from_slice(&env, b"reason");
     client.initiate_dispute(&tx_id, &reason, &None, &seller);
     assert!(client
@@ -547,10 +702,15 @@ fn test_double_dispute_fails() {
 #[test]
 fn test_create_trade_success() {
     use crate::types::{NFTItem, RoyaltyDistribution};
-    let (env, cid, _admin, client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
+    let client = MarketplaceSettlementClient::new(&env, &cid);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
     let initiator = Address::generate(&env);
     let creator = Address::generate(&env);
-
     let dummy_royalty = RoyaltyDistribution {
         creator_address: creator.clone(),
         creator_percentage: 500,
@@ -579,7 +739,13 @@ fn test_create_trade_success() {
 
 #[test]
 fn test_create_trade_empty_nfts_fails() {
-    let (env, cid, _admin, client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
+    let client = MarketplaceSettlementClient::new(&env, &cid);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
     let initiator = Address::generate(&env);
     let empty: soroban_sdk::Vec<crate::types::NFTItem> = soroban_sdk::Vec::new(&env);
     assert!(client
@@ -592,10 +758,15 @@ fn test_create_trade_empty_nfts_fails() {
 #[test]
 fn test_create_bundle_success() {
     use crate::types::{NFTItem, RoyaltyDistribution};
-    let (env, cid, _admin, client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
+    let client = MarketplaceSettlementClient::new(&env, &cid);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
     let seller = Address::generate(&env);
     let creator = Address::generate(&env);
-
     let dummy_royalty = RoyaltyDistribution {
         creator_address: creator.clone(),
         creator_percentage: 500,
@@ -611,17 +782,23 @@ fn test_create_bundle_success() {
         royalty_info: dummy_royalty,
     });
 
-    let bundle_id = client.create_bundle(&seller, &items, &500_000i128, &asset(&env), &86400u64);
+    let bundle_id = client.create_bundle(&seller, &items, &500_000i128, &mk_asset(&env), &86400u64);
     assert!(bundle_id > 0);
 }
 
 #[test]
 fn test_create_bundle_empty_items_fails() {
-    let (env, cid, _admin, client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
+    let client = MarketplaceSettlementClient::new(&env, &cid);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
     let seller = Address::generate(&env);
     let empty: soroban_sdk::Vec<crate::types::NFTItem> = soroban_sdk::Vec::new(&env);
     assert!(client
-        .try_create_bundle(&seller, &empty, &500_000i128, &asset(&env), &86400u64)
+        .try_create_bundle(&seller, &empty, &500_000i128, &mk_asset(&env), &86400u64)
         .is_err());
 }
 
@@ -629,7 +806,13 @@ fn test_create_bundle_empty_items_fails() {
 
 #[test]
 fn test_emergency_withdraw_non_admin_fails() {
-    let (env, cid, _admin, client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
+    let client = MarketplaceSettlementClient::new(&env, &cid);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
     let attacker = Address::generate(&env);
     let reason = Bytes::from_slice(&env, b"stuck");
     assert!(client
@@ -641,12 +824,20 @@ fn test_emergency_withdraw_non_admin_fails() {
 
 #[test]
 fn test_reveal_wrong_salt_fails() {
-    let (env, cid, _admin, client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
+    let client = MarketplaceSettlementClient::new(&env, &cid);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
     let seller = Address::generate(&env);
     let bidder = Address::generate(&env);
     let nft = Address::generate(&env);
     let creator = Address::generate(&env);
-    reg_royalty(&env, &cid, &nft, 1, &creator);
+    env.as_contract(&cid, || {
+        let _ = RoyaltyDistributor::set_royalty_info(&env, &nft, 1, &creator, 500, &creator);
+    });
 
     let id = client.create_auction(
         &seller,
@@ -657,12 +848,10 @@ fn test_reveal_wrong_salt_fails() {
         &3600u64,
         &1_000i128,
         &AuctionType::English,
-        &asset(&env),
+        &mk_asset(&env),
     );
-
     let commitment = Bytes::from_slice(&env, b"commitment_hash");
     client.place_bid(&id, &bidder, &110_000i128, &Some(commitment));
-
     let wrong_salt = Bytes::from_slice(&env, b"wrong_salt");
     assert!(client
         .try_reveal_bid(&id, &bidder, &110_000i128, &wrong_salt)
@@ -673,6 +862,11 @@ fn test_reveal_wrong_salt_fails() {
 
 #[test]
 fn test_cleanup_expired_commitments() {
-    let (_env, _cid, _admin, client) = setup();
+    let env = Env::default();
+    env.mock_all_auths();
+    let cid = env.register(MarketplaceSettlement, ());
+    let client = MarketplaceSettlementClient::new(&env, &cid);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
     client.cleanup_expired_commitments();
 }
