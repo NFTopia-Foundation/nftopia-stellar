@@ -372,10 +372,13 @@ fn various_operation_types_all_execute() {
 #[test]
 #[should_panic(expected = "HostError: Error(Auth, InvalidAction)")]
 fn test_unauthorized_creator_add_operation() {
-    use soroban_sdk::{IntoVal, testutils::{MockAuth, MockAuthInvoke}};
+    use soroban_sdk::{
+        IntoVal,
+        testutils::{MockAuth, MockAuthInvoke},
+    };
     let env = Env::default();
     let (client, creator) = make_client(&env);
-    
+
     // 1. Creator creates the transaction
     env.mock_all_auths();
     let tx_id = client.create_transaction(&creator, &map![&env], &vec![&env]);
@@ -383,11 +386,11 @@ fn test_unauthorized_creator_add_operation() {
     // 2. Now call add_operation as 'hacker'
     let hacker = Address::generate(&env);
     let op = sample_operation(&env, 1, vec![&env]);
-    
+
     // We mock auth ONLY for hacker. add_operation will call creator.require_auth(),
     // which will fail because creator is not in the authorized addresses for this call.
-    client.mock_auths(&[
-        MockAuth {
+    client
+        .mock_auths(&[MockAuth {
             address: &hacker,
             invoke: &MockAuthInvoke {
                 contract: &client.address,
@@ -395,8 +398,8 @@ fn test_unauthorized_creator_add_operation() {
                 args: (tx_id, op.clone()).into_val(&env),
                 sub_invokes: &[],
             },
-        }
-    ]).add_operation(&tx_id, &op);
+        }])
+        .add_operation(&tx_id, &op);
 }
 
 #[test]
@@ -425,7 +428,7 @@ fn test_max_operations_limit_exceeded() {
     let (client, creator) = make_client(&env);
 
     let tx_id = client.create_transaction(&creator, &map![&env], &vec![&env]);
-    
+
     // Max is 50 operations
     for i in 1..=51 {
         let op = sample_operation(&env, i as u64, vec![&env]);
@@ -441,9 +444,10 @@ fn test_max_params_per_op_exceeded() {
     let (client, creator) = make_client(&env);
 
     let tx_id = client.create_transaction(&creator, &map![&env], &vec![&env]);
-    
+
     let mut params = Vec::new(&env);
-    for _ in 0..21 { // Max is 20
+    for _ in 0..21 {
+        // Max is 20
         params.push_back(Parameter {
             param_type: ParamType::Bool,
             value: soroban_sdk::Bytes::from_slice(&env, &[1]),
@@ -464,7 +468,8 @@ fn test_batch_size_limit_exceeded() {
     let (client, _) = make_client(&env);
 
     let mut blueprints = Vec::new(&env);
-    for _ in 0..11 { // Max is 10
+    for _ in 0..11 {
+        // Max is 10
         blueprints.push_back(TransactionBlueprint {
             creator: Address::generate(&env),
             metadata: map![&env],
@@ -501,7 +506,7 @@ fn test_complex_dependency_resolution() {
     let (client, creator) = make_client(&env);
 
     let tx_id = client.create_transaction(&creator, &map![&env], &vec![&env]);
-    
+
     // 1 -> 2
     // 1 -> 3
     // (2, 3) -> 4
@@ -518,7 +523,7 @@ fn test_complex_dependency_resolution() {
     let result = client.execute_transaction(&tx_id, &None, &None);
     assert_eq!(result.final_state, TransactionState::Completed);
     assert_eq!(result.successful_operations, 4);
-    
+
     // Verify specific results are present for all operations
     assert_eq!(result.results.len(), 4);
     for i in 0..4 {
@@ -534,10 +539,10 @@ fn test_circular_dependency_detection() {
     let (client, creator) = make_client(&env);
 
     let tx_id = client.create_transaction(&creator, &map![&env], &vec![&env]);
-    
+
     // 1 -> 2
     // 2 -> 1 (Circular)
-    // Note: The preflight check doesn't explicitly check for cycles yet, 
+    // Note: The preflight check doesn't explicitly check for cycles yet,
     // but execution will fail when it hits the first unmet dependency.
     let op1 = sample_operation(&env, 1, vec![&env, 2]);
     let op2 = sample_operation(&env, 2, vec![&env, 1]);
@@ -555,7 +560,7 @@ fn test_atomic_rollback_on_execution_failure() {
     let (client, creator) = make_client(&env);
 
     let tx_id = client.create_transaction(&creator, &map![&env], &vec![&env]);
-    
+
     // Op 1 succeeds
     client.add_operation(&tx_id, &sample_operation(&env, 1, vec![&env]));
     // Op 2 has a missing dependency → causes execution to fail and state to Rollback
@@ -564,11 +569,11 @@ fn test_atomic_rollback_on_execution_failure() {
     let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         client.execute_transaction(&tx_id, &None, &None)
     }));
-    
+
     assert!(res.is_err());
-    
-    // NOTE: In Soroban, if a contract call fails (panics/errs), the host rolls back 
-    // ALL state changes made during that call. Thus, the transaction state 
+
+    // NOTE: In Soroban, if a contract call fails (panics/errs), the host rolls back
+    // ALL state changes made during that call. Thus, the transaction state
     // remains what it was before the call (Draft).
     let status = client.get_transaction_status(&tx_id);
     assert_eq!(status.state, TransactionState::Draft);
@@ -592,7 +597,7 @@ fn test_gas_optimization_reordering_placeholder() {
         enable_caching: true,
         fallback_gas_multiplier_bps: 10500,
     };
-    
+
     let result_cfg = client.optimize_transaction_flow(&tx_id, &cfg);
     // Should return default config currently
     assert_eq!(result_cfg.batch_size, 10);
@@ -612,7 +617,7 @@ fn test_transaction_lifecycle_full_cycle() {
 
     // 2. Add operations
     client.add_operation(&tx_id, &sample_operation(&env, 1, vec![&env]));
-    
+
     // 3. Execute (Completed)
     client.execute_transaction(&tx_id, &None, &None);
     let status = client.get_transaction_status(&tx_id);
@@ -635,11 +640,10 @@ fn test_batch_execute_partial_success() {
 
     let gas_cfg = crate::types::default_gas_config(&env);
     let result = client.batch_execute_transactions(&vec![&env, tx1, tx2], &gas_cfg);
-    
+
     assert_eq!(result.total_transactions, 2);
     assert_eq!(result.succeeded, 1);
     assert_eq!(result.failed, 1);
     assert_eq!(result.result_ids.len(), 1);
     assert_eq!(result.result_ids.get(0).unwrap(), tx1);
 }
-
