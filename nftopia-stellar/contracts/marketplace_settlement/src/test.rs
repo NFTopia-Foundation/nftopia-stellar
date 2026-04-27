@@ -200,7 +200,9 @@ fn test_execute_expired_sale_fails() {
         .create_sale(&seller, &nft, &1u64, &1_000_000i128, &asset(&env), &60u64)
         .expect("create_sale");
     advance(&env, 120);
-    assert!(client.try_execute_sale(&id, &buyer, &1_000_000i128).is_err());
+    assert!(client
+        .try_execute_sale(&id, &buyer, &1_000_000i128)
+        .is_err());
 }
 
 #[test]
@@ -365,7 +367,9 @@ fn test_bid_below_starting_price_fails() {
         )
         .expect("create_auction");
 
-    assert!(client.try_place_bid(&id, &bidder, &50_000i128, &None).is_err());
+    assert!(client
+        .try_place_bid(&id, &bidder, &50_000i128, &None)
+        .is_err());
 }
 
 #[test]
@@ -392,7 +396,9 @@ fn test_bid_on_expired_auction_fails() {
         .expect("create_auction");
 
     advance(&env, 120);
-    assert!(client.try_place_bid(&id, &bidder, &110_000i128, &None).is_err());
+    assert!(client
+        .try_place_bid(&id, &bidder, &110_000i128, &None)
+        .is_err());
 }
 
 #[test]
@@ -419,7 +425,9 @@ fn test_bid_below_increment_fails() {
         )
         .expect("create_auction");
 
-    client.place_bid(&id, &b1, &110_000i128, &None).expect("first bid");
+    client
+        .place_bid(&id, &b1, &110_000i128, &None)
+        .expect("first bid");
     assert!(client.try_place_bid(&id, &b2, &110_001i128, &None).is_err());
 }
 
@@ -445,7 +453,9 @@ fn test_update_fee_config_by_admin() {
         volume_discounts: soroban_sdk::Vec::new(&env),
         vip_exemptions: soroban_sdk::Vec::new(&env),
     };
-    client.update_fee_config(&cfg, &admin).expect("update_fee_config");
+    client
+        .update_fee_config(&cfg, &admin)
+        .expect("update_fee_config");
 }
 
 #[test]
@@ -470,9 +480,7 @@ fn test_update_fee_config_non_admin_fails() {
 fn test_get_user_volume_starts_zero() {
     let (env, _admin, client) = setup();
     let user = Address::generate(&env);
-    let vol = client
-        .get_user_volume(&user)
-        .expect("get_user_volume");
+    let vol = client.get_user_volume(&user).expect("get_user_volume");
     assert_eq!(vol, 0i128);
 }
 
@@ -487,8 +495,7 @@ fn test_set_and_get_royalty_info() {
     RoyaltyDistributor::set_royalty_info(&env, &nft, 1, &creator, 500, &creator)
         .expect("set_royalty_info");
 
-    let info =
-        RoyaltyDistributor::get_royalty_info(&env, &nft, 1).expect("get_royalty_info");
+    let info = RoyaltyDistributor::get_royalty_info(&env, &nft, 1).expect("get_royalty_info");
     assert_eq!(info.royalty_percentage, 500);
     assert_eq!(info.creator, creator);
 }
