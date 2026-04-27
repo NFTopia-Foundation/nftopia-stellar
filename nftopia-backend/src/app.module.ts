@@ -27,6 +27,7 @@ import { SorobanRpcService } from './services/soroban-rpc.service';
 import { StellarAccountService } from './services/stellar-account.service';
 import { CollectionFactoryModule } from './modules/collection-factory/collection-factory.module';
 import { StellarModule } from './modules/stellar/stellar.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -108,6 +109,7 @@ import { StellarModule } from './modules/stellar/stellar.module';
     SearchModule,
     CollectionFactoryModule,
     StellarModule,
+    NotificationsModule,
     IndexerModule,
   ],
   controllers: [AppController],

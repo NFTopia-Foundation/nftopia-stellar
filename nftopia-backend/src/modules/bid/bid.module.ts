@@ -13,11 +13,7 @@ import { StellarSignatureStrategy } from '../../auth/strategies/stellar.strategy
 import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-<<<<<<< feat/notify-websocket-82
-  imports: [TypeOrmModule.forFeature([Bid, Auction, User]), NotificationsModule],
-=======
-  imports: [TypeOrmModule.forFeature([Bid, Auction, User]), StellarModule],
->>>>>>> main
+  imports: [TypeOrmModule.forFeature([Bid, Auction, User]), StellarModule, NotificationsModule],
   providers: [
     BidService,
     BidGateway,
