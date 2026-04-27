@@ -8,6 +8,8 @@ import {
   Req,
   UnauthorizedException,
   UseGuards,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { UsersService } from './users.service';
@@ -40,6 +42,7 @@ export class UsersController {
 
   // TEMP ownership enforcement
   @Patch('me')
+  @UsePipes(new ValidationPipe({ whitelist: true }))
   updateMe(
     @Headers('x-wallet-address') address: string,
     @Body() dto: UpdateProfileDto,
