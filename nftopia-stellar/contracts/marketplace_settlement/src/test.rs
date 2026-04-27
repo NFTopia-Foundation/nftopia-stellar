@@ -1,9 +1,6 @@
 #![cfg(test)]
 
-use soroban_sdk::{
-    testutils::Address as _,
-    Address, Bytes, Env, Symbol,
-};
+use soroban_sdk::{testutils::Address as _, Address, Bytes, Env, Symbol};
 
 use crate::{
     error::SettlementError,
@@ -22,8 +19,7 @@ fn setup() -> (Env, Address, MarketplaceSettlementClient<'static>) {
     let admin = Address::generate(&env);
     client.initialize(&admin);
     // SAFETY: env, id, and client are all owned by the caller's stack frame.
-    let client: MarketplaceSettlementClient<'static> =
-        unsafe { core::mem::transmute(client) };
+    let client: MarketplaceSettlementClient<'static> = unsafe { core::mem::transmute(client) };
     (env, admin, client)
 }
 
@@ -78,7 +74,14 @@ fn test_create_sale_success() {
     reg_royalty(&env, &nft, 1, &creator);
 
     let id = client
-        .create_sale(&seller, &nft, &1u64, &1_000_000i128, &asset(&env), &86400u64)
+        .create_sale(
+            &seller,
+            &nft,
+            &1u64,
+            &1_000_000i128,
+            &asset(&env),
+            &86400u64,
+        )
         .expect("create_sale");
     assert_eq!(id, 1u64);
 }
@@ -109,7 +112,14 @@ fn test_cancel_sale_by_seller() {
     reg_royalty(&env, &nft, 1, &creator);
 
     let id = client
-        .create_sale(&seller, &nft, &1u64, &1_000_000i128, &asset(&env), &86400u64)
+        .create_sale(
+            &seller,
+            &nft,
+            &1u64,
+            &1_000_000i128,
+            &asset(&env),
+            &86400u64,
+        )
         .expect("create_sale");
     client
         .cancel_transaction(&id, &Symbol::new(&env, "sale"), &seller)
@@ -141,7 +151,14 @@ fn test_cancel_sale_non_seller_fails() {
     reg_royalty(&env, &nft, 1, &creator);
 
     let id = client
-        .create_sale(&seller, &nft, &1u64, &1_000_000i128, &asset(&env), &86400u64)
+        .create_sale(
+            &seller,
+            &nft,
+            &1u64,
+            &1_000_000i128,
+            &asset(&env),
+            &86400u64,
+        )
         .expect("create_sale");
     assert!(client
         .try_cancel_transaction(&id, &Symbol::new(&env, "sale"), &attacker)
@@ -158,7 +175,14 @@ fn test_execute_sale_wrong_payment_fails() {
     reg_royalty(&env, &nft, 1, &creator);
 
     let id = client
-        .create_sale(&seller, &nft, &1u64, &1_000_000i128, &asset(&env), &86400u64)
+        .create_sale(
+            &seller,
+            &nft,
+            &1u64,
+            &1_000_000i128,
+            &asset(&env),
+            &86400u64,
+        )
         .expect("create_sale");
     assert!(client.try_execute_sale(&id, &buyer, &999_999i128).is_err());
 }
@@ -197,8 +221,15 @@ fn test_create_english_auction_success() {
 
     let id = client
         .create_auction(
-            &seller, &nft, &1u64, &100_000i128, &80_000i128,
-            &3600u64, &1_000i128, &AuctionType::English, &asset(&env),
+            &seller,
+            &nft,
+            &1u64,
+            &100_000i128,
+            &80_000i128,
+            &3600u64,
+            &1_000i128,
+            &AuctionType::English,
+            &asset(&env),
         )
         .expect("create_auction");
     assert_eq!(id, 1u64);
@@ -214,8 +245,15 @@ fn test_create_dutch_auction_success() {
 
     let id = client
         .create_auction(
-            &seller, &nft, &1u64, &200_000i128, &50_000i128,
-            &7200u64, &1_000i128, &AuctionType::Dutch, &asset(&env),
+            &seller,
+            &nft,
+            &1u64,
+            &200_000i128,
+            &50_000i128,
+            &7200u64,
+            &1_000i128,
+            &AuctionType::Dutch,
+            &asset(&env),
         )
         .expect("create_dutch_auction");
     assert!(id > 0);
@@ -232,8 +270,15 @@ fn test_place_bid_updates_highest_bidder() {
 
     let id = client
         .create_auction(
-            &seller, &nft, &1u64, &100_000i128, &80_000i128,
-            &3600u64, &1_000i128, &AuctionType::English, &asset(&env),
+            &seller,
+            &nft,
+            &1u64,
+            &100_000i128,
+            &80_000i128,
+            &3600u64,
+            &1_000i128,
+            &AuctionType::English,
+            &asset(&env),
         )
         .expect("create_auction");
 
@@ -256,8 +301,15 @@ fn test_get_dutch_auction_price() {
 
     let id = client
         .create_auction(
-            &seller, &nft, &1u64, &200_000i128, &50_000i128,
-            &7200u64, &1_000i128, &AuctionType::Dutch, &asset(&env),
+            &seller,
+            &nft,
+            &1u64,
+            &200_000i128,
+            &50_000i128,
+            &7200u64,
+            &1_000i128,
+            &AuctionType::Dutch,
+            &asset(&env),
         )
         .expect("create_dutch_auction");
 
@@ -277,8 +329,15 @@ fn test_create_auction_zero_price_fails() {
 
     assert!(client
         .try_create_auction(
-            &seller, &nft, &1u64, &0i128, &0i128,
-            &3600u64, &1_000i128, &AuctionType::English, &asset(&env),
+            &seller,
+            &nft,
+            &1u64,
+            &0i128,
+            &0i128,
+            &3600u64,
+            &1_000i128,
+            &AuctionType::English,
+            &asset(&env),
         )
         .is_err());
 }
@@ -294,8 +353,15 @@ fn test_bid_below_starting_price_fails() {
 
     let id = client
         .create_auction(
-            &seller, &nft, &1u64, &100_000i128, &80_000i128,
-            &3600u64, &1_000i128, &AuctionType::English, &asset(&env),
+            &seller,
+            &nft,
+            &1u64,
+            &100_000i128,
+            &80_000i128,
+            &3600u64,
+            &1_000i128,
+            &AuctionType::English,
+            &asset(&env),
         )
         .expect("create_auction");
 
@@ -313,8 +379,15 @@ fn test_bid_on_expired_auction_fails() {
 
     let id = client
         .create_auction(
-            &seller, &nft, &1u64, &100_000i128, &80_000i128,
-            &60u64, &1_000i128, &AuctionType::English, &asset(&env),
+            &seller,
+            &nft,
+            &1u64,
+            &100_000i128,
+            &80_000i128,
+            &60u64,
+            &1_000i128,
+            &AuctionType::English,
+            &asset(&env),
         )
         .expect("create_auction");
 
@@ -334,13 +407,19 @@ fn test_bid_below_increment_fails() {
 
     let id = client
         .create_auction(
-            &seller, &nft, &1u64, &100_000i128, &80_000i128,
-            &3600u64, &10_000i128, &AuctionType::English, &asset(&env),
+            &seller,
+            &nft,
+            &1u64,
+            &100_000i128,
+            &80_000i128,
+            &3600u64,
+            &10_000i128,
+            &AuctionType::English,
+            &asset(&env),
         )
         .expect("create_auction");
 
     client.place_bid(&id, &b1, &110_000i128, &None).expect("first bid");
-    // 110_001 is only 1 above, below the 10_000 increment
     assert!(client.try_place_bid(&id, &b2, &110_001i128, &None).is_err());
 }
 
@@ -391,7 +470,9 @@ fn test_update_fee_config_non_admin_fails() {
 fn test_get_user_volume_starts_zero() {
     let (env, _admin, client) = setup();
     let user = Address::generate(&env);
-    let vol = client.get_user_volume(&user).expect("get_user_volume");
+    let vol = client
+        .get_user_volume(&user)
+        .expect("get_user_volume");
     assert_eq!(vol, 0i128);
 }
 
@@ -445,7 +526,14 @@ fn test_initiate_dispute_success() {
     reg_royalty(&env, &nft, 1, &creator);
 
     let tx_id = client
-        .create_sale(&seller, &nft, &1u64, &1_000_000i128, &asset(&env), &86400u64)
+        .create_sale(
+            &seller,
+            &nft,
+            &1u64,
+            &1_000_000i128,
+            &asset(&env),
+            &86400u64,
+        )
         .expect("create_sale");
 
     let reason = Bytes::from_slice(&env, b"item not received");
@@ -464,7 +552,14 @@ fn test_double_dispute_fails() {
     reg_royalty(&env, &nft, 1, &creator);
 
     let tx_id = client
-        .create_sale(&seller, &nft, &1u64, &1_000_000i128, &asset(&env), &86400u64)
+        .create_sale(
+            &seller,
+            &nft,
+            &1u64,
+            &1_000_000i128,
+            &asset(&env),
+            &86400u64,
+        )
         .expect("create_sale");
 
     let reason = Bytes::from_slice(&env, b"reason");
@@ -588,8 +683,15 @@ fn test_reveal_wrong_salt_fails() {
 
     let id = client
         .create_auction(
-            &seller, &nft, &1u64, &100_000i128, &80_000i128,
-            &3600u64, &1_000i128, &AuctionType::English, &asset(&env),
+            &seller,
+            &nft,
+            &1u64,
+            &100_000i128,
+            &80_000i128,
+            &3600u64,
+            &1_000i128,
+            &AuctionType::English,
+            &asset(&env),
         )
         .expect("create_auction");
 
