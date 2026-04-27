@@ -88,15 +88,17 @@ describe("WalletConnector", () => {
 
     expect(screen.getByText("GABC...0XYZ")).toBeInTheDocument();
 
+    // Open the dropdown via the trigger button
     fireEvent.click(screen.getByRole("button"));
 
-    fireEvent.click(screen.getByRole("button", { name: "Copy Address" }));
+    // Items are now role="menuitem"
+    fireEvent.click(screen.getByRole("menuitem", { name: /copy address/i }));
     await waitFor(() => {
       expect(navigator.clipboard.writeText).toHaveBeenCalledWith(address);
       expect(mockShowSuccess).toHaveBeenCalled();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /disconnect/i }));
     expect(mockDisconnect).toHaveBeenCalled();
   });
 });

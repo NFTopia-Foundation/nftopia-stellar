@@ -65,6 +65,8 @@ export interface ButtonProps
     ButtonLoadingState {
   asChild?: boolean;
   children?: React.ReactNode;
+  /** Indicates a toggle button's pressed state */
+  pressed?: boolean;
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
@@ -77,20 +79,30 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       loading = false,
       loadingText,
       children,
+      pressed,
+      disabled,
+      "aria-label": ariaLabel,
       ...props
     },
     ref
   ) => {
     const Comp = asChild ? Slot : "button";
+    const isDisabled = loading || disabled;
+
     return (
       <Comp
         className={cn(
           buttonVariants({ variant, size, className }),
-          loading && "cursor-wait opacity-80"
+          loading && "cursor-wait opacity-80",
+          // Explicit disabled visual state (covers aria-disabled usage too)
+          isDisabled && "opacity-50 pointer-events-none"
         )}
         ref={ref}
-        disabled={loading || props.disabled}
-        aria-busy={loading}
+        disabled={isDisabled}
+        aria-busy={loading || undefined}
+        aria-disabled={isDisabled || undefined}
+        aria-pressed={pressed}
+        aria-label={ariaLabel}
         {...props}
       >
         {loading ? (
@@ -116,6 +128,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
               />
             </svg>
+            <span className="sr-only">Loading</span>
             {loadingText || children}
           </>
         ) : (
