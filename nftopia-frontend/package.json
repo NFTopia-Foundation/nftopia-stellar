@@ -55,7 +55,6 @@
     "tailwindcss": "3.3.3",
     "tailwindcss-animate": "^1.0.7",
     "use-sound": "^5.0.0",
-    "utf-8-validate": "^6.0.5",
     "uuid": "^11.1.0",
     "zustand": "^5.0.6"
   },
@@ -86,5 +85,8 @@
     "ts-jest": "^29.4.0",
     "typescript": "^5.8.3",
     "webpack-bundle-analyzer": "^4.10.2"
+  },
+  "optionalDependencies": {
+    "utf-8-validate": "^5.0.10"
   }
 }
