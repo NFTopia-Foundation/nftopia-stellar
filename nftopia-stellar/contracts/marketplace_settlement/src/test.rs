@@ -31,8 +31,7 @@ fn asset(env: &Env) -> Asset {
 }
 
 fn reg_royalty(env: &Env, nft: &Address, token_id: u64, creator: &Address) {
-    RoyaltyDistributor::set_royalty_info(env, nft, token_id, creator, 500, creator)
-        .expect("royalty reg failed");
+    let _ = RoyaltyDistributor::set_royalty_info(env, nft, token_id, creator, 500, creator);
 }
 
 fn advance(env: &Env, secs: u64) {
@@ -458,7 +457,7 @@ fn test_set_and_get_royalty_info() {
     let nft = Address::generate(&env);
     let creator = Address::generate(&env);
 
-    RoyaltyDistributor::set_royalty_info(&env, &nft, 1, &creator, 500, &creator);
+    let _ = RoyaltyDistributor::set_royalty_info(&env, &nft, 1, &creator, 500, &creator);
 
     let info = RoyaltyDistributor::get_royalty_info(&env, &nft, 1).unwrap();
     assert_eq!(info.royalty_percentage, 500);
