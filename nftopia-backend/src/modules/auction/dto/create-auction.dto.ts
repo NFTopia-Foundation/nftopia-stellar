@@ -8,6 +8,13 @@ import {
 
 export class CreateAuctionDto {
   @IsString()
+  @IsOptional()
+  currency?: string;
+
+  @IsString()
+  @IsOptional()
+  auctionType?: string;
+  @IsString()
   @IsNotEmpty()
   nftContractId: string;
 

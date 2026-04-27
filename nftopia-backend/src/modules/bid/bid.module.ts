@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { StellarModule } from '../stellar/stellar.module';
 
 import { Bid } from '../auction/entities/bid.entity';
 import { Auction } from '../auction/entities/auction.entity';
@@ -12,7 +13,11 @@ import { StellarSignatureStrategy } from '../../auth/strategies/stellar.strategy
 import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
+<<<<<<< feat/notify-websocket-82
   imports: [TypeOrmModule.forFeature([Bid, Auction, User]), NotificationsModule],
+=======
+  imports: [TypeOrmModule.forFeature([Bid, Auction, User]), StellarModule],
+>>>>>>> main
   providers: [
     BidService,
     BidGateway,

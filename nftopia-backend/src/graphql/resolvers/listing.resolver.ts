@@ -124,7 +124,7 @@ export class ListingResolver {
 
     return {
       success: Boolean(result.success),
-      listingId: result.listingId,
+      listingId: result.listingId ?? '',
       buyerId: result.buyer,
     };
   }

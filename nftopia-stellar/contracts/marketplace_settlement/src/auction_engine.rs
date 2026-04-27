@@ -520,7 +520,7 @@ impl AuctionAnalytics {
 
         Ok(AuctionStats {
             total_bids: bids.len() as u64,
-            unique_bidders: Self::count_unique_bidders(&bids) as u64,
+            unique_bidders: Self::count_unique_bidders(env, &bids) as u64,
             highest_bid: auction.highest_bid,
             average_bid: Self::calculate_average_bid(&bids),
             bid_frequency: Self::calculate_bid_frequency(&bids),
@@ -528,8 +528,8 @@ impl AuctionAnalytics {
     }
 
     /// Count unique bidders
-    fn count_unique_bidders(bids: &Vec<Bid>) -> u32 {
-        let mut unique = Vec::new(&Env::default());
+    fn count_unique_bidders(env: &Env, bids: &Vec<Bid>) -> u32 {
+        let mut unique = Vec::new(env);
 
         for bid in bids.iter() {
             if !unique.contains(bid.bidder.clone()) {

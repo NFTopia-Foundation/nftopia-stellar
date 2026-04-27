@@ -40,10 +40,10 @@ export default function FormInput({
       <TextInput
         style={[
           styles.input,
-          isFocused && styles.inputFocused,
-          error && styles.inputError,
-          !editable && styles.inputDisabled,
-          multiline && styles.inputMultiline,
+          isFocused ? styles.inputFocused : undefined,
+          error ? styles.inputError : undefined,
+          !editable ? styles.inputDisabled : undefined,
+          multiline ? styles.inputMultiline : undefined,
         ]}
         placeholder={placeholder}
         placeholderTextColor="#999"

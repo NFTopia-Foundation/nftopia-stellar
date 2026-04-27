@@ -5,6 +5,8 @@ import { Listing } from './entities/listing.entity';
 import { StellarNft } from '../../nft/entities/stellar-nft.entity';
 import { ListingStatus } from './interfaces/listing.interface';
 import { CreateListingDto } from './dto/create-listing.dto';
+import { ConfigService } from '@nestjs/config';
+import { MarketplaceSettlementClient } from '../stellar/marketplace-settlement.client';
 
 const mockListingRepo = {
   findOne: jest.fn(),
@@ -29,13 +31,30 @@ describe('ListingService', () => {
   let service: ListingService;
 
   beforeEach(async () => {
+    const mockConfigService = {
+      get: jest.fn().mockReturnValue(false),
+    };
+    const mockSettlementClient = {
+      createSale: jest.fn(),
+      executeSale: jest.fn(),
+    };
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ListingService,
         { provide: getRepositoryToken(Listing), useValue: mockListingRepo },
         { provide: getRepositoryToken(StellarNft), useValue: mockNftRepo },
+        { provide: ConfigService, useValue: mockConfigService },
+        {
+          provide: MarketplaceSettlementClient,
+          useValue: mockSettlementClient,
+        },
       ],
-    }).compile();
+    })
+      .overrideProvider(ConfigService)
+      .useValue(mockConfigService)
+      .overrideProvider(MarketplaceSettlementClient)
+      .useValue(mockSettlementClient)
+      .compile();
 
     service = module.get<ListingService>(ListingService);
     jest.clearAllMocks();

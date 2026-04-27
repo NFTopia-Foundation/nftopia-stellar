@@ -1,3 +1,4 @@
+// ...existing code...
 import {
   Injectable,
   NotFoundException,
@@ -9,15 +10,46 @@ import { Order } from './entities/order.entity';
 import { CreateOrderDto, OrderStatus, OrderType } from './dto/create-order.dto';
 import { OrderQueryDto } from './dto/order-query.dto';
 import { OrderInterface, OrderStats } from './interfaces/order.interface';
+import { ConfigService } from '@nestjs/config';
+import { MarketplaceSettlementClient } from '../stellar/marketplace-settlement.client';
 
 @Injectable()
 export class OrderService {
   constructor(
     @InjectRepository(Order)
     private readonly orderRepository: Repository<Order>,
+    private readonly configService: ConfigService,
+    private readonly settlementClient: MarketplaceSettlementClient,
   ) {}
 
-  async create(createOrderDto: CreateOrderDto): Promise<OrderInterface> {
+  async create(
+    createOrderDto: CreateOrderDto,
+  ): Promise<OrderInterface | { success: boolean; contractId: number }> {
+    const enableOnchain = this.configService.get<boolean>(
+      'ENABLE_ONCHAIN_SETTLEMENT',
+    );
+    if (enableOnchain) {
+      // On-chain: call contract for bundle or trade
+      // If you add a bundle contract, update this check
+      if (createOrderDto.type === OrderType.PURCHASE) {
+        // TODO: Map to create_bundle contract call if implemented
+        // const contractId = await this.settlementClient.createBundle(...);
+        return { success: true, contractId: -1 }; // Placeholder
+      } else if (createOrderDto.type === OrderType.SALE) {
+        // Map to createTrade contract call
+        const params = {
+          initiator: createOrderDto.buyerId,
+          offeredNftContract: createOrderDto.nftContractId ?? '',
+          offeredTokenId: createOrderDto.nftTokenId ?? '',
+          requestedNftContract: createOrderDto.requestedNftContract ?? '',
+          requestedTokenId: createOrderDto.requestedNftTokenId ?? '',
+          expiresAt: createOrderDto.expiresAt ?? '',
+        };
+        const contractId = await this.settlementClient.createTrade(params);
+        return { success: true, contractId };
+      }
+    }
+    // Legacy DB logic
     const order = this.orderRepository.create(createOrderDto);
     const saved = await this.orderRepository.save(order);
     return this.toOrderInterface(saved);
@@ -88,6 +120,16 @@ export class OrderService {
       volume: stats.volume ?? '0',
       count: Number(stats.count ?? 0),
       averagePrice: stats.averagePrice ?? '0',
+    };
+  }
+
+  // Placeholder for sales analytics
+  getSalesAnalytics() {
+    // TODO: Implement real analytics logic
+    return {
+      volume: '0',
+      count: 0,
+      averagePrice: '0',
     };
   }
 }

@@ -11,5 +11,8 @@
   ],
   "moduleNameMapper": {
     "^expo-secure-store$": "<rootDir>/src/services/auth/__mocks__/expo-secure-store.ts"
-  }
+  },
+  "transformIgnorePatterns": [
+    "node_modules/(?!(stellar-hd-wallet)/)"
+  ]
 }
