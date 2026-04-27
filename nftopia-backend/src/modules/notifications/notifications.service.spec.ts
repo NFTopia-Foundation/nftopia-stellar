@@ -132,8 +132,8 @@ describe('NotificationsService', () => {
     it('notifies different users in their respective rooms', () => {
       const room2 = makeRoom();
       mockServer.to
-        .mockReturnValueOnce(room as ReturnType<Server['to']>)
-        .mockReturnValueOnce(room2 as ReturnType<Server['to']>);
+        .mockReturnValueOnce(room as unknown as ReturnType<Server['to']>)
+        .mockReturnValueOnce(room2 as unknown as ReturnType<Server['to']>);
 
       service.notifyUser('user-A', 'bid.received', 'Bid on A');
       service.notifyUser('user-B', 'item.sold', 'Item Sold');
@@ -179,8 +179,8 @@ describe('NotificationsService', () => {
     it('broadcasts different auctions to their respective rooms', () => {
       const room2 = makeRoom();
       mockServer.to
-        .mockReturnValueOnce(room as ReturnType<Server['to']>)
-        .mockReturnValueOnce(room2 as ReturnType<Server['to']>);
+        .mockReturnValueOnce(room as unknown as ReturnType<Server['to']>)
+        .mockReturnValueOnce(room2 as unknown as ReturnType<Server['to']>);
 
       service.broadcastBidUpdate('auction-1', makeBidUpdate({ auctionId: 'auction-1' }));
       service.broadcastBidUpdate('auction-2', makeBidUpdate({ auctionId: 'auction-2' }));
