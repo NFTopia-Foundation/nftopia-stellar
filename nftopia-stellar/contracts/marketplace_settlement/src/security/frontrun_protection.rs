@@ -173,7 +173,7 @@ impl FrontRunningDetector {
         }
 
         // Pattern 3: Bids placed at exact time intervals
-        if Self::detect_timed_bidding(new_bid, recent_bids) {
+        if Self::detect_timed_bidding(env, new_bid, recent_bids) {
             patterns.push_back(Bytes::from_slice(env, "timed_bidding".as_bytes()));
         }
 
@@ -214,13 +214,13 @@ impl FrontRunningDetector {
     }
 
     /// Detect suspiciously timed bidding
-    fn detect_timed_bidding(new_bid: &Bid, recent_bids: &Vec<Bid>) -> bool {
+    fn detect_timed_bidding(env: &Env, new_bid: &Bid, recent_bids: &Vec<Bid>) -> bool {
         if recent_bids.len() < 2 {
             return false;
         }
 
         // Check for regular time intervals between bids
-        let mut intervals = Vec::new(&Env::default());
+        let mut intervals = Vec::new(env);
 
         for i in 1..recent_bids.len() {
             if let (Some(prev_bid), Some(curr_bid)) = (recent_bids.get(i - 1), recent_bids.get(i)) {

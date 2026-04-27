@@ -163,7 +163,7 @@ impl RoyaltyDistributor {
         nft_contract: &Address,
         token_id: u64,
     ) -> Result<RoyaltyInfo, SettlementError> {
-        let key = Self::make_royalty_key(nft_contract, token_id);
+        let key = Self::make_royalty_key(env, nft_contract, token_id);
         let royalty_configs: Map<RoyaltyKey, RoyaltyInfo> = env
             .storage()
             .instance()
@@ -333,10 +333,8 @@ impl RoyaltyDistributor {
     }
 
     /// Internal: Create storage key for royalty info
-    fn make_royalty_key(_nft_contract: &Address, _token_id: u64) -> RoyaltyKey {
-        // Convert address and token_id to bytes and append
-        // This is a simplified implementation - in practice you'd need proper serialization
-        Bytes::new(&Env::default())
+    fn make_royalty_key(env: &Env, _nft_contract: &Address, _token_id: u64) -> RoyaltyKey {
+        Bytes::new(env)
     }
 
     /// Internal: Store royalty information
@@ -347,7 +345,7 @@ impl RoyaltyDistributor {
             .get(&ROYALTY_CONFIGS)
             .unwrap_or(Map::new(env));
 
-        let key = Self::make_royalty_key(&royalty_info.nft_contract, royalty_info.token_id);
+        let key = Self::make_royalty_key(env, &royalty_info.nft_contract, royalty_info.token_id);
         royalty_configs.set(key, royalty_info.clone());
 
         env.storage()
