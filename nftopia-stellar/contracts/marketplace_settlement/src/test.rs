@@ -460,7 +460,7 @@ fn test_set_and_get_royalty_info() {
 
     RoyaltyDistributor::set_royalty_info(&env, &nft, 1, &creator, 500, &creator);
 
-    let info = RoyaltyDistributor::get_royalty_info(&env, &nft, 1);
+    let info = RoyaltyDistributor::get_royalty_info(&env, &nft, 1).unwrap();
     assert_eq!(info.royalty_percentage, 500);
     assert_eq!(info.creator, creator);
 }
