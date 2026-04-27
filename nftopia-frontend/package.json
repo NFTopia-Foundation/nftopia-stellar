@@ -79,6 +79,7 @@
     "@types/jest-axe": "^3.5.9",
     "babel-jest": "^30.0.5",
     "chromatic": "^13.1.2",
+    "identity-obj-proxy": "^3.0.0",
     "jest": "^30.0.5",
     "jest-axe": "^10.0.0",
     "jest-environment-jsdom": "^30.0.5",
