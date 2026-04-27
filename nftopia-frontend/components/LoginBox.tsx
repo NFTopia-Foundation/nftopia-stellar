@@ -3,6 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { useTranslation } from "@/hooks/useTranslation";
+import { Button } from "@/components/ui/button";
 
 const LoginBox = () => {
   const { t } = useTranslation();
@@ -25,7 +26,7 @@ const LoginBox = () => {
               required
               className="w-full h-12 bg-transparent border border-white/20 rounded-full text-white px-4 pr-12 placeholder-white focus:outline-none focus:ring-2 focus:ring-white"
             />
-            <i className="bx bxs-user absolute right-4 top-1/2 transform -translate-y-1/2 text-xl"></i>
+            <i className="bx bxs-user absolute right-4 top-1/2 transform -translate-y-1/2 text-xl" aria-hidden="true"></i>
           </div>
           <div className="relative">
             <input
@@ -34,7 +35,7 @@ const LoginBox = () => {
               required
               className="w-full h-12 bg-transparent border border-white/20 rounded-full text-white px-4 pr-12 placeholder-white focus:outline-none focus:ring-2 focus:ring-white"
             />
-            <i className="bx bxs-lock-alt absolute right-4 top-1/2 transform -translate-y-1/2 text-xl"></i>
+            <i className="bx bxs-lock-alt absolute right-4 top-1/2 transform -translate-y-1/2 text-xl" aria-hidden="true"></i>
           </div>
           <div className="flex justify-between text-sm">
             <label className="flex items-center">
@@ -45,12 +46,13 @@ const LoginBox = () => {
               {t("auth.forgotPassword")}
             </a>
           </div>
-          <button
+          <Button
             type="submit"
-            className="w-full h-12 bg-white text-gray-800 font-semibold rounded-full shadow hover:shadow-lg focus:outline-none"
+            variant="secondary"
+            className="w-full rounded-full bg-white text-gray-800 hover:bg-gray-100 font-semibold shadow hover:shadow-lg"
           >
             {t("auth.login")}
-          </button>
+          </Button>
           <div className="text-center text-sm mt-4">
             <p>
               {t("auth.dontHaveAccount")}{" "}
