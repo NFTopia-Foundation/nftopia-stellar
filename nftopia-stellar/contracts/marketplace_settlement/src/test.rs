@@ -31,8 +31,7 @@ fn setup_contract() -> (Env, Address, MarketplaceSettlementClient<'static>, Addr
     client.initialize(&admin);
     // SAFETY: env lives for the duration of the test; the 'static bound is
     // satisfied by the test-local lifetime extension pattern used in Soroban tests.
-    let client: MarketplaceSettlementClient<'static> =
-        unsafe { std::mem::transmute(client) };
+    let client: MarketplaceSettlementClient<'static> = unsafe { std::mem::transmute(client) };
     (env, contract_id, client, admin)
 }
 
@@ -525,7 +524,9 @@ fn test_update_fee_config_by_non_admin_fails() {
 fn test_get_user_volume_starts_zero() {
     let (env, _cid, client, _admin) = setup_contract();
     let user = Address::generate(&env);
-    let vol = client.get_user_volume(&user).expect("get_user_volume failed");
+    let vol = client
+        .get_user_volume(&user)
+        .expect("get_user_volume failed");
     assert_eq!(vol, 0i128);
 }
 
@@ -541,8 +542,8 @@ fn test_set_and_get_royalty_info() {
     RoyaltyDistributor::set_royalty_info(&env, &nft, 1, &creator, 500, &creator)
         .expect("set_royalty_info failed");
 
-    let info = RoyaltyDistributor::get_royalty_info(&env, &nft, 1)
-        .expect("get_royalty_info failed");
+    let info =
+        RoyaltyDistributor::get_royalty_info(&env, &nft, 1).expect("get_royalty_info failed");
     assert_eq!(info.royalty_percentage, 500);
     assert_eq!(info.creator, creator);
 }
@@ -649,7 +650,13 @@ fn test_create_trade_success() {
     });
 
     let trade_id = client
-        .create_trade(&initiator, &None, &initiator_nfts, &counterparty_nfts, &3600u64)
+        .create_trade(
+            &initiator,
+            &None,
+            &initiator_nfts,
+            &counterparty_nfts,
+            &3600u64,
+        )
         .expect("create_trade failed");
     assert!(trade_id > 0);
 }
