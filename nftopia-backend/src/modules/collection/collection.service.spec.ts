@@ -5,6 +5,7 @@ import { User } from '../../users/user.entity';
 import { Nft } from '../nft/entities/nft.entity';
 import { CollectionService } from './collection.service';
 import { Collection } from './entities/collection.entity';
+import { VerificationRequest } from './entities/verification-request.entity';
 
 function makeCollection(overrides: Partial<Collection> = {}): Collection {
   return {
@@ -60,6 +61,14 @@ describe('CollectionService', () => {
     exists: jest.fn(),
   };
 
+  const mockVerificationRequestRepository = {
+    findOne: jest.fn(),
+    find: jest.fn(),
+    create: jest.fn(),
+    save: jest.fn(),
+    createQueryBuilder: jest.fn(() => queryBuilder),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
 
@@ -77,6 +86,10 @@ describe('CollectionService', () => {
         {
           provide: getRepositoryToken(User),
           useValue: mockUserRepository,
+        },
+        {
+          provide: getRepositoryToken(VerificationRequest),
+          useValue: mockVerificationRequestRepository,
         },
       ],
     }).compile();
