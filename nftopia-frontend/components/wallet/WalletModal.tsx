@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { X, AlertCircle, Loader2, ExternalLink } from "lucide-react";
 import { WalletInfo, WalletProvider } from "@/types/stellar";
 import { useStellarWallet } from "./hooks/useStellarWallet";
@@ -19,11 +19,24 @@ export function WalletModal({ open, onClose, onConnected }: WalletModalProps) {
   const { connect, connecting, error, connected, address, clearError } = useStellarWallet();
   const [wallets, setWallets] = useState<WalletInfo[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<WalletProvider | null>(null);
+  const [isVisible, setIsVisible] = useState(false);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const firstFocusableRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (open) {
       detectInstalledWallets().then(setWallets);
+      setIsVisible(true);
+      // Prevent background scrolling
+      document.body.style.overflow = 'hidden';
+    } else {
+      setIsVisible(false);
+      document.body.style.overflow = '';
     }
+    
+    return () => {
+      document.body.style.overflow = '';
+    };
   }, [open]);
 
   useEffect(() => {
@@ -32,6 +45,48 @@ export function WalletModal({ open, onClose, onConnected }: WalletModalProps) {
       onClose();
     }
   }, [connected, address, open, onConnected, onClose]);
+
+  // Handle ESC key press
+  const handleKeyDown = useCallback((e: globalThis.KeyboardEvent) => {
+    if (e.key === 'Escape' && open) {
+      onClose();
+    }
+  }, [open, onClose]);
+
+  useEffect(() => {
+    if (open) {
+      document.addEventListener('keydown', handleKeyDown);
+      // Focus trap - focus first element
+      firstFocusableRef.current?.focus();
+    }
+    
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open, handleKeyDown]);
+
+  // Focus trap within modal
+  const handleTabKey = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'Tab' || !modalRef.current) return;
+
+    const focusableElements = modalRef.current.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    const firstElement = focusableElements[0] as HTMLElement;
+    const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
+
+    if (e.shiftKey) {
+      if (document.activeElement === firstElement) {
+        e.preventDefault();
+        lastElement.focus();
+      }
+    } else {
+      if (document.activeElement === lastElement) {
+        e.preventDefault();
+        firstElement.focus();
+      }
+    }
+  }, []);
 
   const handleConnect = async (provider: WalletProvider) => {
     setSelectedProvider(provider);
@@ -42,23 +97,41 @@ export function WalletModal({ open, onClose, onConnected }: WalletModalProps) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
+      onKeyDown={handleTabKey}
+    >
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={onClose}
+        aria-hidden="true"
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-sm rounded-2xl border border-purple-500/20 bg-gray-950/95 backdrop-blur-md shadow-2xl">
+      <div 
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="wallet-modal-title"
+        className={`
+          relative w-full max-w-[480px] rounded-2xl border border-purple-500/20 bg-gray-950/95 backdrop-blur-md shadow-2xl
+          transform transition-all duration-300 ease-out
+          ${isVisible ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}
+          sm:mx-auto
+          max-[480px]:w-[calc(100%-32px)] max-[480px]:mx-4
+        `}
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-purple-500/10">
-          <h2 className="text-lg font-semibold text-white">
+          <h2 id="wallet-modal-title" className="text-lg font-semibold text-white">
             {t("walletModal.title") || "Connect Wallet"}
           </h2>
           <button
+            ref={firstFocusableRef}
             onClick={onClose}
             className="text-gray-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/5"
+            aria-label="Close modal"
           >
             <X className="h-5 w-5" />
           </button>
@@ -114,6 +187,7 @@ function WalletOption({
   isConnecting,
   onConnect,
 }: {
+  key?: string | number;
   wallet: WalletInfo;
   isConnecting: boolean;
   onConnect: (id: WalletProvider) => void;
@@ -131,7 +205,7 @@ function WalletOption({
           width={32}
           height={32}
           className="object-contain"
-          onError={(e) => {
+          onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
             (e.target as HTMLImageElement).style.display = "none";
           }}
         />

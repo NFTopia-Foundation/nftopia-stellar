@@ -4,9 +4,10 @@ import { User } from '../../users/user.entity';
 import { Nft } from '../nft/entities/nft.entity';
 import { CollectionService } from './collection.service';
 import { Collection } from './entities/collection.entity';
+import { VerificationRequest } from './entities/verification-request.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Collection, Nft, User])],
+  imports: [TypeOrmModule.forFeature([Collection, Nft, User, VerificationRequest])],
   providers: [CollectionService],
   exports: [CollectionService],
 })
