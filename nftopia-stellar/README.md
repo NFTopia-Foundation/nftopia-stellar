@@ -1,182 +1,158 @@
 # NFTopia Soroban Contracts
+**Stellar Smart-Contract Workspace**
 
-NFTopia Soroban Contracts is the on-chain backbone of the NFTopia decentralized platform, powering secure NFT minting, management, and marketplace interactions on the Stellar blockchain. Built with Rust and Soroban smart contracts, it handles core logic like token issuance, ownership transfers, royalties, and escrow for auctions—all leveraging Stellar's sub-second settlements and low fees for efficient, tamper-proof operations. This standalone repository focuses exclusively on the blockchain layer, integrating seamlessly with NFTopia's frontend, backend, and mobile apps via the Stellar SDK.
+![Rust](https://img.shields.io/badge/Rust-Contracts-b7410e)
+![Soroban](https://img.shields.io/badge/Soroban-SDK%2023-0f766e)
+![WASM](https://img.shields.io/badge/WASM-Build%20Target-334155)
+![Stellar](https://img.shields.io/badge/Stellar-Testnet%20%2F%20Mainnet-111827)
 
-Targeted at blockchain developers, Solidity/Rust migrants, and Web3 contributors, this repo enables rapid iteration on NFT standards (e.g., compliant with SIP-XXX for Stellar NFTs). It supports testnet experimentation and mainnet deployment, emphasizing auditability, upgradability, and composability with other Soroban protocols for a robust, scalable NFT ecosystem.
+NFTopia Soroban Contracts is the on-chain workspace for collection creation, marketplace settlement, and transaction orchestration on Stellar. It is organized as a Cargo workspace with multiple contract packages under `contracts/`, plus helper scripts for deployment and verification.
 
-## Features
+## 🌟 Key Features
 
-### Core Contracts
-- **NFT Minting Contract**: Issues unique NFTs with customizable metadata, royalties, and attributes; supports batch minting.
-- **NFT Management Contract**: Handles transfers, burns, approvals, and metadata updates with access controls.
-- **Marketplace Escrow Contract**: Securely locks assets during auctions/bids, with automated settlements and dispute resolution.
-- **Royalties & Analytics Hooks**: Enforces creator royalties on secondary sales; emits events for off-chain indexing.
+- **Multi-package workspace** using a shared Soroban SDK dependency
+- **Collection factory contract** for creating and tracking NFT collections
+- **Marketplace settlement package** with royalties, fees, disputes, and security helpers
+- **Transaction contract package** for execution, recovery, validation, and storage flows
+- **Deployment helper scripts** for installing and initializing the collection factory
 
-### Advanced
-- **Upgradability**: Proxy patterns for seamless contract upgrades without disrupting user state.
-- **Cross-Contract Calls**: Integrates with Stellar assets (e.g., USDC payments) and external oracles for dynamic pricing.
-- **Testing Suite**: Comprehensive unit and integration tests with Soroban CLI for local RPC simulation.
+## 📋 Table of Contents
 
-## Tech Stack
-- **Language**: Rust (via soroban-sdk for contract development).
-- **Framework**: Soroban (Stellar's smart contract platform for WASM-based execution).
-- **Testing**: Cargo test framework with Soroban test utils.
-- **Deployment**: Soroban CLI for building, deploying, and invoking contracts.
-- **Integration**: Stellar SDK (JS/TS) for off-chain clients; compatible with Freighter/Lobstr wallets.
+1. [Workspace Architecture](#-workspace-architecture)
+2. [Contract Packages](#-contract-packages)
+3. [Prerequisites](#-prerequisites)
+4. [Build and Test](#-build-and-test)
+5. [Deploy and Verify](#-deploy-and-verify)
+6. [Project Structure](#-project-structure)
+7. [Security Notes](#-security-notes)
+8. [Repository Notes](#-repository-notes)
 
-## Repository Structure
-This repo follows the standard Soroban project layout for easy onboarding and scalability. Contracts are isolated in subdirectories under `contracts/`, allowing multiple independent modules while sharing workspace dependencies.
+## 🏗️ Workspace Architecture
 
+```text
+┌──────────────────────────────────────────────────────────────────┐
+│                    NFTopia Soroban Workspace                    │
+├──────────────────────────────────────────────────────────────────┤
+│ Cargo workspace root                                            │
+│  resolver = "2"                                                 │
+│  members = contracts/*                                          │
+├──────────────────────────────────────────────────────────────────┤
+│ Contract packages                                                │
+│  collection_factory      marketplace_settlement                 │
+│  transaction_contract    nft_contract                           │
+├──────────────────────────────────────────────────────────────────┤
+│ Scripts                                                          │
+│  deploy_factory.sh        verify_contract.sh                    │
+└──────────────────────────────────────────────────────────────────┘
 ```
-nftopia-soroban/
+
+## 🧩 Contract Packages
+
+| Package | What it contains |
+| --- | --- |
+| `collection_factory` | Factory, collection module, storage, events, error and types modules for collection deployment and tracking |
+| `marketplace_settlement` | Settlement core, atomic swap, auction engine, dispute resolution, royalty distribution, fee management, storage, utility, and security modules |
+| `transaction_contract` | Transaction core, execution engine, dependency resolution, signature management, recovery, storage, and security helpers |
+| `nft_contract` | Present in the workspace but currently scaffolded compared with the other packages |
+
+## 🧰 Prerequisites
+
+- Rust toolchain
+- `wasm32-unknown-unknown` target
+- Soroban CLI
+- A configured Soroban identity for deployment
+
+Typical setup:
+
+```bash
+rustup target add wasm32-unknown-unknown
+cargo install --locked stellar-cli
+```
+
+## 🏗️ Build and Test
+
+Build the full workspace:
+
+```bash
+cd nftopia-stellar
+cargo build --workspace
+```
+
+Build a specific package for release WASM output:
+
+```bash
+cargo build --target wasm32-unknown-unknown --release --package collection_factory
+```
+
+Run tests:
+
+```bash
+cargo test --workspace
+```
+
+The workspace root also defines an optimized `release` profile and a `release-with-logs` profile for debugging.
+
+## 🚀 Deploy and Verify
+
+Helper scripts are provided for the collection factory package.
+
+### Deploy the collection factory
+
+```bash
+cd nftopia-stellar
+chmod +x scripts/deploy_factory.sh
+NETWORK=testnet SOURCE=secret ./scripts/deploy_factory.sh
+```
+
+What the script does:
+
+1. builds `collection_factory` for the WASM target
+2. optionally loads values from `.env`
+3. installs the WASM with Soroban CLI
+4. deploys a contract instance
+5. invokes `initialize` with the configured identity as admin
+
+### Verify a deployed contract
+
+```bash
+chmod +x scripts/verify_contract.sh
+NETWORK=testnet SOURCE=secret ./scripts/verify_contract.sh <CONTRACT_ID>
+```
+
+The verification script currently checks the deployed factory by invoking `get_collection_count`.
+
+## 📁 Project Structure
+
+```text
+nftopia-stellar/
 ├── contracts/
-│   ├── nftopia-nft/              # Core NFT minting and management
-│   │   ├── src/
-│   │   │   ├── lib.rs            # Contract entrypoint and functions
-│   │   │   └── test.rs           # Unit/integration tests
-│   │   └── Cargo.toml            # Contract-specific dependencies
-│   ├── nftopia-marketplace/      # Escrow and auction logic
-│   │   ├── src/
-│   │   │   ├── lib.rs
-│   │   │   └── test.rs
-│   │   └── Cargo.toml
-│   └── Cargo.toml                # Example: Additional contracts here
-├── Cargo.toml                    # Workspace root: Shared deps (e.g., soroban-sdk)
-├── README.md                     # This file
-└── .env.example                  # Deployment env vars
+│   ├── collection_factory/
+│   │   └── src/               # factory, collection, storage, events, tests
+│   ├── marketplace_settlement/
+│   │   └── src/               # settlement, royalties, disputes, security
+│   ├── transaction_contract/
+│   │   └── src/               # transaction execution, storage, recovery
+│   └── nft_contract/          # scaffold-level NFT package
+├── scripts/
+│   ├── deploy_factory.sh
+│   └── verify_contract.sh
+└── Cargo.toml                 # workspace root and shared release profiles
 ```
 
-- Add new contracts in `contracts/<name>/` with their own `src/lib.rs` and `Cargo.toml`.
-- Workspace `Cargo.toml` manages common crates like `soroban-sdk` and `ed25519-dalek`.
-- Tests run per-contract; use `--test` for full suite.
+## 🔐 Security Notes
 
-## Setup Instructions
+The contract workspace already includes several explicit security-oriented modules, especially inside `marketplace_settlement` and `transaction_contract`:
 
-### Prerequisites
-Ensure you have:
-- Rust 1.75+ (install via [rustup.rs](https://rustup.rs); enable WASM target: `rustup target add wasm32-unknown-unknown`).
-- Soroban CLI (install: `cargo install --locked --git https://github.com/stellar/rs-soroban-cli`).
-- Stellar testnet wallet (e.g., Freighter; fund at [laboratory.stellar.org](https://laboratory.stellar.org)).
-- Git (for cloning).
+- reentrancy guard helpers
+- front-running protection modules
+- dispute resolution support
+- fee and royalty distribution logic
+- validation, resource guarding, and recovery helpers
 
-### Installation
-1. Clone the repository:
-   ```
-   git clone https://github.com/your-username/nftopia-soroban.git
-   cd nftopia-soroban
-   ```
+Those modules are worth preserving as first-class documentation targets when the contracts mature further.
 
-2. Build the workspace:
-   ```
-   cargo build --target wasm32-unknown-unknown --release
-   ```
+## 📌 Repository Notes
 
-### Environment Setup
-1. Copy `.env.example` to `.env`:
-   ```
-   STELLAR_NETWORK=testnet  # Or 'mainnet'
-   SOROBAN_RPC_URL=http://localhost:8000/soroban/rpc  # Local RPC
-   WALLET_SECRET_SEED=your_wallet_secret_seed  # Base64-encoded for deployment
-   ```
-2. For testnet: Fund your wallet via Friendbot (URL in env).
-3. For mainnet: Replace RPC with public endpoint (e.g., `https://soroban-api.stellar.org`).
-
-### Running Locally
-1. Start a local Soroban RPC for testing:
-   ```
-   soroban rpc serve --network testnet --hostname 127.0.0.1 --port 8000
-   ```
-2. Build and deploy a contract (e.g., NFT):
-   ```
-   cd contracts/nftopia-nft
-   cargo build --target wasm32-unknown-unknown --release
-   soroban contract deploy \
-     --wasm target/wasm32-unknown-unknown/release/nftopia_nft.wasm \
-     --source WALLET_SECRET_SEED \
-     --network testnet \
-     --rpc-url $SOROBAN_RPC_URL
-   ```
-3. Invoke/test:
-   ```
-   soroban contract invoke \
-     --source WALLET_SECRET_SEED \
-     --network testnet \
-     --wasm-id <CONTRACT_ID> \
-     -- initialize  # Example function call
-   ```
-
-Connect via Stellar SDK in your app to interact (e.g., mint NFTs).
-
-### Testing
-1. Run unit tests for a contract:
-   ```
-   cd contracts/nftopia-nft
-   cargo test
-   ```
-2. Full workspace tests:
-   ```
-   cargo test --all
-   ```
-3. Simulate deployments:
-   ```
-   soroban contract test \
-     --wasm target/wasm32-unknown-unknown/release/nftopia_nft.wasm
-   ```
-Tests include edge cases like invalid mints and royalty enforcement; requires testnet RPC.
-
-### Deployment
-1. **Testnet**: Use the `soroban contract deploy` command above; verify on [Stellar Laboratory](https://laboratory.stellar.org/#network?network=testnet).
-2. **Mainnet**:
-   - Update `.env` to `STELLAR_NETWORK=mainnet`.
-   - Optimize WASM: `soroban contract optimize --wasm target/wasm32-unknown-unknown/release/nftopia_nft.wasm`.
-   - Deploy via CI/CD (e.g., GitHub Actions with Soroban CLI).
-3. Post-Deploy: Register contract IDs in NFTopia's backend config; audit via tools like Slither-for-Rust.
-
-For production, conduct formal audits and use upgradable proxies. See `DEPLOYMENT.md` for CI scripts.
-
-## Usage
-1. **Mint NFT**: Call `mint` with metadata URI, royalties; returns token ID.
-2. **Transfer**: Invoke `transfer` with recipient; emits Transfer event.
-3. **Auction Setup**: Use marketplace contract to lock NFT in escrow with bid params.
-4. **Off-Chain Integration**: Query via Horizon API; invoke via Stellar SDK (e.g., `contract.mint({to: user, uri: ipfsHash})`).
-
-Example Rust snippet in `src/lib.rs` for minting:
-```rust
-#[contractimpl]
-impl NftopiaNft for Self {
-    fn mint(env: Env, to: Address, uri: String) -> u32 {
-        // Mint logic here
-        env.events().emit((to.clone(), token_id), LogEvent::Mint);
-        token_id
-    }
-}
-```
-
-Figma for app integration: [View here](https://www.figma.com/file/YOUR-FIGMA-LINK).
-
-## Contributing
-Contributions to NFTopia's on-chain layer are key to its evolution! Focus on secure, gas-efficient Rust code.
-
-- **Report Issues**: GitHub Issues with repro steps, contract ID, and tx hash.
-- **Propose Features**: Discussions for new contracts (e.g., fractional NFTs).
-- **Submit PRs**:
-  1. Fork and branch: `git checkout -b feat/new-contract`.
-  2. Add contract in `contracts/<name>/`; update workspace `Cargo.toml`.
-  3. Test thoroughly: `cargo test --all`.
-  4. Commit: "feat: add fractional ownership contract".
-  5. PR to `main`; include benchmarks.
-- **Best Practices**:
-  - Follow Rust/Soroban idioms; use `#[contractimpl]` for exports.
-  - Benchmark storage/CPU limits; aim <1M units.
-  - Audit changes with `cargo clippy`.
-
-Adhere to [Code of Conduct](CODE_OF_CONDUCT.md); DCO sign-off required.
-
-## License
-MIT License. See [LICENSE](LICENSE) for details.
-
-## Support & Community
-- NFTopia Discord: [discord.gg/nftopia](https://discord.gg/nftopia) (#soroban channel).
-- Questions? Ping @Oluwaseyi89 or @Cedarich in issues.
-
-Built with ❤️ by the NFTopia team. Powered by Stellar & Soroban. 🚀
+- `nft_contract` is not yet as developed as the other packages and should be documented as scaffolded.
+- The helper scripts are currently centered on the collection factory flow, not the entire workspace.
+- If you standardize deployment further, this README should be expanded with environment conventions and per-contract invocation examples.

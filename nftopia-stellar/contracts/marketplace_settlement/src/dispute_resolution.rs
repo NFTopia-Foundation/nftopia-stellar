@@ -393,11 +393,9 @@ impl DisputeResolutionManager {
             }
 
             // Update reputation based on participation and success rate
-            let success_rate = if arb.disputes_handled > 0 {
-                (arb.successful_resolutions * 100) / arb.disputes_handled
-            } else {
-                100
-            };
+            let success_rate = (arb.successful_resolutions * 100)
+                .checked_div(arb.disputes_handled)
+                .unwrap_or(100);
 
             arb.reputation_score = success_rate;
             Self::store_arbitrator(env, &arb)?;

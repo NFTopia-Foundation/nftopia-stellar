@@ -30,6 +30,8 @@ const initialState = {
   loading: false,
   isAuthenticated: false,
   error: null,
+  accessToken: null,
+  refreshTokenValue: null,
 };
 
 export const useAuthStore = create<AuthStore>()(
@@ -59,6 +61,9 @@ export const useAuthStore = create<AuthStore>()(
           logout: async () => {
             throw new Error("Not implemented");
           },
+          refreshToken: async () => {
+            throw new Error("Not implemented");
+          },
         }))
       ),
       {
@@ -66,6 +71,8 @@ export const useAuthStore = create<AuthStore>()(
         partialize: (state: AuthStore) => ({
           user: state.user,
           isAuthenticated: state.isAuthenticated,
+          accessToken: state.accessToken,
+          refreshTokenValue: state.refreshTokenValue,
         }),
       } as PersistOptions<AuthStore>
     ),

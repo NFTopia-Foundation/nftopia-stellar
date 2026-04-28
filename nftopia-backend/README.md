@@ -1,68 +1,175 @@
-# NFTopia Backend API
+# NFTopia Backend
+**Stellar API Gateway and Marketplace Services**
 
-A scalable NestJS backend for the NFTopia NFT marketplace platform. This service provides API endpoints for user management, NFT operations, collections, and marketplace features integrated with Stellar/Soroban smart contracts.
+![NestJS](https://img.shields.io/badge/NestJS-11-e0234e)
+![GraphQL](https://img.shields.io/badge/GraphQL-Apollo-e10098)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-336791)
+![Redis](https://img.shields.io/badge/Redis-Cache-d82c20)
+![Stellar](https://img.shields.io/badge/Stellar-Soroban-111827)
+![Swagger](https://img.shields.io/badge/Swagger-REST%20Docs-85ea2d)
 
-## 🚀 Features
+NFTopia Backend is the service backbone of the platform. It owns authentication, NFT and collection management, marketplace workflows, contract-facing services, decentralized storage integration, search, and API documentation. The app exposes a REST API on port `3000` and a separate GraphQL gateway on port `3001` from the same codebase.
 
-- ✨ RESTful API with global `/api/v1` prefix
-- �️ Embedded GraphQL gateway sidecar on `/graphql`
-- 🔒 CORS enabled for frontend integration
-- 🏥 REST and GraphQL health checks
-- 🛠️ Environment configuration support
-- 📦 Modular NestJS architecture
-- 🧪 Jest testing setup
-- 🔧 ESLint configuration
-- 📝 TypeScript strict mode
+## 🌟 Key Features
 
-## 📋 Prerequisites
+- **REST API with global versioning** via `/api/v1`
+- **GraphQL sidecar** on `/graphql`
+- **Swagger docs** exposed from the REST app at `/api/docs`
+- **Stellar wallet authentication** with challenge and signature verification
+- **Marketplace modules** for NFTs, collections, listings, auctions, bids, and orders
+- **Redis-backed cache and rate guard**
+- **Meilisearch integration** for NFT and profile discovery
+- **IPFS and Arweave storage support** for decentralized asset persistence
 
-- Node.js v18 or higher
-- npm or pnpm
+## 📋 Table of Contents
 
-## ⚡ Quick Start
+1. [Architecture](#-architecture)
+2. [Module Map](#-module-map)
+3. [Quick Start](#-quick-start)
+4. [Environment Configuration](#-environment-configuration)
+5. [Available Scripts](#-available-scripts)
+6. [API Surface](#-api-surface)
+7. [Project Structure](#-project-structure)
+8. [Testing and Quality](#-testing-and-quality)
+9. [Security Notes](#-security-notes)
 
-### 1. Install Dependencies
+## 🏗️ Architecture
 
-```bash
-npm install
+```text
+┌──────────────────────────────────────────────────────────────────────┐
+│                           NFTopia Backend                           │
+├──────────────────────────────────────────────────────────────────────┤
+│ REST API (:3000)                                                    │
+│  /api/v1/auth  /nfts  /collections  /listings  /auctions  /orders   │
+│  /bids  /users  /search  /admin                                      │
+├──────────────────────────────────────────────────────────────────────┤
+│ GraphQL Gateway (:3001/graphql)                                     │
+│  Apollo Server + Nest GraphQL schema factory                        │
+├──────────────────────────────────────────────────────────────────────┤
+│ Core Services                                                        │
+│  Auth | Soroban RPC | Stellar account transforms | storage | search │
+├─────────────────────┬─────────────────────────┬──────────────────────┤
+│ PostgreSQL          │ Redis                   │ Meilisearch          │
+│ entities + records  │ cache + rate limit      │ discovery index       │
+├─────────────────────┴─────────────────────────┴──────────────────────┤
+│ External systems: Soroban RPC, Stellar network, IPFS, Arweave       │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
-### 2. Configure Environment
+## 🧩 Module Map
+
+| Area | Responsibility |
+| --- | --- |
+| `src/auth` | Email auth, Stellar wallet challenge/verify, JWT, wallet session management |
+| `src/modules/nft` | NFT listing, minting, metadata updates, burn, attributes |
+| `src/modules/collection` | Collection CRUD, stats, top collections, NFTs per collection |
+| `src/modules/listing` | Marketplace listings, buy flow, cancel flow |
+| `src/modules/auction` | Auction creation, bids, settlement, cancellation |
+| `src/modules/bid` | Bid-specific resources and operations |
+| `src/modules/order` | Order lifecycle handling |
+| `src/storage` | IPFS and Arweave integration |
+| `src/search` | Search controller and Meilisearch-backed discovery |
+| `src/graphql` | GraphQL schema, resolvers, middleware, context factory |
+| `src/services` | Soroban RPC and Stellar response transformation services |
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- Node.js 18+
+- Docker and Docker Compose
+- PostgreSQL and Redis access, either local or containerized
+
+### Local Setup
 
 ```bash
-# Copy example configuration
+cd nftopia-backend
+npm install
 cp .env.example .env
 
-# Update .env with your settings (optional, defaults work fine)
-```
+# docker-compose.yml reads these values directly
+printf '\nDB_USER=postgres\nDB_PASSWORD=postgres\nDB_NAME=nftopia\nDB_HOST=localhost\nDB_PORT=5433\n' >> .env
 
-### 3. Start Development Server
+# match the container port mapping
+sed -i 's|localhost:5432|localhost:5433|' .env
 
-```bash
+docker compose up -d
 npm run start:dev
 ```
 
-The backend starts two HTTP servers in the same Nest.js process:
-- REST API: `http://localhost:3000`
-- GraphQL gateway: `http://localhost:3001/graphql`
+After startup:
 
-### 4. Test Health Endpoints
+- REST base: `http://localhost:3000/api/v1`
+- Swagger: `http://localhost:3000/api/docs`
+- GraphQL: `http://localhost:3001/graphql`
 
-REST health check:
+## ⚙️ Environment Configuration
 
-```bash
-curl http://localhost:3000/api/v1/health
+The provided `.env.example` includes the main runtime knobs. The most important ones for local development are below.
+
+```env
+PORT=3000
+GRAPHQL_PORT=3001
+NODE_ENV=development
+CORS_ORIGIN=http://localhost:5000
+
+DB_USER=postgres
+DB_PASSWORD=postgres
+DB_NAME=nftopia
+DB_HOST=localhost
+DB_PORT=5433
+DATABASE_URL=postgresql://postgres:postgres@localhost:5433/nftopia
+
+REDIS_HOST=localhost
+REDIS_PORT=6379
+
+JWT_SECRET=replace-this-for-real-environments
+JWT_EXPIRES_IN_SECONDS=900
+JWT_REFRESH_EXPIRES_IN_SECONDS=604800
+
+STELLAR_NETWORK=testnet
+SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
+
+IPFS_PROVIDER=pinata
+IPFS_GATEWAY_URL=https://ipfs.io/ipfs
+STORAGE_FALLBACK_ENABLED=true
 ```
 
-Expected response:
-```json
-{
-  "status": "OK",
-  "timestamp": "2026-01-21T12:00:00.000Z"
-}
-```
+Notes:
 
-GraphQL health check:
+- `docker-compose.yml` uses `DB_USER`, `DB_PASSWORD`, and `DB_NAME` directly, so those must exist even if `DATABASE_URL` is set.
+- The default example file points PostgreSQL at port `5432`, but the compose file exposes it on `5433`.
+
+## 🛠️ Available Scripts
+
+| Command | Description |
+| --- | --- |
+| `npm run start` | Start the Nest app |
+| `npm run start:dev` | Start in watch mode |
+| `npm run start:debug` | Start in debug watch mode |
+| `npm run build` | Build the TypeScript project |
+| `npm run start:prod` | Run the compiled output |
+| `npm run test` | Run unit tests |
+| `npm run test:e2e` | Run end-to-end tests |
+| `npm run test:cov` | Generate coverage |
+| `npm run lint` | Run ESLint with fixes |
+| `npm run format` | Format source and test files |
+
+## 🔌 API Surface
+
+Swagger is the best source of truth for exact mounted routes, but the primary controller surfaces are:
+
+| Domain | Main Routes |
+| --- | --- |
+| Auth | `auth/register`, `auth/email/login`, `auth/wallet/challenge`, `auth/wallet/verify`, wallet link and session management |
+| NFTs | `nfts`, `nfts/:id`, `nfts/token/:tokenId`, `nfts/owner/:ownerId`, `nfts/collection/:collectionId` |
+| Collections | collection listing, top collections, stats, per-collection NFT access, create and update |
+| Listings | list, active, detail, create, cancel, buy |
+| Auctions | list, active, detail, bids, create, place bid, settle, cancel |
+| Search | `search` for NFTs and profiles |
+| Admin / Users / Orders / Bids | Additional operational and domain-specific controllers |
+
+### GraphQL Health Example
 
 ```bash
 curl -X POST http://localhost:3001/graphql \
@@ -70,285 +177,42 @@ curl -X POST http://localhost:3001/graphql \
   --data '{"query":"query { health { status service timestamp } }"}'
 ```
 
-Expected response:
-```json
-{
-  "data": {
-    "health": {
-      "status": "ok",
-      "service": "graphql-gateway",
-      "timestamp": "2026-03-25T13:32:46.566Z"
-    }
-  }
-}
-```
-
-## 📚 Available Scripts
-
-| Command | Description |
-|---------|-------------|
-| `npm run start` | Start the server in production mode |
-| `npm run start:dev` | Start the server in development mode (with watch) |
-| `npm run start:debug` | Start the server in debug mode |
-| `npm run start:prod` | Run production build |
-| `npm run build` | Compile TypeScript to JavaScript |
-| `npm run test` | Run unit tests |
-| `npm run test:watch` | Run tests in watch mode |
-| `npm run test:cov` | Generate test coverage report |
-| `npm run test:e2e` | Run end-to-end tests |
-| `npm run lint` | Run ESLint linter |
-| `npm run format` | Format code with Prettier |
-
 ## 📁 Project Structure
 
-```
+```text
 nftopia-backend/
+├── migrations/              # SQL migrations for marketplace tables
 ├── src/
-│   ├── app.controller.ts       # Main API controller
-│   ├── app.service.ts          # Main service logic
-│   ├── app.module.ts           # Root module
-│   ├── main.ts                 # Application entry point
-│   └── [features]/             # Feature modules (to be added)
-├── test/                       # E2E test files
-├── dist/                       # Compiled output (generated)
-├── node_modules/               # Dependencies (generated)
-├── package.json                # Dependencies & scripts
-├── tsconfig.json               # TypeScript configuration
-├── nest-cli.json               # NestJS CLI config
-├── .env                        # Environment variables (local)
-├── .env.example                # Example environment variables
-├── .gitignore                  # Git ignore rules
-└── README.md                   # This file
+│   ├── admin/               # Admin-facing module
+│   ├── auth/                # Email + Stellar wallet authentication
+│   ├── common/              # Filters, guards, shared helpers
+│   ├── config/              # Runtime configuration
+│   ├── graphql/             # GraphQL schema and context
+│   ├── modules/             # NFT, collection, listing, auction, order, bid
+│   ├── search/              # Meilisearch-backed discovery
+│   ├── services/            # Soroban RPC and Stellar account services
+│   ├── storage/             # IPFS and Arweave adapters
+│   └── users/               # User entity and controller
+├── docker-compose.yml       # Postgres, Redis, Meilisearch
+├── README-SETUP.md          # Older setup notes
+└── package.json             # Scripts and dependencies
 ```
 
-## 🔧 Environment Variables
-
-Edit `.env` to configure:
-
-```env
-# REST Server
-PORT=3000
-NODE_ENV=development
-
-# GraphQL Gateway
-GRAPHQL_PORT=3001
-GRAPHQL_PLAYGROUND_ENABLED=true
-GRAPHQL_INTROSPECTION_ENABLED=true
-
-# CORS Configuration
-CORS_ORIGIN=http://localhost:3001
-```
-
-### Core Application Variables
-
-```env
-# Database
-DATABASE_URL=postgresql://user:password@localhost:5432/nftopia
-
-# JWT
-JWT_SECRET=your_jwt_secret_key_here
-JWT_EXPIRES_IN_SECONDS=900
-JWT_REFRESH_EXPIRES_IN_SECONDS=604800
-
-# Stellar/Soroban
-SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
-STELLAR_NETWORK=testnet
-SOROBAN_EVENT_CONTRACT_IDS=CXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-```
-
-## 📡 API Endpoints
-
-### REST Health Check
-- **GET** `/api/v1/health`
-- **Response:**
-  ```json
-  {
-    "status": "OK",
-    "timestamp": "2026-01-21T12:00:00.000Z"
-  }
-  ```
-
-### GraphQL Gateway
-- **URL:** `http://localhost:3001/graphql`
-- **Playground:** available in development when `GRAPHQL_PLAYGROUND_ENABLED=true`
-- **Health Query:**
-  ```graphql
-  query {
-    health {
-      status
-      service
-      timestamp
-    }
-  }
-  ```
-
-## 🧪 Testing
+## 🧪 Testing and Quality
 
 ```bash
-# Run all tests
 npm run test
-
-# Watch mode
-npm run test:watch
-
-# Coverage report
-npm run test:cov
-
-# E2E tests
 npm run test:e2e
-```
-
-## 🔍 Code Quality
-
-```bash
-# Lint code
+npm run test:cov
 npm run lint
-
-# Format code
-npm run format
 ```
 
-## 🏗️ Project Architecture
+The codebase is configured with Jest, ESLint, Prettier, and strict TypeScript support.
 
-This NestJS backend follows enterprise-grade architecture patterns:
+## 🔐 Security Notes
 
-- **Modular Design:** Features are organized into separate modules
-- **Global Prefix:** All REST API routes use `/api/v1` for versioning
-- **Dual Transport Setup:** REST runs on port `3000` while GraphQL gateway runs on port `3001`
-- **CORS Handling:** Configured to work with the frontend origin defined in `.env`
-- **Environment Configuration:** Externalize all configuration to `.env`
-- **TypeScript:** Full type safety with strict mode
-
-## 🚀 Deployment
-
-### Build for Production
-```bash
-npm run build
-npm run start:prod
-```
-
-The compiled code will be in the `dist/` directory.
-
-### Environment for Production
-```env
-PORT=3000
-GRAPHQL_PORT=3001
-NODE_ENV=production
-GRAPHQL_PLAYGROUND_ENABLED=false
-GRAPHQL_INTROSPECTION_ENABLED=false
-CORS_ORIGIN=https://your-frontend-domain.com
-```
-
-## 🔐 Security Considerations
-
-- [ ] Enable rate limiting
-- [ ] Add request validation
-- [ ] Implement authentication (JWT)
-- [ ] Add HTTPS in production
-- [ ] Setup API key management
-- [ ] Enable request logging
-
-## 📦 Adding New Features
-
-### Create a New Module
-
-```bash
-npx @nestjs/cli generate module features/your-feature
-npx @nestjs/cli generate controller features/your-feature
-npx @nestjs/cli generate service features/your-feature
-```
-
-### Module Structure Example
-
-```
-src/features/nft/
-├── nft.module.ts
-├── nft.controller.ts
-├── nft.service.ts
-├── dto/
-│   ├── create-nft.dto.ts
-│   └── update-nft.dto.ts
-├── entities/
-│   └── nft.entity.ts
-└── nft.controller.spec.ts
-```
-
-## 🐛 Troubleshooting
-
-### Port Already in Use
-```bash
-# Use different REST and GraphQL ports
-PORT=3000 GRAPHQL_PORT=3002 npm run start:dev
-```
-
-### Dependencies Not Installed
-```bash
-rm -rf node_modules package-lock.json
-npm install
-```
-
-### TypeScript Errors
-```bash
-# Clear build and rebuild
-rm -rf dist
-npm run build
-```
-
-### ESLint Issues
-```bash
-npm run lint
-npm run format
-```
-
-## 📝 Commit Convention
-
-Use conventional commits:
-```
-feat: add new feature
-fix: fix a bug
-docs: update documentation
-test: add tests
-refactor: refactor code
-chore: maintenance tasks
-```
-
-Example: `feat: initialize nestjs backend with basic configuration and health check`
-
-## 🎯 Roadmap
-
-- [x] Initialize NestJS project
-- [x] Configure global prefix and CORS
-- [x] Create health check endpoint
-- [ ] Setup database (PostgreSQL + TypeORM)
-- [ ] Implement authentication (JWT)
-- [ ] Create NFT module
-- [ ] Create user module
-- [ ] Integrate Stellar/Soroban contracts
-- [ ] Add API documentation (Swagger)
-- [ ] Setup CI/CD pipeline
-- [ ] Add monitoring and logging
-
-## 📖 Resources
-
-- [NestJS Documentation](https://docs.nestjs.com)
-- [NestJS Best Practices](https://docs.nestjs.com/techniques/database)
-- [TypeScript Handbook](https://www.typescriptlang.org/docs)
-- [Stellar Documentation](https://developers.stellar.org)
-
-## 📄 License
-
-UNLICENSED - Internal use only
-
-## 🤝 Contributing
-
-1. Create a feature branch: `git checkout -b feat/your-feature`
-2. Follow NestJS best practices
-3. Write tests for new features
-4. Run linter: `npm run lint`
-5. Format code: `npm run format`
-6. Commit with conventional message
-7. Push and create a pull request
-
-## ❓ Support
-
-For questions or issues, please open an issue in the repository.
+- Stellar wallet verification is handled through challenge and signature checks.
+- JWT guards protect authenticated routes.
+- Request logging uses Pino with sensitive header redaction.
+- A Redis-backed guard provides rate limiting support.
+- The service currently uses TypeORM `synchronize: true`; that is acceptable for development only and should be replaced with migration-driven schema control for production.

@@ -7,11 +7,19 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ConfigService } from '@nestjs/config';
 import { Listing } from './entities/listing.entity';
 import { CreateListingDto } from './dto/create-listing.dto';
 import { ListingStatus } from './interfaces/listing.interface';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { StellarNft } from '../../nft/entities/stellar-nft.entity';
+import { MarketplaceSettlementClient } from '../stellar/marketplace-settlement.client';
+import { CreateSaleParams } from '../shared/contracts/marketplace-settlement.types';
+
+type ListingCursorPayload = {
+  createdAt: string;
+  id: string;
+};
 
 @Injectable()
 export class ListingService {
@@ -22,11 +30,45 @@ export class ListingService {
     private readonly listingRepo: Repository<Listing>,
     @InjectRepository(StellarNft)
     private readonly nftRepo: Repository<StellarNft>,
+    private readonly configService: ConfigService,
+    private readonly settlementClient: MarketplaceSettlementClient,
   ) {}
 
   async create(dto: CreateListingDto, sellerId: string) {
     if (dto.price <= 0) throw new BadRequestException('Price must be positive');
 
+    // Feature flag: use contract if enabled
+    const enableOnchain = this.configService.get<boolean>(
+      'ENABLE_ONCHAIN_SETTLEMENT',
+    );
+    if (enableOnchain) {
+      // Call contract to create sale
+      const params: CreateSaleParams = {
+        seller: sellerId,
+        nftContract: dto.nftContractId,
+        tokenId: dto.nftTokenId,
+        price: String(dto.price),
+        currency: dto.currency || 'XLM',
+        durationSeconds: dto.expiresAt
+          ? Math.floor((new Date(dto.expiresAt).getTime() - Date.now()) / 1000)
+          : 0,
+      };
+      await this.settlementClient.createSale(params);
+      // Optionally, sync to DB or return contract result
+      // For GraphQL compatibility, return a Listing object (mock or DB-backed)
+      return this.listingRepo.create({
+        nftContractId: dto.nftContractId,
+        nftTokenId: dto.nftTokenId,
+        sellerId,
+        price: dto.price,
+        currency: dto.currency || 'XLM',
+        expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : undefined,
+        status: ListingStatus.ACTIVE,
+        // Optionally, add a field for contract saleId if needed
+      });
+    }
+
+    // Legacy DB logic
     // prevent duplicate active listing for same nft
     const existing = await this.listingRepo.findOne({
       where: {
@@ -92,6 +134,84 @@ export class ListingService {
     return qb.getMany();
   }
 
+  async findConnection(query: {
+    first: number;
+    after?: ListingCursorPayload;
+    status?: ListingStatus;
+    sellerId?: string;
+    nftContractId?: string;
+    nftTokenId?: string;
+  }): Promise<{
+    data: Listing[];
+    total: number;
+    hasNextPage: boolean;
+  }> {
+    const qb = this.listingRepo
+      .createQueryBuilder('l')
+      .orderBy('l.createdAt', 'DESC')
+      .addOrderBy('l.id', 'DESC');
+
+    this.applyFilters(qb, query);
+
+    if (query.after) {
+      qb.andWhere(
+        '(l.createdAt < :afterCreatedAt OR (l.createdAt = :afterCreatedAt AND l.id < :afterId))',
+        {
+          afterCreatedAt: query.after.createdAt,
+          afterId: query.after.id,
+        },
+      );
+    }
+
+    const totalQb = this.listingRepo.createQueryBuilder('l');
+    this.applyFilters(totalQb, query);
+
+    const [rows, total] = await Promise.all([
+      qb.take(query.first + 1).getMany(),
+      totalQb.getCount(),
+    ]);
+
+    return {
+      data: rows.slice(0, query.first),
+      total,
+      hasNextPage: rows.length > query.first,
+    };
+  }
+
+  private applyFilters(
+    qb: ReturnType<Repository<Listing>['createQueryBuilder']>,
+    query: {
+      status?: ListingStatus;
+      sellerId?: string;
+      nftContractId?: string;
+      nftTokenId?: string;
+    },
+  ) {
+    if (query.status) {
+      qb.andWhere('l.status = :status', { status: query.status });
+    }
+    if (query.sellerId) {
+      qb.andWhere('l.sellerId = :sellerId', { sellerId: query.sellerId });
+    }
+    if (query.nftContractId) {
+      qb.andWhere('l.nftContractId = :nftContractId', {
+        nftContractId: query.nftContractId,
+      });
+    }
+    if (query.nftTokenId) {
+      qb.andWhere('l.nftTokenId = :nftTokenId', {
+        nftTokenId: query.nftTokenId,
+      });
+    }
+
+    const status = query.status;
+    if (status === ListingStatus.ACTIVE || status == null) {
+      qb.andWhere('(l.expiresAt IS NULL OR l.expiresAt > :now)', {
+        now: new Date(),
+      });
+    }
+  }
+
   async findOne(id: string) {
     const listing = await this.listingRepo.findOne({ where: { id } });
     if (!listing) throw new NotFoundException('Listing not found');
@@ -116,6 +236,28 @@ export class ListingService {
   }
 
   async buy(id: string, buyerId: string) {
+    const enableOnchain = this.configService.get<boolean>(
+      'ENABLE_ONCHAIN_SETTLEMENT',
+    );
+    if (enableOnchain) {
+      // On-chain: call contract to execute sale
+      // You may want to fetch the sale details from contract or DB for mapping
+      // For now, assume id is the contract saleId
+      const resultRaw: unknown = await this.settlementClient.executeSale(
+        Number(id),
+        buyerId,
+        undefined,
+      );
+      let result: Record<string, unknown>;
+      if (typeof resultRaw === 'object' && resultRaw !== null) {
+        result = resultRaw as Record<string, unknown>;
+      } else {
+        result = { txHash: String(resultRaw) };
+      }
+      return { success: true, result };
+    }
+
+    // Legacy DB logic
     const listing = await this.findOne(id);
     const ls = listing.status as ListingStatus;
     if (ls !== ListingStatus.ACTIVE)
@@ -134,7 +276,6 @@ export class ListingService {
     listing.status = ListingStatus.SOLD;
     await this.listingRepo.save(listing);
 
-    // Payment/on-chain transfer not implemented — placeholder for Soroban integration
     return { success: true, listingId: id, buyer: buyerId };
   }
 

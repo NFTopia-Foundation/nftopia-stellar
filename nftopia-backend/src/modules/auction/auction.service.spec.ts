@@ -7,6 +7,8 @@ import { StellarNft } from '../../nft/entities/stellar-nft.entity';
 import { AuctionStatus } from './interfaces/auction.interface';
 import { CreateAuctionDto } from './dto/create-auction.dto';
 import { PlaceBidDto } from './dto/place-bid.dto';
+import { ConfigService } from '@nestjs/config';
+import { MarketplaceSettlementClient } from '../stellar/marketplace-settlement.client';
 
 const mockAuctionRepo = {
   findOne: jest.fn(),
@@ -46,6 +48,15 @@ describe('AuctionService', () => {
         { provide: getRepositoryToken(Auction), useValue: mockAuctionRepo },
         { provide: getRepositoryToken(Bid), useValue: mockBidRepo },
         { provide: getRepositoryToken(StellarNft), useValue: mockNftRepo },
+        { provide: ConfigService, useValue: { get: jest.fn() } },
+        {
+          provide: MarketplaceSettlementClient,
+          useValue: {
+            createAuction: jest.fn(),
+            settleAuction: jest.fn(),
+            cancelAuction: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -74,7 +85,7 @@ describe('AuctionService', () => {
     const result = await service.create(dto, 'seller-1');
     expect(mockAuctionRepo.create).toHaveBeenCalled();
     expect(mockAuctionRepo.save).toHaveBeenCalled();
-    expect(result.sellerId).toBe('seller-1');
+    expect((result as Auction).sellerId).toBe('seller-1'); // ← Keep original
   });
 
   it('prevents duplicate active auction', async () => {
@@ -104,7 +115,7 @@ describe('AuctionService', () => {
     const bid = await service.placeBid('a1', 'b1', dto);
     expect(mockBidRepo.save).toHaveBeenCalled();
     expect(mockAuctionRepo.save).toHaveBeenCalled();
-    expect(bid.amount).toBe(2);
+    expect((bid as Bid).amount).toBe(2); // ← Keep original
   });
 
   it('rejects low bids', async () => {

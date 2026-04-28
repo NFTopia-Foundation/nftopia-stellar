@@ -5,6 +5,7 @@ import { X, AlertCircle, CheckCircle2, Loader2, ExternalLink } from "lucide-reac
 import { useStellarTransaction } from "./hooks/useStellarTransaction";
 import { useWalletStore } from "@/stores/walletStore";
 import { getExplorerUrl } from "@/lib/stellar/network";
+import { Button } from "@/components/ui/button";
 
 export type TransactionType = "mint" | "list" | "bid" | "buy" | "cancel";
 
@@ -60,23 +61,32 @@ export function TransactionSigner({
   const isLoading = signing || submitting;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={!isLoading ? handleClose : undefined} />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="tx-signer-title">
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={!isLoading ? handleClose : undefined}
+        aria-hidden="true"
+      />
 
       <div className="relative w-full max-w-sm rounded-2xl border border-purple-500/20 bg-gray-950/95 backdrop-blur-md shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-purple-500/10">
-          <h2 className="text-lg font-semibold text-white">{TYPE_LABELS[type]}</h2>
+          <h2 id="tx-signer-title" className="text-lg font-semibold text-white">{TYPE_LABELS[type]}</h2>
           {!isLoading && (
-            <button onClick={handleClose} className="text-gray-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/5">
-              <X className="h-5 w-5" />
-            </button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleClose}
+              aria-label="Close transaction dialog"
+              className="text-gray-400 hover:text-white min-h-0 h-9 w-9 rounded-lg hover:bg-white/5"
+            >
+              <X className="h-5 w-5" aria-hidden="true" />
+            </Button>
           )}
         </div>
 
         {/* Body */}
         <div className="px-6 py-5 space-y-4">
-          {/* Status states */}
           {!done && !error && (
             <>
               {description && (
@@ -101,8 +111,8 @@ export function TransactionSigner({
               </div>
 
               {isLoading && (
-                <div className="flex items-center justify-center gap-3 py-2">
-                  <Loader2 className="h-5 w-5 text-purple-400 animate-spin" />
+                <div className="flex items-center justify-center gap-3 py-2" aria-live="polite">
+                  <Loader2 className="h-5 w-5 text-purple-400 animate-spin" aria-hidden="true" />
                   <span className="text-sm text-gray-300">
                     {signing ? "Waiting for wallet signature…" : "Submitting to Stellar…"}
                   </span>
@@ -112,15 +122,15 @@ export function TransactionSigner({
           )}
 
           {error && (
-            <div className="flex items-start gap-3 p-3 rounded-lg bg-red-900/30 border border-red-500/30 text-red-300 text-sm">
-              <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-red-900/30 border border-red-500/30 text-red-300 text-sm" role="alert">
+              <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" aria-hidden="true" />
               <span>{error}</span>
             </div>
           )}
 
           {done && txHash && (
             <div className="text-center space-y-3 py-2">
-              <CheckCircle2 className="h-12 w-12 text-green-400 mx-auto" />
+              <CheckCircle2 className="h-12 w-12 text-green-400 mx-auto" aria-hidden="true" />
               <p className="font-semibold text-white">Transaction Submitted!</p>
               <p className="text-xs text-gray-400 font-mono break-all">{txHash}</p>
               <a
@@ -129,7 +139,7 @@ export function TransactionSigner({
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 text-sm text-purple-400 hover:text-purple-300"
               >
-                View on Stellar Expert <ExternalLink className="h-3.5 w-3.5" />
+                View on Stellar Expert <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
               </a>
             </div>
           )}
@@ -138,35 +148,36 @@ export function TransactionSigner({
         {/* Footer */}
         {!done && (
           <div className="px-6 pb-6 flex gap-3">
-            <button
+            <Button
+              variant="outline"
               onClick={handleClose}
               disabled={isLoading}
-              className="flex-1 py-3 rounded-xl border border-border text-gray-300 hover:text-white hover:border-purple-500/40 transition-colors text-sm font-medium disabled:opacity-40"
+              className="flex-1 rounded-xl text-gray-300 hover:text-white hover:border-purple-500/40 min-h-0 h-12 text-sm"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="wallet"
               onClick={handleSign}
               disabled={isLoading || !transactionXdr || !provider}
-              className="flex-1 py-3 rounded-xl bg-gradient-to-r from-[#4e3bff] to-[#9747ff] text-white text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              loading={isLoading}
+              loadingText={signing ? "Signing…" : "Submitting…"}
+              className="flex-1 rounded-xl min-h-0 h-12 text-sm"
             >
-              {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                "Confirm & Sign"
-              )}
-            </button>
+              Confirm &amp; Sign
+            </Button>
           </div>
         )}
 
         {done && (
           <div className="px-6 pb-6">
-            <button
+            <Button
+              variant="wallet"
               onClick={handleClose}
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-[#4e3bff] to-[#9747ff] text-white text-sm font-medium hover:opacity-90 transition-opacity"
+              className="w-full rounded-xl min-h-0 h-12 text-sm"
             >
               Done
-            </button>
+            </Button>
           </div>
         )}
       </div>

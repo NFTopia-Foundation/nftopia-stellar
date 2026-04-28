@@ -65,7 +65,11 @@ export class CollectionController {
   ) {
     const parsedPage = page ? parseInt(page, 10) : 1;
     const parsedLimit = limit ? parseInt(limit, 10) : 20;
-    return await this.collectionService.getNftsInCollection(id, parsedPage, parsedLimit);
+    return await this.collectionService.getNftsInCollection(
+      id,
+      parsedPage,
+      parsedLimit,
+    );
   }
 
   @Post()

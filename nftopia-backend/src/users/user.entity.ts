@@ -31,6 +31,18 @@ export class User {
   @Column({ type: 'varchar', length: 500, nullable: true })
   avatarUrl?: string;
 
+  @Column({ name: 'banner_url', type: 'varchar', length: 500, nullable: true })
+  bannerUrl?: string;
+
+  @Column({ name: 'twitter_handle', type: 'varchar', length: 50, nullable: true })
+  twitterHandle?: string;
+
+  @Column({ name: 'instagram_handle', type: 'varchar', length: 50, nullable: true })
+  instagramHandle?: string;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  website?: string;
+
   @Column({
     type: 'enum',
     enum: UserRole,

@@ -15,6 +15,8 @@ import { AuctionQueryDto } from './dto/auction-query.dto';
 import { AuctionStatus } from './interfaces/auction.interface';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { StellarNft } from '../../nft/entities/stellar-nft.entity';
+import { ConfigService } from '@nestjs/config';
+import { MarketplaceSettlementClient } from '../stellar/marketplace-settlement.client';
 
 @Injectable()
 export class AuctionService {
@@ -27,9 +29,40 @@ export class AuctionService {
     private readonly bidRepo: Repository<Bid>,
     @InjectRepository(StellarNft)
     private readonly nftRepo: Repository<StellarNft>,
+    private readonly configService: ConfigService,
+    private readonly settlementClient: MarketplaceSettlementClient,
   ) {}
 
   async create(createDto: CreateAuctionDto, sellerId: string) {
+    const enableOnchain = this.configService.get<boolean>(
+      'ENABLE_ONCHAIN_SETTLEMENT',
+    );
+    if (enableOnchain) {
+      // Only allow 'english' or 'dutch' for auctionType
+      const auctionType: 'english' | 'dutch' =
+        createDto.auctionType === 'dutch' ? 'dutch' : 'english';
+      const params = {
+        seller: sellerId,
+        nftContract: createDto.nftContractId,
+        tokenId: createDto.nftTokenId,
+        startPrice: String(createDto.startPrice),
+        reservePrice: String(createDto.reservePrice),
+        currency: createDto.currency || 'XLM',
+        auctionType,
+        durationSeconds:
+          createDto.endTime && createDto.startTime
+            ? Math.floor(
+                (new Date(createDto.endTime).getTime() -
+                  new Date(createDto.startTime).getTime()) /
+                  1000,
+              )
+            : 0,
+      };
+      const auctionId = await this.settlementClient.createAuction(params);
+      return { success: true, auctionId };
+    }
+
+    // Legacy DB logic
     const {
       nftContractId,
       nftTokenId,
@@ -109,6 +142,20 @@ export class AuctionService {
   }
 
   async placeBid(auctionId: string, bidderId: string, dto: PlaceBidDto) {
+    const enableOnchain = this.configService.get<boolean>(
+      'ENABLE_ONCHAIN_SETTLEMENT',
+    );
+    if (enableOnchain) {
+      // On-chain: call contract to place bid
+      const result = await this.settlementClient.placeBid(
+        Number(auctionId),
+        bidderId,
+        String(dto.amount),
+      );
+      return { success: true, result };
+    }
+
+    // Legacy DB logic
     const auction = await this.auctionRepo.findOne({
       where: { id: auctionId },
     });
