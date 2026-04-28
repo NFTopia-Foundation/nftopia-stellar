@@ -8,6 +8,8 @@ import { AuctionStatus } from './interfaces/auction.interface';
 import { CreateAuctionDto } from './dto/create-auction.dto';
 import { PlaceBidDto } from './dto/place-bid.dto';
 import { BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { MarketplaceSettlementClient } from '../stellar/marketplace-settlement.client';
 
 const mockAuctionRepo = {
   findOne: jest.fn(),
@@ -35,21 +37,40 @@ const mockNftRepo = {
   save: jest.fn().mockResolvedValue(undefined),
 };
 
+const mockConfigService = {
+  get: jest.fn().mockImplementation((key: string) => {
+    if (key === 'ENABLE_ONCHAIN_SETTLEMENT') return false;
+    return undefined;
+  }),
+};
+
+const mockSettlementClient = {
+  createAuction: jest.fn(),
+  placeBid: jest.fn(),
+};
+
 describe('AuctionService', () => {
   let service: AuctionService;
 
   beforeEach(async () => {
+    jest.clearAllMocks();
+    mockConfigService.get.mockImplementation((key: string) => {
+      if (key === 'ENABLE_ONCHAIN_SETTLEMENT') return false;
+      return undefined;
+    });
+    
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuctionService,
         { provide: getRepositoryToken(Auction), useValue: mockAuctionRepo },
         { provide: getRepositoryToken(Bid), useValue: mockBidRepo },
         { provide: getRepositoryToken(StellarNft), useValue: mockNftRepo },
+        { provide: ConfigService, useValue: mockConfigService },
+        { provide: MarketplaceSettlementClient, useValue: mockSettlementClient },
       ],
     }).compile();
 
     service = module.get<AuctionService>(AuctionService);
-    jest.clearAllMocks();
   });
 
   it('should be defined', () => {
@@ -74,8 +95,9 @@ describe('AuctionService', () => {
       const result = await service.create(dto, 'seller-1');
       expect(mockAuctionRepo.create).toHaveBeenCalled();
       expect(mockAuctionRepo.save).toHaveBeenCalled();
-      expect(result.sellerId).toBe('seller-1');
-      expect(result.status).toBe(AuctionStatus.ACTIVE);
+      // Type assertion: with ENABLE_ONCHAIN_SETTLEMENT=false, result is Auction
+      expect((result as Auction).sellerId).toBe('seller-1');
+      expect((result as Auction).status).toBe(AuctionStatus.ACTIVE);
     });
 
     it('should prevent duplicate active auction for same NFT', async () => {
@@ -206,7 +228,8 @@ describe('AuctionService', () => {
       });
       expect(mockBidRepo.save).toHaveBeenCalled();
       expect(mockAuctionRepo.save).toHaveBeenCalled();
-      expect(bid.amount).toBe(2);
+      // Type assertion: with ENABLE_ONCHAIN_SETTLEMENT=false, result is Bid
+      expect((bid as Bid).amount).toBe(2);
     });
 
     it('should reject bid on non-active auction', async () => {
