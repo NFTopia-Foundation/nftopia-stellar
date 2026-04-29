@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
@@ -9,6 +10,8 @@ import { User } from '../../users/user.entity';
 import { Nft } from '../nft/entities/nft.entity';
 import { CreateCollectionDto } from './dto/create-collection.dto';
 import { Collection } from './entities/collection.entity';
+import { VerificationRequest, VerificationStatus } from './entities/verification-request.entity';
+import { SubmitVerificationRequestDto } from './dto/verification-request.dto';
 import {
   type CollectionConnectionQuery,
   type CollectionConnectionResult,
@@ -30,6 +33,8 @@ export class CollectionService {
     private readonly nftRepository: Repository<Nft>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(VerificationRequest)
+    private readonly verificationRequestRepository: Repository<VerificationRequest>,
   ) {}
 
   async findById(id: string): Promise<Collection> {
@@ -274,5 +279,125 @@ export class CollectionService {
     }
 
     return parsed.toFixed(7);
+  }
+
+  async submitVerificationRequest(
+    collectionId: string,
+    requesterId: string,
+    dto: SubmitVerificationRequestDto,
+  ): Promise<VerificationRequest> {
+    // Check if collection exists
+    const collection = await this.findById(collectionId);
+
+    // Verify the requester is the collection creator
+    if (collection.creatorId !== requesterId) {
+      throw new ForbiddenException('Only the collection creator can request verification');
+    }
+
+    // Check if there's already a pending request
+    const existingRequest = await this.verificationRequestRepository.findOne({
+      where: {
+        collectionId,
+        status: VerificationStatus.PENDING,
+      },
+    });
+
+    if (existingRequest) {
+      throw new BadRequestException('A verification request is already pending for this collection');
+    }
+
+    // Create new verification request
+    const verificationRequest = this.verificationRequestRepository.create({
+      collectionId,
+      requesterId,
+      proofLinks: dto.proofLinks,
+      additionalInfo: dto.additionalInfo,
+      status: VerificationStatus.PENDING,
+    });
+
+    return this.verificationRequestRepository.save(verificationRequest);
+  }
+
+  async getPendingVerificationRequests(
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<{
+    data: VerificationRequest[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const skip = (page - 1) * limit;
+
+    const [data, total] = await this.verificationRequestRepository.findAndCount({
+      where: { status: VerificationStatus.PENDING },
+      relations: ['collection', 'requester'],
+      order: { createdAt: 'DESC' },
+      skip,
+      take: limit,
+    });
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+    };
+  }
+
+  async approveVerificationRequest(
+    requestId: string,
+    adminId: string,
+    reviewNotes?: string,
+  ): Promise<VerificationRequest> {
+    const request = await this.verificationRequestRepository.findOne({
+      where: { id: requestId },
+      relations: ['collection'],
+    });
+
+    if (!request) {
+      throw new NotFoundException('Verification request not found');
+    }
+
+    if (request.status !== VerificationStatus.PENDING) {
+      throw new BadRequestException('Verification request has already been reviewed');
+    }
+
+    // Update request status
+    request.status = VerificationStatus.APPROVED;
+    request.reviewedBy = adminId;
+    request.reviewNotes = reviewNotes;
+    request.reviewedAt = new Date();
+
+    // Update collection isVerified to true
+    request.collection.isVerified = true;
+    await this.collectionRepository.save(request.collection);
+
+    return this.verificationRequestRepository.save(request);
+  }
+
+  async rejectVerificationRequest(
+    requestId: string,
+    adminId: string,
+    reviewNotes?: string,
+  ): Promise<VerificationRequest> {
+    const request = await this.verificationRequestRepository.findOne({
+      where: { id: requestId },
+    });
+
+    if (!request) {
+      throw new NotFoundException('Verification request not found');
+    }
+
+    if (request.status !== VerificationStatus.PENDING) {
+      throw new BadRequestException('Verification request has already been reviewed');
+    }
+
+    request.status = VerificationStatus.REJECTED;
+    request.reviewedBy = adminId;
+    request.reviewNotes = reviewNotes;
+    request.reviewedAt = new Date();
+
+    return this.verificationRequestRepository.save(request);
   }
 }
