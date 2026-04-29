@@ -7,7 +7,6 @@ import { ServiceUnavailableException } from '@nestjs/common';
 
 describe('HealthController', () => {
   let controller: HealthController;
-  let service: HealthService;
 
   const mockCacheManager = {
     get: jest.fn(),
@@ -36,7 +35,6 @@ describe('HealthController', () => {
     }).compile();
 
     controller = module.get<HealthController>(HealthController);
-    service = module.get<HealthService>(HealthService);
   });
 
   it('should be defined', () => {

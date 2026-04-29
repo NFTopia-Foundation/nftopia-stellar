@@ -1,5 +1,6 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 import { DataSource } from 'typeorm';
 
 @Injectable()
@@ -7,15 +8,15 @@ export class HealthService {
   private readonly logger = new Logger(HealthService.name);
 
   constructor(
-    @Inject(CACHE_MANAGER) private cacheManager: any,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
     private dataSource: DataSource,
   ) {}
 
-  async checkLive(): Promise<{ status: string; timestamp: string }> {
-    return {
+  checkLive(): Promise<{ status: string; timestamp: string }> {
+    return Promise.resolve({
       status: 'ok',
       timestamp: new Date().toISOString(),
-    };
+    });
   }
 
   async checkReady(): Promise<{
