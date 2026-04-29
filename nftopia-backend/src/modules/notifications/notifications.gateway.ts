@@ -122,9 +122,10 @@ export class NotificationsGateway
 
   handleDisconnect(client: Socket): void {
     const typedClient = client as AuthenticatedSocket;
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
     const user = typedClient.data.user;
     if (user) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       this.logger.debug(`User ${user.userId} disconnected (${client.id})`);
     } else {
       this.logger.debug(`Anonymous socket ${client.id} disconnected`);
