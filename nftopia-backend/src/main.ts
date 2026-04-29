@@ -87,8 +87,8 @@ async function bootstrapRestApi() {
   await app.listen(port);
   const logger = app.get<PinoLogger>(PinoLogger);
 
-  logger.info(`Application is running on: ...`);
-  logger.info(`Swagger documentation available at: ...`);
+  logger.log(`Application is running on: http://localhost:${port}/api/v1`);
+  logger.log(`Swagger documentation available at: http://localhost:${port}/api/docs`);
 
   return app;
 }
