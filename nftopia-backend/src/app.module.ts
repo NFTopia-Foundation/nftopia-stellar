@@ -28,6 +28,7 @@ import { StellarAccountService } from './services/stellar-account.service';
 import { CollectionFactoryModule } from './modules/collection-factory/collection-factory.module';
 import { StellarModule } from './modules/stellar/stellar.module';
 import { HealthModule } from './health/health.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -109,6 +110,7 @@ import { HealthModule } from './health/health.module';
     SearchModule,
     CollectionFactoryModule,
     StellarModule,
+    NotificationsModule,
     IndexerModule,
   ],
   controllers: [AppController],

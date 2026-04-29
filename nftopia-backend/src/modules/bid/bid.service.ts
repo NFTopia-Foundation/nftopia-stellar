@@ -132,6 +132,7 @@ export class BidService {
 
     const event: BidPlacedEvent = {
       auctionId,
+      sellerId: auction.sellerId,
       bidderId,
       stellarPublicKey: dto.publicKey,
       amount: amountXlm,
