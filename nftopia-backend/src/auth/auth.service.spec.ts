@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { AuthService } from './auth.service';
 import { User } from '../users/user.entity';
 import { UserWallet } from './entities/user-wallet.entity';
@@ -45,6 +46,12 @@ describe('AuthService', () => {
     verifySignedMessage: jest.fn(),
   };
 
+  const cacheManager = {
+    get: jest.fn(),
+    set: jest.fn(),
+    del: jest.fn(),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
 
@@ -71,6 +78,10 @@ describe('AuthService', () => {
           provide: getRepositoryToken(WalletSession),
           useValue: walletSessionRepository,
         },
+        {
+          provide: CACHE_MANAGER,
+          useValue: cacheManager,
+        },
       ],
     }).compile();
 
@@ -79,19 +90,7 @@ describe('AuthService', () => {
 
   it('generates a wallet challenge session', async () => {
     stellarStrategy.isValidPublicKey.mockReturnValue(true);
-    const createdSession = {
-      walletAddress: 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
-      walletProvider: 'freighter',
-      nonce: 'nonce-1',
-      challengeMessage: 'NFTopia Wallet Authentication',
-      nonceExpiresAt: new Date(Date.now() + 60_000),
-      ipAddress: '127.0.0.1',
-    };
-    walletSessionRepository.create.mockReturnValue(createdSession);
-    walletSessionRepository.save.mockResolvedValue({
-      id: 'session-1',
-      ...createdSession,
-    });
+    cacheManager.set.mockResolvedValue(undefined);
 
     const result = await service.generateWalletChallenge(
       {
@@ -102,12 +101,13 @@ describe('AuthService', () => {
       '127.0.0.1',
     );
 
-    expect(result.sessionId).toEqual('session-1');
+    expect(result.sessionId).toContain('nonce:');
     expect(result.walletAddress).toEqual(
       'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
     );
     expect(result.nonce).toBeTruthy();
     expect(result.message).toContain('NFTopia Wallet Authentication');
+    expect(cacheManager.set).toHaveBeenCalled();
   });
 
   it('rejects invalid signatures during wallet verification', async () => {
@@ -139,13 +139,14 @@ describe('AuthService', () => {
     stellarStrategy.isValidPublicKey.mockReturnValue(true);
     stellarStrategy.verifySignedMessage.mockReturnValue(true);
 
-    walletSessionRepository.findOne.mockResolvedValue({
-      id: 'session-1',
-      walletAddress,
+    // Mock cacheManager.get to return session data
+    cacheManager.get.mockResolvedValue({
       nonce: 'nonce-1',
       challengeMessage: 'challenge-message',
-      nonceExpiresAt: new Date(Date.now() + 60_000),
-      consumedAt: null,
+      walletAddress,
+      walletProvider: 'freighter',
+      issuedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
     });
 
     userWalletRepository.findOne
@@ -182,7 +183,7 @@ describe('AuthService', () => {
     });
 
     userRepository.update.mockResolvedValue(undefined);
-    walletSessionRepository.save.mockResolvedValue(undefined);
+    cacheManager.del.mockResolvedValue(undefined);
 
     jwtService.sign
       .mockReturnValueOnce('access-token')
@@ -198,6 +199,8 @@ describe('AuthService', () => {
     expect(result.refresh_token).toEqual('refresh-token');
     expect(result.user.id).toEqual('user-1');
     expect(result.user.walletAddress).toEqual(walletAddress);
+    expect(cacheManager.get).toHaveBeenCalled();
+    expect(cacheManager.del).toHaveBeenCalled();
   });
 
   it('registers with email/password and returns tokens', async () => {
@@ -214,6 +217,7 @@ describe('AuthService', () => {
       passwordHash: 'salt:hash',
       isEmailVerified: false,
     });
+    // buildAuthResponse calls buildTokenPair which calls jwtService.sign twice
     jwtService.sign
       .mockReturnValueOnce('access-token-email')
       .mockReturnValueOnce('refresh-token-email');
