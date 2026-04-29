@@ -64,9 +64,7 @@ export class NotificationsService {
       .to(userRoom(userId))
       .emit(NOTIFICATION_EVENT, payload);
 
-    this.logger.debug(
-      `[notify] user=${userId} type=${type} title="${title}"`,
-    );
+    this.logger.debug(`[notify] user=${userId} type=${type} title="${title}"`);
   }
 
   /**

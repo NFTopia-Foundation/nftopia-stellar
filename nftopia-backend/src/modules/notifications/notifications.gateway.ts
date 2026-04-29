@@ -18,6 +18,14 @@ import {
   userRoom,
 } from './interfaces/notification.interface';
 
+// Type alias for Socket with typed data property
+type AuthenticatedSocket = Socket & {
+  data: {
+    user?: AuthenticatedSocketUser;
+    [key: string]: unknown;
+  };
+};
+
 /**
  * JWT-authenticated WebSocket gateway that powers real-time notifications.
  *
@@ -93,8 +101,10 @@ export class NotificationsGateway
         username: payload.username,
         email: payload.email,
       };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (client.data as any).user = user;
+
+      const typedClient = client as AuthenticatedSocket;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      typedClient.data.user = user;
 
       void client.join(userRoom(user.userId));
       this.logger.debug(
@@ -111,10 +121,9 @@ export class NotificationsGateway
   }
 
   handleDisconnect(client: Socket): void {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const user = (client.data as any).user as
-      | AuthenticatedSocketUser
-      | undefined;
+    const typedClient = client as AuthenticatedSocket;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const user = typedClient.data.user;
     if (user) {
       this.logger.debug(`User ${user.userId} disconnected (${client.id})`);
     } else {

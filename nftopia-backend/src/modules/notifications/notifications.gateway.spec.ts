@@ -9,7 +9,7 @@ import { NotificationsGateway } from './notifications.gateway';
 const makeJwtService = (
   verify: jest.Mock = jest.fn(),
 ): jest.Mocked<JwtService> =>
-  ({ verify } as unknown as jest.Mocked<JwtService>);
+  ({ verify }) as unknown as jest.Mocked<JwtService>;
 
 const makeSocket = (
   overrides: Partial<{
@@ -20,8 +20,13 @@ const makeSocket = (
     data: Record<string, unknown>;
   }> = {},
 ): jest.Mocked<Socket> => {
-  const { id = 'socket-1', auth = {}, query = {}, headers = {}, data = {} } =
-    overrides;
+  const {
+    id = 'socket-1',
+    auth = {},
+    query = {},
+    headers = {},
+    data = {},
+  } = overrides;
   return {
     id,
     handshake: { auth, query, headers },
@@ -109,8 +114,8 @@ describe('NotificationsGateway', () => {
     it('attaches user metadata to client.data', () => {
       const client = makeSocket({ auth: { token: VALID_TOKEN } });
       gateway.handleConnection(client);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const storedUser = (client.data as any).user;
+
+      const storedUser = (client.data as { user?: unknown }).user;
       expect(storedUser).toEqual({
         userId: VALID_PAYLOAD.sub,
         username: VALID_PAYLOAD.username,
@@ -219,9 +224,7 @@ describe('NotificationsGateway', () => {
       spy.mockClear();
 
       gateway.handleDisconnect(client);
-      expect(spy).toHaveBeenCalledWith(
-        expect.stringContaining('user-42'),
-      );
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining('user-42'));
     });
 
     it('handles unauthenticated disconnect without throwing', () => {
@@ -233,9 +236,7 @@ describe('NotificationsGateway', () => {
       const spy = jest.spyOn(Logger.prototype, 'debug');
       const client = makeSocket({ id: 'anon-socket' });
       gateway.handleDisconnect(client);
-      expect(spy).toHaveBeenCalledWith(
-        expect.stringContaining('anon-socket'),
-      );
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining('anon-socket'));
     });
   });
 
@@ -254,7 +255,10 @@ describe('NotificationsGateway', () => {
         { auctionId: 'auction-1' },
         client,
       );
-      expect(result).toEqual({ event: 'join_auction:ok', auctionId: 'auction-1' });
+      expect(result).toEqual({
+        event: 'join_auction:ok',
+        auctionId: 'auction-1',
+      });
     });
 
     it('returns error when auctionId is missing', () => {

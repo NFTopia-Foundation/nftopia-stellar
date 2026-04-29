@@ -15,7 +15,9 @@ const makeServer = (room: ReturnType<typeof makeRoom>): jest.Mocked<Server> =>
 const makeGateway = (
   server: jest.Mocked<Server>,
 ): jest.Mocked<NotificationsGateway> =>
-  ({ getServer: jest.fn().mockReturnValue(server) } as unknown as jest.Mocked<NotificationsGateway>);
+  ({
+    getServer: jest.fn().mockReturnValue(server),
+  }) as unknown as jest.Mocked<NotificationsGateway>;
 
 const makeBidUpdate = (
   override: Partial<BidUpdatePayload> = {},
@@ -81,7 +83,12 @@ describe('NotificationsService', () => {
     });
 
     it('payload includes message when provided', () => {
-      service.notifyUser('user-1', 'bid.received', 'New Bid', 'User X bid 100 XLM');
+      service.notifyUser(
+        'user-1',
+        'bid.received',
+        'New Bid',
+        'User X bid 100 XLM',
+      );
       const [, payload] = room.emit.mock.calls[0] as [
         string,
         Record<string, unknown>,
@@ -169,10 +176,7 @@ describe('NotificationsService', () => {
     it('passes the full payload through unchanged', () => {
       const payload = makeBidUpdate();
       service.broadcastBidUpdate(payload.auctionId, payload);
-      const [, emitted] = room.emit.mock.calls[0] as [
-        string,
-        BidUpdatePayload,
-      ];
+      const [, emitted] = room.emit.mock.calls[0] as [string, BidUpdatePayload];
       expect(emitted).toEqual(payload);
     });
 
@@ -182,8 +186,14 @@ describe('NotificationsService', () => {
         .mockReturnValueOnce(room as unknown as ReturnType<Server['to']>)
         .mockReturnValueOnce(room2 as unknown as ReturnType<Server['to']>);
 
-      service.broadcastBidUpdate('auction-1', makeBidUpdate({ auctionId: 'auction-1' }));
-      service.broadcastBidUpdate('auction-2', makeBidUpdate({ auctionId: 'auction-2' }));
+      service.broadcastBidUpdate(
+        'auction-1',
+        makeBidUpdate({ auctionId: 'auction-1' }),
+      );
+      service.broadcastBidUpdate(
+        'auction-2',
+        makeBidUpdate({ auctionId: 'auction-2' }),
+      );
 
       expect(mockServer.to).toHaveBeenCalledWith('auction:auction-1');
       expect(mockServer.to).toHaveBeenCalledWith('auction:auction-2');
@@ -192,7 +202,10 @@ describe('NotificationsService', () => {
     });
 
     it('handles payload without optional txHash / ledgerSequence', () => {
-      const payload = makeBidUpdate({ txHash: undefined, ledgerSequence: undefined });
+      const payload = makeBidUpdate({
+        txHash: undefined,
+        ledgerSequence: undefined,
+      });
       expect(() =>
         service.broadcastBidUpdate(payload.auctionId, payload),
       ).not.toThrow();
