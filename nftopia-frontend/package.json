@@ -55,7 +55,6 @@
     "tailwindcss": "3.3.3",
     "tailwindcss-animate": "^1.0.7",
     "use-sound": "^5.0.0",
-    "utf-8-validate": "^6.0.5",
     "uuid": "^11.1.0",
     "zustand": "^5.0.6"
   },
@@ -79,11 +78,15 @@
     "@types/jest-axe": "^3.5.9",
     "babel-jest": "^30.0.5",
     "chromatic": "^13.1.2",
+    "identity-obj-proxy": "^3.0.0",
     "jest": "^30.0.5",
     "jest-axe": "^10.0.0",
     "jest-environment-jsdom": "^30.0.5",
     "ts-jest": "^29.4.0",
     "typescript": "^5.8.3",
     "webpack-bundle-analyzer": "^4.10.2"
+  },
+  "optionalDependencies": {
+    "utf-8-validate": "^5.0.10"
   }
 }

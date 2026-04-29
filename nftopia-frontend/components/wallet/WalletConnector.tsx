@@ -9,6 +9,7 @@ import { WalletNetworkStatus } from "./WalletNetworkStatus";
 import { useTranslation } from "@/hooks/useTranslation";
 import { getExplorerUrl } from "@/lib/stellar/network";
 import { useToast } from "@/lib/stores";
+import { Button } from "@/components/ui/button";
 import { Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, DropdownSeparator } from "@/components/ui/dropdown";
 
 interface WalletConnectorProps {
@@ -41,21 +42,23 @@ export function WalletConnector({ forceVisible = false, fullWidth = false }: Wal
     : "";
 
   if (!connected) {
-    const connectButtonClass = forceVisible ? "flex w-full justify-center" : "hidden xl:flex";
+    const wrapperClass = forceVisible ? "flex w-full justify-center" : "hidden xl:flex";
 
     return (
       <>
-        <button
-          onClick={() => setModalOpen(true)}
-          className={`${connectButtonClass} items-center gap-2 rounded-full px-6 py-2 bg-gradient-to-r from-[#4e3bff] to-[#9747ff] text-white hover:opacity-90 transition-opacity font-medium text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2`}
-          disabled={connecting}
-          aria-busy={connecting}
-        >
-          <Wallet className="h-4 w-4" aria-hidden="true" />
-          {connecting
-            ? t("connectWallet.connecting") || "Connecting..."
-            : t("connectWallet.connect")}
-        </button>
+        <div className={wrapperClass}>
+          <Button
+            variant="wallet"
+            size="pill"
+            onClick={() => setModalOpen(true)}
+            loading={connecting}
+            loadingText={t("connectWallet.connecting") || "Connecting..."}
+            className="rounded-full"
+          >
+            <Wallet className="h-4 w-4" />
+            {t("connectWallet.connect")}
+          </Button>
+        </div>
         <WalletModal open={modalOpen} onClose={() => setModalOpen(false)} />
       </>
     );

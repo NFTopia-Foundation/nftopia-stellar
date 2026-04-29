@@ -8,6 +8,7 @@ import { detectInstalledWallets } from "@/lib/stellar/wallet/detection";
 import { useTranslation } from "@/hooks/useTranslation";
 import Image from "next/image";
 import { useToast } from "@/lib/stores";
+import { Button } from "@/components/ui/button";
 
 interface WalletModalProps {
   open: boolean;
@@ -58,33 +59,37 @@ export function WalletModal({ open, onClose, onConnected }: WalletModalProps) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="wallet-modal-title">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={onClose}
+        aria-hidden="true"
       />
 
       {/* Modal */}
       <div className="relative w-full max-w-sm rounded-2xl border border-purple-500/20 bg-gray-950/95 backdrop-blur-md shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-purple-500/10">
-          <h2 className="text-lg font-semibold text-white">
+          <h2 id="wallet-modal-title" className="text-lg font-semibold text-white">
             {t("walletModal.title") || "Connect Wallet"}
           </h2>
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={onClose}
-            className="text-gray-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/5"
+            aria-label="Close wallet modal"
+            className="text-gray-400 hover:text-white min-h-0 h-9 w-9 rounded-lg hover:bg-white/5"
           >
-            <X className="h-5 w-5" />
-          </button>
+            <X className="h-5 w-5" aria-hidden="true" />
+          </Button>
         </div>
 
         {/* Body */}
         <div className="px-6 py-4">
           {error && (
-            <div className="mb-4 flex items-start gap-3 p-3 rounded-lg bg-red-900/30 border border-red-500/30 text-red-300 text-sm">
-              <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+            <div className="mb-4 flex items-start gap-3 p-3 rounded-lg bg-red-900/30 border border-red-500/30 text-red-300 text-sm" role="alert">
+              <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" aria-hidden="true" />
               <span>{error}</span>
             </div>
           )}
@@ -116,7 +121,7 @@ export function WalletModal({ open, onClose, onConnected }: WalletModalProps) {
               rel="noopener noreferrer"
               className="text-purple-400 hover:text-purple-300 inline-flex items-center gap-1"
             >
-              stellar.org <ExternalLink className="h-3 w-3" />
+              stellar.org <ExternalLink className="h-3 w-3" aria-hidden="true" />
             </a>
           </p>
         </div>
@@ -135,10 +140,11 @@ function WalletOption({
   onConnect: (id: WalletProvider) => void;
 }) {
   return (
-    <button
+    <Button
+      variant="outline"
       onClick={() => onConnect(wallet.id)}
       disabled={isConnecting}
-      className="w-full flex items-center gap-4 p-4 rounded-xl border border-purple-500/15 hover:border-purple-500/40 hover:bg-purple-500/5 transition-all group disabled:opacity-60 disabled:cursor-not-allowed"
+      className="w-full justify-start gap-4 p-4 rounded-xl border-purple-500/15 hover:border-purple-500/40 hover:bg-purple-500/5 min-h-0 h-auto group"
     >
       <div className="w-10 h-10 rounded-xl bg-gray-800 flex items-center justify-center flex-shrink-0 overflow-hidden">
         <Image
@@ -166,12 +172,12 @@ function WalletOption({
       </div>
 
       {isConnecting ? (
-        <Loader2 className="h-4 w-4 text-purple-400 animate-spin" />
+        <Loader2 className="h-4 w-4 text-purple-400 animate-spin" aria-label="Connecting..." />
       ) : (
-        <div className="text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity">
+        <span className="text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity" aria-hidden="true">
           →
-        </div>
+        </span>
       )}
-    </button>
+    </Button>
   );
 }

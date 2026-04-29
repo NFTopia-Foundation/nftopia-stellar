@@ -27,10 +27,11 @@ import { SorobanRpcService } from './services/soroban-rpc.service';
 import { StellarAccountService } from './services/stellar-account.service';
 import { CollectionFactoryModule } from './modules/collection-factory/collection-factory.module';
 import { StellarModule } from './modules/stellar/stellar.module';
-import { NotificationsModule } from './modules/notifications/notifications.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
+    HealthModule,
     ScheduleModule.forRoot(),
     LoggerModule.forRootAsync({
       inject: [ConfigService],
@@ -104,7 +105,6 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     BidModule,
     ListingModule,
     OrderModule,
-    CollectionModule,
     StorageModule,
     SearchModule,
     CollectionFactoryModule,

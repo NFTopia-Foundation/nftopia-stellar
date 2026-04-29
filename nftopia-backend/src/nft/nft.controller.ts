@@ -1,6 +1,7 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { NftService } from './nft.service';
 import { NftFilterDto } from './dto/nft-filter.dto';
+import { StellarNft } from './entities/stellar-nft.entity';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 
 @ApiTags('nfts')
@@ -28,8 +29,8 @@ export class NftController {
     required: false,
     description: 'Filter by owner G-address',
   })
-  async findAll(@Query() query: NftFilterDto) {
-    return this.nftService.findAll(query);
+  async findAll(@Query() query: NftFilterDto): Promise<StellarNft[]> {
+    return this.nftService.findAll(query) as Promise<StellarNft[]>;
   }
 
   /**
