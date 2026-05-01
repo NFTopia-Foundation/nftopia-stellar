@@ -102,13 +102,13 @@ export class NftService implements OnModuleInit {
     if (cached) return cached;
 
     const sellers: Array<{ owner: string; sales: string; volume: string }> =
-      await this.nftRepository.query(`
+      (await this.nftRepository.query(`
         SELECT owner, count(*) as sales, sum(volume) as volume
         FROM stellar_nfts
         GROUP BY owner
         ORDER BY volume DESC
         LIMIT 10
-    `);
+    `)) as Array<{ owner: string; sales: string; volume: string }>;
 
     await this.cacheManager.set(cacheKey, sellers, 300000); // 5 minutes
 

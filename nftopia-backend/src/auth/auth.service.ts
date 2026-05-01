@@ -6,9 +6,12 @@ import {
   Injectable,
   NotFoundException,
   UnauthorizedException,
+  Inject,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import type { Cache } from 'cache-manager';
 import * as crypto from 'crypto';
 import { promisify } from 'util';
 import { IsNull, MoreThan, Repository } from 'typeorm';
@@ -68,6 +71,7 @@ export class AuthService {
     private readonly userWalletRepository: Repository<UserWallet>,
     @InjectRepository(WalletSession)
     private readonly walletSessionRepository: Repository<WalletSession>,
+    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
   ) {}
 
   async registerWithEmail(dto: EmailRegisterDto) {
@@ -140,23 +144,26 @@ export class AuthService {
       issuedAt,
     );
 
-    const session = this.walletSessionRepository.create({
-      walletAddress: dto.walletAddress,
-      walletProvider: dto.walletProvider,
+    // Store nonce in Redis with TTL
+    const sessionKey = `nonce:${dto.walletAddress}`;
+    const sessionData = {
       nonce,
       challengeMessage: message,
-      nonceExpiresAt: expiresAt,
+      walletAddress: dto.walletAddress,
+      walletProvider: dto.walletProvider,
+      issuedAt: issuedAt.toISOString(),
+      expiresAt: expiresAt.toISOString(),
       ipAddress: requestIp,
-    });
-
-    const saved = await this.walletSessionRepository.save(session);
+    };
+    
+    await this.cacheManager.set(sessionKey, sessionData, this.challengeTtlSeconds * 1000);
 
     return {
-      sessionId: saved.id,
-      walletAddress: saved.walletAddress,
-      nonce: saved.nonce,
-      message: saved.challengeMessage,
-      expiresAt: saved.nonceExpiresAt.toISOString(),
+      sessionId: sessionKey,
+      walletAddress: dto.walletAddress,
+      nonce,
+      message,
+      expiresAt: expiresAt.toISOString(),
     };
   }
 
@@ -165,26 +172,36 @@ export class AuthService {
       throw new BadRequestException('Invalid Stellar wallet address');
     }
 
-    const session = await this.walletSessionRepository.findOne({
-      where: {
-        walletAddress: dto.walletAddress,
-        nonce: dto.nonce,
-        consumedAt: IsNull(),
-      },
-      order: { createdAt: 'DESC' },
-    });
+    // Retrieve nonce from Redis
+    const sessionKey = `nonce:${dto.walletAddress}`;
+    const sessionData = await this.cacheManager.get<{
+      nonce: string;
+      challengeMessage: string;
+      walletAddress: string;
+      walletProvider?: string;
+      issuedAt: string;
+      expiresAt: string;
+      ipAddress?: string;
+    }>(sessionKey);
 
-    if (!session) {
+    if (!sessionData) {
       throw new UnauthorizedException('Wallet challenge not found');
     }
 
-    if (session.nonceExpiresAt <= new Date()) {
+    // Check if expired
+    if (new Date(sessionData.expiresAt) <= new Date()) {
+      await this.cacheManager.del(sessionKey);
       throw new UnauthorizedException('Wallet challenge has expired');
+    }
+
+    // Check nonce matches
+    if (sessionData.nonce !== dto.nonce) {
+      throw new UnauthorizedException('Invalid nonce');
     }
 
     const isValidSignature = this.stellarStrategy.verifySignedMessage(
       dto.walletAddress,
-      session.challengeMessage,
+      sessionData.challengeMessage,
       dto.signature,
     );
 
@@ -194,7 +211,7 @@ export class AuthService {
 
     const user = await this.resolveUserByWallet(
       dto.walletAddress,
-      dto.walletProvider || session.walletProvider,
+      dto.walletProvider || sessionData.walletProvider,
     );
 
     await this.upsertLinkedWallet(
@@ -204,9 +221,8 @@ export class AuthService {
       true,
     );
 
-    session.userId = user.id;
-    session.consumedAt = new Date();
-    await this.walletSessionRepository.save(session);
+    // Delete nonce from Redis after successful verification (one-time use)
+    await this.cacheManager.del(sessionKey);
 
     return this.buildAuthResponse(user);
   }

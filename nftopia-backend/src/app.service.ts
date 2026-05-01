@@ -6,13 +6,6 @@ import type { Cache } from 'cache-manager';
 export class AppService {
   constructor(@Inject(CACHE_MANAGER) private cacheManager: Cache) {}
 
-  getHealth(): { status: string; timestamp: string } {
-    return {
-      status: 'OK',
-      timestamp: new Date().toISOString(),
-    };
-  }
-
   async testCache(): Promise<{
     message: string;
     cacheHit: boolean;
