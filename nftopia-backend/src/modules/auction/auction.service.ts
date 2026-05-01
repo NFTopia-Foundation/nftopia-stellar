@@ -6,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Brackets, Repository } from 'typeorm';
 import { Auction } from './entities/auction.entity';
 import { Bid } from './entities/bid.entity';
 import { CreateAuctionDto } from './dto/create-auction.dto';
@@ -132,6 +132,51 @@ export class AuctionService {
     const auction = await this.auctionRepo.findOne({ where: { id } });
     if (!auction) throw new NotFoundException('Auction not found');
     return auction;
+  }
+
+  async findByNFTIds(nftIds: string[]): Promise<Auction[]> {
+    const uniqueNftIds = [...new Set(nftIds.filter(Boolean))];
+    if (!uniqueNftIds.length) {
+      return [];
+    }
+
+    const parsed = uniqueNftIds
+      .map((nftId) => {
+        const [contractId, tokenId] = nftId.split(':');
+        if (!contractId || !tokenId) {
+          return null;
+        }
+
+        return { contractId, tokenId };
+      })
+      .filter(
+        (value): value is { contractId: string; tokenId: string } =>
+          value !== null,
+      );
+
+    if (!parsed.length) {
+      return [];
+    }
+
+    const qb = this.auctionRepo
+      .createQueryBuilder('a')
+      .where(
+        new Brackets((where) => {
+          parsed.forEach(({ contractId, tokenId }, index) => {
+            where.orWhere(
+              `(a.nftContractId = :contractId${index} AND a.nftTokenId = :tokenId${index})`,
+              {
+                [`contractId${index}`]: contractId,
+                [`tokenId${index}`]: tokenId,
+              },
+            );
+          });
+        }),
+      )
+      .andWhere('a.status = :status', { status: AuctionStatus.ACTIVE })
+      .andWhere('a.endTime > :now', { now: new Date() });
+
+    return qb.getMany();
   }
 
   async getBids(auctionId: string) {

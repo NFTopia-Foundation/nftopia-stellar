@@ -5,7 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, SelectQueryBuilder } from 'typeorm';
+import { In, Repository, SelectQueryBuilder } from 'typeorm';
 import { User } from '../../users/user.entity';
 import { Nft } from '../nft/entities/nft.entity';
 import { CreateCollectionDto } from './dto/create-collection.dto';
@@ -47,6 +47,17 @@ export class CollectionService {
     }
 
     return collection;
+  }
+
+  async findByIds(ids: string[]): Promise<Collection[]> {
+    const uniqueIds = [...new Set(ids.filter(Boolean))];
+    if (!uniqueIds.length) {
+      return [];
+    }
+
+    return this.collectionRepository.find({
+      where: { id: In(uniqueIds) },
+    });
   }
 
   async findOne(id: string): Promise<Collection> {

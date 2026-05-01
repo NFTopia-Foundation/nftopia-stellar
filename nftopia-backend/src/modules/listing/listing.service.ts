@@ -6,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Brackets, Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { Listing } from './entities/listing.entity';
 import { CreateListingDto } from './dto/create-listing.dto';
@@ -222,6 +222,53 @@ export class ListingService {
     return this.listingRepo.find({
       where: { nftContractId: contractId, nftTokenId: tokenId },
     });
+  }
+
+  async findByNFTIds(nftIds: string[]): Promise<Listing[]> {
+    const uniqueNftIds = [...new Set(nftIds.filter(Boolean))];
+    if (!uniqueNftIds.length) {
+      return [];
+    }
+
+    const parsed = uniqueNftIds
+      .map((nftId) => {
+        const [contractId, tokenId] = nftId.split(':');
+        if (!contractId || !tokenId) {
+          return null;
+        }
+
+        return { contractId, tokenId };
+      })
+      .filter(
+        (value): value is { contractId: string; tokenId: string } =>
+          value !== null,
+      );
+
+    if (!parsed.length) {
+      return [];
+    }
+
+    const qb = this.listingRepo
+      .createQueryBuilder('l')
+      .where(
+        new Brackets((where) => {
+          parsed.forEach(({ contractId, tokenId }, index) => {
+            where.orWhere(
+              `(l.nftContractId = :contractId${index} AND l.nftTokenId = :tokenId${index})`,
+              {
+                [`contractId${index}`]: contractId,
+                [`tokenId${index}`]: tokenId,
+              },
+            );
+          });
+        }),
+      )
+      .andWhere('l.status = :status', { status: ListingStatus.ACTIVE })
+      .andWhere('(l.expiresAt IS NULL OR l.expiresAt > :now)', {
+        now: new Date(),
+      });
+
+    return qb.getMany();
   }
 
   async cancel(id: string, callerId: string) {

@@ -8,6 +8,11 @@ import {
   Scalar,
 } from '@nestjs/graphql';
 import { Kind, type ValueNode, GraphQLError, GraphQLScalarType } from 'graphql';
+import { GraphqlCollection } from './collection.types';
+import { GraphqlListing } from './listing.types';
+import { GraphqlOrder } from './order.types';
+import { GraphqlAuction } from './auction.types';
+import { GraphqlUserType } from './user.types';
 
 function parseLiteralNode(node: ValueNode): unknown {
   switch (node.kind) {
@@ -107,6 +112,24 @@ export class GraphqlNft {
 
   @Field(() => String, { nullable: true })
   lastPrice?: string | null;
+
+  @Field(() => GraphqlUserType, { nullable: true })
+  owner?: GraphqlUserType | null;
+
+  @Field(() => GraphqlUserType, { nullable: true })
+  creator?: GraphqlUserType | null;
+
+  @Field(() => GraphqlCollection, { nullable: true })
+  collection?: GraphqlCollection | null;
+
+  @Field(() => GraphqlListing, { nullable: true })
+  listing?: GraphqlListing | null;
+
+  @Field(() => GraphqlAuction, { nullable: true })
+  auction?: GraphqlAuction | null;
+
+  @Field(() => [GraphqlOrder], { nullable: true })
+  orders?: GraphqlOrder[];
 }
 
 @ObjectType()

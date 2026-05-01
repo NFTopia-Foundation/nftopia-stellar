@@ -9,7 +9,7 @@ import {
   Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
@@ -234,6 +234,18 @@ export class BidService {
   async getMyBids(auctionId: string, userId: string): Promise<Bid[]> {
     return this.bidRepo.find({
       where: { auctionId, bidderId: userId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async findByAuctionIds(auctionIds: string[]): Promise<Bid[]> {
+    const uniqueAuctionIds = [...new Set(auctionIds.filter(Boolean))];
+    if (!uniqueAuctionIds.length) {
+      return [];
+    }
+
+    return this.bidRepo.find({
+      where: { auctionId: In(uniqueAuctionIds) },
       order: { createdAt: 'DESC' },
     });
   }

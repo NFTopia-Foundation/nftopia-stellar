@@ -11,6 +11,7 @@ import {
 } from '@nestjs/graphql';
 import {
   BadRequestException,
+  NotFoundException,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
@@ -31,7 +32,9 @@ import {
   GraphqlCollection,
 } from '../types/collection.types';
 import { GraphqlNft, NFTConnection } from '../types/nft.types';
+import { GraphqlUserType } from '../types/user.types';
 import type { CollectionCursorPayload } from '../../modules/collection/interfaces/collection.interface';
+import type { User } from '../../users/user.entity';
 
 @Resolver(() => GraphqlCollection)
 export class CollectionResolver {
@@ -46,8 +49,13 @@ export class CollectionResolver {
   })
   async collection(
     @Args('id', { type: () => ID }) id: string,
+    @Context() context: GraphqlContext,
   ): Promise<GraphqlCollection> {
-    const collection = await this.collectionService.findById(id);
+    const collection = await context.loaders.collectionById.load(id);
+    if (!collection) {
+      throw new NotFoundException('Collection not found');
+    }
+
     return this.toGraphqlCollection(collection);
   }
 
@@ -130,6 +138,23 @@ export class CollectionResolver {
     );
 
     return this.toGraphqlCollection(collection);
+  }
+
+  @ResolveField(() => GraphqlUserType, {
+    name: 'creator',
+    nullable: true,
+    description: 'Resolve collection creator using request-scoped DataLoader',
+  })
+  async creator(
+    @Parent() collection: GraphqlCollection,
+    @Context() context: GraphqlContext,
+  ): Promise<GraphqlUserType | null> {
+    const creator = await context.loaders.userById.load(collection.creatorId);
+    if (!creator) {
+      return null;
+    }
+
+    return this.toGraphqlUser(creator);
   }
 
   @ResolveField(() => NFTConnection, {
@@ -249,6 +274,15 @@ export class CollectionResolver {
       collectionId: nft.collectionId ?? null,
       mintedAt: nft.mintedAt,
       lastPrice: nft.lastPrice ?? null,
+    };
+  }
+
+  private toGraphqlUser(user: User): GraphqlUserType {
+    return {
+      id: user.id,
+      username: user.username ?? null,
+      email: user.email ?? null,
+      walletAddress: user.walletAddress ?? user.address ?? null,
     };
   }
 

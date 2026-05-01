@@ -7,6 +7,7 @@ import {
   registerEnumType,
 } from '@nestjs/graphql';
 import { PageInfo } from './nft.types';
+import { GraphqlUserType } from './user.types';
 
 export enum OrderType {
   SALE = 'SALE',
@@ -58,6 +59,12 @@ export class GraphqlOrder {
 
   @Field(() => GraphQLISODateTime)
   createdAt: Date;
+
+  @Field(() => GraphqlUserType, { nullable: true })
+  buyer?: GraphqlUserType | null;
+
+  @Field(() => GraphqlUserType, { nullable: true })
+  seller?: GraphqlUserType | null;
 }
 
 @ObjectType()

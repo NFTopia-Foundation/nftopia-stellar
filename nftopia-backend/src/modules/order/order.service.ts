@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Order } from './entities/order.entity';
 import { CreateOrderDto, OrderStatus, OrderType } from './dto/create-order.dto';
 import { OrderQueryDto } from './dto/order-query.dto';
@@ -86,6 +86,20 @@ export class OrderService {
     const order = await this.orderRepository.findOne({ where: { id } });
     if (!order) throw new NotFoundException('Order not found');
     return this.toOrderInterface(order);
+  }
+
+  async findByNFTIds(nftIds: string[]): Promise<OrderInterface[]> {
+    const uniqueNftIds = [...new Set(nftIds.filter(Boolean))];
+    if (!uniqueNftIds.length) {
+      return [];
+    }
+
+    const orders = await this.orderRepository.find({
+      where: { nftId: In(uniqueNftIds) },
+      order: { createdAt: 'DESC' },
+    });
+
+    return orders.map(this.toOrderInterface);
   }
 
   async updateStatus(id: string, status: string): Promise<OrderInterface> {

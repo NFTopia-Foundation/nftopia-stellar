@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, SelectQueryBuilder } from 'typeorm';
+import { In, Repository, SelectQueryBuilder } from 'typeorm';
 import { Nft } from './entities/nft.entity';
 import { NftMetadata } from './entities/nft-metadata.entity';
 import { CreateNftDto } from './dto/create-nft.dto';
@@ -87,6 +87,18 @@ export class NftService {
     }
 
     return nft;
+  }
+
+  async findByIds(ids: string[]): Promise<Nft[]> {
+    const uniqueIds = [...new Set(ids.filter(Boolean))];
+    if (!uniqueIds.length) {
+      return [];
+    }
+
+    return this.nftRepository.find({
+      where: { id: In(uniqueIds) },
+      relations: ['attributes'],
+    });
   }
 
   async findByTokenId(tokenId: string): Promise<Nft> {

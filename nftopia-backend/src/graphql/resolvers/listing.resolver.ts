@@ -1,4 +1,13 @@
-import { Args, Context, ID, Mutation, Query, Resolver } from '@nestjs/graphql';
+import {
+  Args,
+  Context,
+  ID,
+  Mutation,
+  Parent,
+  Query,
+  ResolveField,
+  Resolver,
+} from '@nestjs/graphql';
 import {
   BadRequestException,
   UnauthorizedException,
@@ -16,9 +25,11 @@ import {
   ListingConnection,
   TransactionResult,
 } from '../types/listing.types';
+import { GraphqlUserType } from '../types/user.types';
 import { ListingService } from '../../modules/listing/listing.service';
 import type { Listing } from '../../modules/listing/entities/listing.entity';
 import { ListingStatus } from '../../modules/listing/interfaces/listing.interface';
+import type { User } from '../../users/user.entity';
 
 type CursorPayload = {
   createdAt: string;
@@ -129,6 +140,23 @@ export class ListingResolver {
     };
   }
 
+  @ResolveField(() => GraphqlUserType, {
+    name: 'seller',
+    nullable: true,
+    description: 'Resolve listing seller using request-scoped DataLoader',
+  })
+  async seller(
+    @Parent() listing: GraphqlListing,
+    @Context() context: GraphqlContext,
+  ): Promise<GraphqlUserType | null> {
+    const seller = await context.loaders.userById.load(listing.sellerId);
+    if (!seller) {
+      return null;
+    }
+
+    return this.toGraphqlUser(seller);
+  }
+
   private getAuthenticatedUserId(context: GraphqlContext): string {
     const userId = context.user?.userId;
     if (!userId) {
@@ -199,6 +227,15 @@ export class ListingResolver {
     }
 
     return parsed.toFixed(7);
+  }
+
+  private toGraphqlUser(user: User): GraphqlUserType {
+    return {
+      id: user.id,
+      username: user.username ?? null,
+      email: user.email ?? null,
+      walletAddress: user.walletAddress ?? user.address ?? null,
+    };
   }
 
   private encodeCursor(listing: Pick<Listing, 'createdAt' | 'id'>): string {

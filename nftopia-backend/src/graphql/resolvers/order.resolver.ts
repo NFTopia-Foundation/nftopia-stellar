@@ -1,4 +1,12 @@
-import { Args, Context, ID, Query, Resolver } from '@nestjs/graphql';
+import {
+  Args,
+  Context,
+  ID,
+  Parent,
+  Query,
+  ResolveField,
+  Resolver,
+} from '@nestjs/graphql';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { GqlAuthGuard } from '../../common/guards/gql-auth.guard';
 import { UseGuards } from '@nestjs/common';
@@ -8,11 +16,13 @@ import {
   OrderConnection,
   SalesAnalytics,
 } from '../types/order.types';
+import { GraphqlUserType } from '../types/user.types';
 import { TimeframeInput } from '../inputs/order.inputs';
 import { PaginationInput } from '../inputs/nft.inputs';
 import type { GraphqlContext } from '../context/context.interface';
 import type { OrderQueryDto } from '../../modules/order/dto/order-query.dto';
 import type { OrderInterface } from '../../modules/order/interfaces/order.interface';
+import type { User } from '../../users/user.entity';
 // import { UserRole } from '../../common/enums/user-role.enum';
 
 @Resolver(() => GraphqlOrder)
@@ -119,6 +129,40 @@ export class OrderResolver {
     });
   }
 
+  @ResolveField(() => GraphqlUserType, {
+    name: 'buyer',
+    nullable: true,
+    description: 'Resolve order buyer using request-scoped DataLoader',
+  })
+  async buyer(
+    @Parent() order: GraphqlOrder,
+    @Context() context: GraphqlContext,
+  ): Promise<GraphqlUserType | null> {
+    const buyer = await context.loaders.userById.load(order.buyerId);
+    if (!buyer) {
+      return null;
+    }
+
+    return this.toGraphqlUser(buyer);
+  }
+
+  @ResolveField(() => GraphqlUserType, {
+    name: 'seller',
+    nullable: true,
+    description: 'Resolve order seller using request-scoped DataLoader',
+  })
+  async seller(
+    @Parent() order: GraphqlOrder,
+    @Context() context: GraphqlContext,
+  ): Promise<GraphqlUserType | null> {
+    const seller = await context.loaders.userById.load(order.sellerId);
+    if (!seller) {
+      return null;
+    }
+
+    return this.toGraphqlUser(seller);
+  }
+
   private toGraphqlOrder = (order: OrderInterface): GraphqlOrder => ({
     id: order.id,
     nftId: order.nftId,
@@ -130,6 +174,13 @@ export class OrderResolver {
     status: order.status,
     transactionHash: order.transactionHash,
     createdAt: order.createdAt,
+  });
+
+  private toGraphqlUser = (user: User): GraphqlUserType => ({
+    id: user.id,
+    username: user.username ?? null,
+    email: user.email ?? null,
+    walletAddress: user.walletAddress ?? user.address ?? null,
   });
 
   private toConnection = (orders: OrderInterface[]): OrderConnection => {
@@ -148,3 +199,4 @@ export class OrderResolver {
     };
   };
 }
+
