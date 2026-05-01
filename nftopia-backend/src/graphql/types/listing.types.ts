@@ -7,7 +7,9 @@ import {
   registerEnumType,
 } from '@nestjs/graphql';
 import { ListingStatus as ListingStatusValue } from '../../modules/listing/interfaces/listing.interface';
-import { PageInfo } from './nft.types';
+import { PageInfo } from './common.types';
+import { GraphqlUserType } from './user.types';
+import { GraphqlNft } from './nft.types';
 
 export enum ListingStatus {
   ACTIVE = ListingStatusValue.ACTIVE,
@@ -46,6 +48,12 @@ export class GraphqlListing {
 
   @Field(() => GraphQLISODateTime, { nullable: true })
   expiresAt?: Date | null;
+
+  @Field(() => GraphqlUserType, { nullable: true })
+  seller?: GraphqlUserType | null;
+
+  @Field(() => GraphqlNft, { nullable: true })
+  nft?: GraphqlNft | null;
 }
 
 @ObjectType()

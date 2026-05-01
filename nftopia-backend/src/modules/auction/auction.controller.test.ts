@@ -5,7 +5,14 @@ import { AuctionQueryDto } from './dto/auction-query.dto';
 import { CreateAuctionDto } from './dto/create-auction.dto';
 import { PlaceBidDto } from './dto/place-bid.dto';
 import { AuctionStatus } from './interfaces/auction.interface';
-import { BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
+import type { Request as ExpressRequest } from 'express';
+
+type ControllerReq = ExpressRequest & { user?: { userId?: string } };
 
 const mockService = {
   findAll: jest.fn(),
@@ -38,24 +45,24 @@ describe('AuctionController', () => {
     it('should call findAll with query parameters', async () => {
       const mockAuctions = [{ id: 'a1' }, { id: 'a2' }];
       mockService.findAll.mockResolvedValueOnce(mockAuctions);
-      
+
       const query: AuctionQueryDto = {
         status: AuctionStatus.ACTIVE,
         page: 1,
         limit: 20,
       };
-      
+
       const result = await controller.list(query);
-      
+
       expect(mockService.findAll).toHaveBeenCalledWith(query);
       expect(result).toEqual(mockAuctions);
     });
 
     it('should return empty array when no auctions found', async () => {
       mockService.findAll.mockResolvedValueOnce([]);
-      
+
       const result = await controller.list({});
-      
+
       expect(result).toEqual([]);
     });
   });
@@ -64,10 +71,10 @@ describe('AuctionController', () => {
     it('should call findAll with ACTIVE status', async () => {
       const mockAuctions = [{ id: 'a1', status: AuctionStatus.ACTIVE }];
       mockService.findAll.mockResolvedValueOnce(mockAuctions);
-      
+
       const query: AuctionQueryDto = { page: 1 };
       const result = await controller.active(query);
-      
+
       expect(mockService.findAll).toHaveBeenCalledWith({
         ...query,
         status: AuctionStatus.ACTIVE,
@@ -80,19 +87,21 @@ describe('AuctionController', () => {
     it('should return auction by id', async () => {
       const mockAuction = { id: 'a1', status: AuctionStatus.ACTIVE };
       mockService.findOne.mockResolvedValueOnce(mockAuction);
-      
+
       const result = await controller.get('a1');
-      
+
       expect(mockService.findOne).toHaveBeenCalledWith('a1');
       expect(result).toEqual(mockAuction);
     });
 
     it('should throw NotFoundException for invalid id', async () => {
       mockService.findOne.mockRejectedValueOnce(
-        new NotFoundException('Auction not found')
+        new NotFoundException('Auction not found'),
       );
-      
-      await expect(controller.get('invalid')).rejects.toThrow(NotFoundException);
+
+      await expect(controller.get('invalid')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -103,18 +112,18 @@ describe('AuctionController', () => {
         { id: 'b2', amount: 20 },
       ];
       mockService.getBids.mockResolvedValueOnce(mockBids);
-      
+
       const result = await controller.bids('a1');
-      
+
       expect(mockService.getBids).toHaveBeenCalledWith('a1');
       expect(result).toEqual(mockBids);
     });
 
     it('should return empty array when no bids', async () => {
       mockService.getBids.mockResolvedValueOnce([]);
-      
+
       const result = await controller.bids('a1');
-      
+
       expect(result).toEqual([]);
     });
   });
@@ -130,9 +139,9 @@ describe('AuctionController', () => {
       const mockReq = { user: { userId: 'seller-1' } };
       const mockAuction = { id: 'a1', sellerId: 'seller-1' };
       mockService.create.mockResolvedValueOnce(mockAuction);
-      
-      const result = await controller.create(dto, mockReq as any);
-      
+
+      const result = await controller.create(dto, mockReq as ControllerReq);
+
       expect(mockService.create).toHaveBeenCalledWith(dto, 'seller-1');
       expect(result).toEqual(mockAuction);
     });
@@ -146,12 +155,12 @@ describe('AuctionController', () => {
       };
       const mockReq = { user: { userId: 'seller-1' } };
       mockService.create.mockRejectedValueOnce(
-        new BadRequestException('NFT already in active auction')
+        new BadRequestException('NFT already in active auction'),
       );
-      
-      await expect(controller.create(dto, mockReq as any)).rejects.toThrow(
-        BadRequestException
-      );
+
+      await expect(
+        controller.create(dto, mockReq as ControllerReq),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -161,14 +170,14 @@ describe('AuctionController', () => {
       const mockReq = { user: { userId: 'bidder-1' } };
       const mockBid = { id: 'b1', amount: 10, bidderId: 'bidder-1' };
       mockService.placeBid.mockResolvedValueOnce(mockBid);
-      
-      const result = await controller.placeBid('a1', dto, mockReq as any);
-      
-      expect(mockService.placeBid).toHaveBeenCalledWith(
+
+      const result = await controller.placeBid(
         'a1',
-        'bidder-1',
-        dto
+        dto,
+        mockReq as ControllerReq,
       );
+
+      expect(mockService.placeBid).toHaveBeenCalledWith('a1', 'bidder-1', dto);
       expect(result).toEqual(mockBid);
     });
 
@@ -176,11 +185,11 @@ describe('AuctionController', () => {
       const dto: PlaceBidDto = { amount: 5 };
       const mockReq = { user: { userId: 'bidder-1' } };
       mockService.placeBid.mockRejectedValueOnce(
-        new BadRequestException('Bid must be greater than current price')
+        new BadRequestException('Bid must be greater than current price'),
       );
-      
+
       await expect(
-        controller.placeBid('a1', dto, mockReq as any)
+        controller.placeBid('a1', dto, mockReq as ControllerReq),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -188,11 +197,11 @@ describe('AuctionController', () => {
       const dto: PlaceBidDto = { amount: 10 };
       const mockReq = { user: { userId: 'bidder-1' } };
       mockService.placeBid.mockRejectedValueOnce(
-        new NotFoundException('Auction not found')
+        new NotFoundException('Auction not found'),
       );
-      
+
       await expect(
-        controller.placeBid('invalid', dto, mockReq as any)
+        controller.placeBid('invalid', dto, mockReq as ControllerReq),
       ).rejects.toThrow(NotFoundException);
     });
   });
@@ -202,9 +211,9 @@ describe('AuctionController', () => {
       const mockReq = { user: { userId: 'seller-1' } };
       const mockResult = { id: 'a1', status: 'CANCELLED' };
       mockService.cancelAuction.mockResolvedValueOnce(mockResult);
-      
-      const result = await controller.cancel('a1', mockReq as any);
-      
+
+      const result = await controller.cancel('a1', mockReq as ControllerReq);
+
       expect(mockService.cancelAuction).toHaveBeenCalledWith('a1', 'seller-1');
       expect(result).toEqual(mockResult);
     });
@@ -212,23 +221,23 @@ describe('AuctionController', () => {
     it('should throw ForbiddenException when non-seller tries to cancel', async () => {
       const mockReq = { user: { userId: 'other-user' } };
       mockService.cancelAuction.mockRejectedValueOnce(
-        new ForbiddenException('Only seller can cancel')
+        new ForbiddenException('Only seller can cancel'),
       );
-      
-      await expect(controller.cancel('a1', mockReq as any)).rejects.toThrow(
-        ForbiddenException
-      );
+
+      await expect(
+        controller.cancel('a1', mockReq as ControllerReq),
+      ).rejects.toThrow(ForbiddenException);
     });
 
     it('should throw BadRequestException for non-active auction', async () => {
       const mockReq = { user: { userId: 'seller-1' } };
       mockService.cancelAuction.mockRejectedValueOnce(
-        new BadRequestException('Auction not active')
+        new BadRequestException('Auction not active'),
       );
-      
-      await expect(controller.cancel('a1', mockReq as any)).rejects.toThrow(
-        BadRequestException
-      );
+
+      await expect(
+        controller.cancel('a1', mockReq as ControllerReq),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -241,9 +250,9 @@ describe('AuctionController', () => {
         amount: 100,
       };
       mockService.settleAuction.mockResolvedValueOnce(mockResult);
-      
-      const result = await controller.settle('a1', mockReq as any);
-      
+
+      const result = await controller.settle('a1', mockReq as ControllerReq);
+
       expect(mockService.settleAuction).toHaveBeenCalledWith('a1', 'seller-1');
       expect(result).toEqual(mockResult);
     });
@@ -256,9 +265,9 @@ describe('AuctionController', () => {
         amount: 100,
       };
       mockService.settleAuction.mockResolvedValueOnce(mockResult);
-      
-      const result = await controller.settle('a1', mockReq as any);
-      
+
+      const result = await controller.settle('a1', mockReq as ControllerReq);
+
       expect(mockService.settleAuction).toHaveBeenCalledWith('a1', undefined);
       expect(result).toEqual(mockResult);
     });
@@ -266,23 +275,23 @@ describe('AuctionController', () => {
     it('should throw ForbiddenException when non-seller settles early', async () => {
       const mockReq = { user: { userId: 'other-user' } };
       mockService.settleAuction.mockRejectedValueOnce(
-        new ForbiddenException('Only seller or admin can settle before end')
+        new ForbiddenException('Only seller or admin can settle before end'),
       );
-      
-      await expect(controller.settle('a1', mockReq as any)).rejects.toThrow(
-        ForbiddenException
-      );
+
+      await expect(
+        controller.settle('a1', mockReq as ControllerReq),
+      ).rejects.toThrow(ForbiddenException);
     });
 
     it('should throw BadRequestException for non-active auction', async () => {
       const mockReq = { user: { userId: 'seller-1' } };
       mockService.settleAuction.mockRejectedValueOnce(
-        new BadRequestException('Auction not active')
+        new BadRequestException('Auction not active'),
       );
-      
-      await expect(controller.settle('a1', mockReq as any)).rejects.toThrow(
-        BadRequestException
-      );
+
+      await expect(
+        controller.settle('a1', mockReq as ControllerReq),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 });

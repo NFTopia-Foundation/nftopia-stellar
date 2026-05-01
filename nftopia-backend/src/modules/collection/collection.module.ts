@@ -13,7 +13,14 @@ import { Order } from '../order/entities/order.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Collection, CollectionStats, Order, Nft, User, VerificationRequest]),
+    TypeOrmModule.forFeature([
+      Collection,
+      CollectionStats,
+      Order,
+      Nft,
+      User,
+      VerificationRequest,
+    ]),
   ],
   providers: [CollectionService, AnalyticsService, AnalyticsCronJob],
   controllers: [CollectionAnalyticsController],

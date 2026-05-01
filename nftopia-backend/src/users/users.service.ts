@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { User } from './user.entity';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UserWallet } from '../auth/entities/user-wallet.entity';
@@ -20,8 +20,24 @@ export class UsersService {
     return this.repo.findOne({ where: { id } });
   }
 
+  findByIds(ids: string[]) {
+    const uniqueIds = [...new Set(ids.filter(Boolean))];
+    if (!uniqueIds.length) {
+      return Promise.resolve([]);
+    }
+
+    return this.repo.find({ where: { id: In(uniqueIds) } });
+  }
+
   findByAddress(address: string) {
     return this.repo.findOne({ where: { address } });
+  }
+
+  findByStellarAddress(address: string): Promise<User | null> {
+    return this.repo
+      .createQueryBuilder('u')
+      .where('u.address = :address OR u.walletAddress = :address', { address })
+      .getOne();
   }
 
   async updateProfile(address: string, data: UpdateProfileDto) {

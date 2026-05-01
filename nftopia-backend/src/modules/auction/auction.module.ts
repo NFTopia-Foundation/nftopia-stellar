@@ -15,5 +15,6 @@ import { StellarModule } from '../stellar/stellar.module';
   ],
   providers: [AuctionService],
   controllers: [AuctionController],
+  exports: [AuctionService],
 })
 export class AuctionModule {}

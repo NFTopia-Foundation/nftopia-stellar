@@ -29,6 +29,7 @@ import { CollectionFactoryModule } from './modules/collection-factory/collection
 import { StellarModule } from './modules/stellar/stellar.module';
 import { HealthModule } from './health/health.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { OfferModule } from './modules/offer/offer.module';
 
 @Module({
   imports: [
@@ -106,6 +107,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     BidModule,
     ListingModule,
     OrderModule,
+    OfferModule,
     StorageModule,
     SearchModule,
     CollectionFactoryModule,

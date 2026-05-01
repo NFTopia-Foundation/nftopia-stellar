@@ -30,7 +30,7 @@ export class NftController {
     description: 'Filter by owner G-address',
   })
   async findAll(@Query() query: NftFilterDto): Promise<StellarNft[]> {
-    return this.nftService.findAll(query) as Promise<StellarNft[]>;
+    return this.nftService.findAll(query);
   }
 
   /**

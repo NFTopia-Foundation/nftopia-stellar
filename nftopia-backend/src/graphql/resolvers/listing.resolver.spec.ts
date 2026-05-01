@@ -142,6 +142,7 @@ describe('ListingResolver', () => {
       {
         req: {} as never,
         res: {} as never,
+        loaders: {} as never,
         user: { userId: 'seller-1' },
       },
     );
@@ -167,6 +168,7 @@ describe('ListingResolver', () => {
     const result = await resolver.cancelListing('listing-1', {
       req: {} as never,
       res: {} as never,
+      loaders: {} as never,
       user: { userId: 'seller-1' },
     });
 
@@ -187,6 +189,7 @@ describe('ListingResolver', () => {
     const result = await resolver.buyNFT('listing-1', {
       req: {} as never,
       res: {} as never,
+      loaders: {} as never,
       user: { userId: 'buyer-1' },
     });
 
@@ -207,6 +210,7 @@ describe('ListingResolver', () => {
         {
           req: {} as never,
           res: {} as never,
+          loaders: {} as never,
         },
       ),
     ).rejects.toThrow(UnauthorizedException);
