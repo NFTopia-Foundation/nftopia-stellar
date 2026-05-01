@@ -54,7 +54,9 @@ async function bootstrapRestApi() {
   app.useLogger(app.get<PinoLogger>(PinoLogger));
 
   const sorobanRpcService = app.get<SorobanRpcService>(SorobanRpcService);
-  const stellarAccountService = app.get<StellarAccountService>(StellarAccountService);
+  const stellarAccountService = app.get<StellarAccountService>(
+    StellarAccountService,
+  );
 
   app.useGlobalInterceptors(
     new StellarErrorInterceptor(sorobanRpcService),
@@ -88,7 +90,9 @@ async function bootstrapRestApi() {
   const logger = app.get<PinoLogger>(PinoLogger);
 
   logger.log(`Application is running on: http://localhost:${port}/api/v1`);
-  logger.log(`Swagger documentation available at: http://localhost:${port}/api/docs`);
+  logger.log(
+    `Swagger documentation available at: http://localhost:${port}/api/docs`,
+  );
 
   return app;
 }

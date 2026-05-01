@@ -5,7 +5,8 @@ import {
   Int,
   ObjectType,
 } from '@nestjs/graphql';
-import { NFTConnection, PageInfo } from './nft.types';
+import { NFTConnection } from './nft.types';
+import { PageInfo } from './common.types';
 import { GraphqlUserType } from './user.types';
 
 @ObjectType('Collection')

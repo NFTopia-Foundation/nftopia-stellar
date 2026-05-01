@@ -15,7 +15,11 @@ describe('GraphQL DataLoaders', () => {
     const loader = createUserLoader(usersService as never);
     const values = await loader.loadMany(['u1', 'u2', 'missing']);
 
-    expect(usersService.findByIds).toHaveBeenCalledWith(['u1', 'u2', 'missing']);
+    expect(usersService.findByIds).toHaveBeenCalledWith([
+      'u1',
+      'u2',
+      'missing',
+    ]);
     expect(values).toEqual([{ id: 'u1' }, { id: 'u2' }, null]);
   });
 
@@ -52,9 +56,11 @@ describe('GraphQL DataLoaders', () => {
       ]),
     };
     const nftService = {
-      findByIds: jest.fn().mockResolvedValue([
-        { id: 'n1', contractAddress: 'contract-1', tokenId: 'token-1' },
-      ]),
+      findByIds: jest
+        .fn()
+        .mockResolvedValue([
+          { id: 'n1', contractAddress: 'contract-1', tokenId: 'token-1' },
+        ]),
     };
 
     const loader = createListingLoader(
@@ -86,9 +92,11 @@ describe('GraphQL DataLoaders', () => {
       ]),
     };
     const nftService = {
-      findByIds: jest.fn().mockResolvedValue([
-        { id: 'n1', contractAddress: 'contract-1', tokenId: 'token-1' },
-      ]),
+      findByIds: jest
+        .fn()
+        .mockResolvedValue([
+          { id: 'n1', contractAddress: 'contract-1', tokenId: 'token-1' },
+        ]),
     };
 
     const loader = createAuctionLoader(

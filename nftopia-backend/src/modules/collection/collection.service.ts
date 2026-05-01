@@ -10,7 +10,10 @@ import { User } from '../../users/user.entity';
 import { Nft } from '../nft/entities/nft.entity';
 import { CreateCollectionDto } from './dto/create-collection.dto';
 import { Collection } from './entities/collection.entity';
-import { VerificationRequest, VerificationStatus } from './entities/verification-request.entity';
+import {
+  VerificationRequest,
+  VerificationStatus,
+} from './entities/verification-request.entity';
 import { SubmitVerificationRequestDto } from './dto/verification-request.dto';
 import {
   type CollectionConnectionQuery,
@@ -302,7 +305,9 @@ export class CollectionService {
 
     // Verify the requester is the collection creator
     if (collection.creatorId !== requesterId) {
-      throw new ForbiddenException('Only the collection creator can request verification');
+      throw new ForbiddenException(
+        'Only the collection creator can request verification',
+      );
     }
 
     // Check if there's already a pending request
@@ -314,7 +319,9 @@ export class CollectionService {
     });
 
     if (existingRequest) {
-      throw new BadRequestException('A verification request is already pending for this collection');
+      throw new BadRequestException(
+        'A verification request is already pending for this collection',
+      );
     }
 
     // Create new verification request
@@ -340,13 +347,15 @@ export class CollectionService {
   }> {
     const skip = (page - 1) * limit;
 
-    const [data, total] = await this.verificationRequestRepository.findAndCount({
-      where: { status: VerificationStatus.PENDING },
-      relations: ['collection', 'requester'],
-      order: { createdAt: 'DESC' },
-      skip,
-      take: limit,
-    });
+    const [data, total] = await this.verificationRequestRepository.findAndCount(
+      {
+        where: { status: VerificationStatus.PENDING },
+        relations: ['collection', 'requester'],
+        order: { createdAt: 'DESC' },
+        skip,
+        take: limit,
+      },
+    );
 
     return {
       data,
@@ -371,7 +380,9 @@ export class CollectionService {
     }
 
     if (request.status !== VerificationStatus.PENDING) {
-      throw new BadRequestException('Verification request has already been reviewed');
+      throw new BadRequestException(
+        'Verification request has already been reviewed',
+      );
     }
 
     // Update request status
@@ -401,7 +412,9 @@ export class CollectionService {
     }
 
     if (request.status !== VerificationStatus.PENDING) {
-      throw new BadRequestException('Verification request has already been reviewed');
+      throw new BadRequestException(
+        'Verification request has already been reviewed',
+      );
     }
 
     request.status = VerificationStatus.REJECTED;

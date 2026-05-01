@@ -6,6 +6,7 @@ import { JsonScalar } from '../types/nft.types';
 import { OrderResolver } from './order.resolver';
 import { UserResolver } from './user.resolver';
 import { AuctionResolver } from './auction.resolver';
+import { BidResolver } from './bid.resolver';
 
 export const graphqlResolvers = [
   BaseResolver,
@@ -15,6 +16,7 @@ export const graphqlResolvers = [
   OrderResolver,
   UserResolver,
   AuctionResolver,
+  BidResolver,
 ] as const;
 
 export const graphqlScalarClasses = [JsonScalar] as const;
@@ -27,3 +29,4 @@ export { JsonScalar };
 export { OrderResolver };
 export { UserResolver };
 export { AuctionResolver };
+export { BidResolver };

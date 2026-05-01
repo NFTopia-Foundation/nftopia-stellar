@@ -26,10 +26,12 @@ import {
   TransactionResult,
 } from '../types/listing.types';
 import { GraphqlUserType } from '../types/user.types';
+import { GraphqlNft } from '../types/nft.types';
 import { ListingService } from '../../modules/listing/listing.service';
 import type { Listing } from '../../modules/listing/entities/listing.entity';
 import { ListingStatus } from '../../modules/listing/interfaces/listing.interface';
 import type { User } from '../../users/user.entity';
+import type { Nft } from '../../modules/nft/entities/nft.entity';
 
 type CursorPayload = {
   createdAt: string;
@@ -157,6 +159,23 @@ export class ListingResolver {
     return this.toGraphqlUser(seller);
   }
 
+  @ResolveField(() => GraphqlNft, {
+    name: 'nft',
+    nullable: true,
+    description: 'Resolve listing NFT using request-scoped DataLoader',
+  })
+  async nft(
+    @Parent() listing: GraphqlListing,
+    @Context() context: GraphqlContext,
+  ): Promise<GraphqlNft | null> {
+    const nft = await context.loaders.nftByCompositeKey.load(listing.nftId);
+    if (!nft) {
+      return null;
+    }
+
+    return this.toGraphqlNft(nft);
+  }
+
   private getAuthenticatedUserId(context: GraphqlContext): string {
     const userId = context.user?.userId;
     if (!userId) {
@@ -235,6 +254,31 @@ export class ListingResolver {
       username: user.username ?? null,
       email: user.email ?? null,
       walletAddress: user.walletAddress ?? user.address ?? null,
+      stellarAddress: user.walletAddress ?? user.address ?? null,
+      avatar: user.avatarUrl ?? null,
+    };
+  }
+
+  private toGraphqlNft(nft: Nft): GraphqlNft {
+    return {
+      id: nft.id,
+      tokenId: nft.tokenId,
+      contractAddress: nft.contractAddress,
+      name: nft.name,
+      description: nft.description ?? null,
+      image: nft.imageUrl ?? null,
+      attributes: (nft.attributes ?? []).map((attribute) => ({
+        traitType: attribute.traitType,
+        value: attribute.value,
+        ...(attribute.displayType
+          ? { displayType: attribute.displayType }
+          : {}),
+      })),
+      ownerId: nft.ownerId,
+      creatorId: nft.creatorId,
+      collectionId: nft.collectionId ?? null,
+      mintedAt: nft.mintedAt,
+      lastPrice: nft.lastPrice ?? null,
     };
   }
 

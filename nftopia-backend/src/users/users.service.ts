@@ -33,6 +33,13 @@ export class UsersService {
     return this.repo.findOne({ where: { address } });
   }
 
+  findByStellarAddress(address: string): Promise<User | null> {
+    return this.repo
+      .createQueryBuilder('u')
+      .where('u.address = :address OR u.walletAddress = :address', { address })
+      .getOne();
+  }
+
   async updateProfile(address: string, data: UpdateProfileDto) {
     const user = await this.findByAddress(address);
     if (!user) throw new NotFoundException('User not found');

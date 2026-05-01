@@ -13,6 +13,7 @@ import { GraphqlListing } from './listing.types';
 import { GraphqlOrder } from './order.types';
 import { GraphqlAuction } from './auction.types';
 import { GraphqlUserType } from './user.types';
+import { PageInfo } from './common.types';
 
 function parseLiteralNode(node: ValueNode): unknown {
   switch (node.kind) {
@@ -125,23 +126,17 @@ export class GraphqlNft {
   @Field(() => GraphqlListing, { nullable: true })
   listing?: GraphqlListing | null;
 
+  @Field(() => [GraphqlListing], { nullable: true })
+  listings?: GraphqlListing[];
+
   @Field(() => GraphqlAuction, { nullable: true })
   auction?: GraphqlAuction | null;
 
+  @Field(() => GraphqlAuction, { nullable: true })
+  currentAuction?: GraphqlAuction | null;
+
   @Field(() => [GraphqlOrder], { nullable: true })
   orders?: GraphqlOrder[];
-}
-
-@ObjectType()
-export class PageInfo {
-  @Field()
-  hasNextPage: boolean;
-
-  @Field(() => String, { nullable: true })
-  startCursor?: string;
-
-  @Field(() => String, { nullable: true })
-  endCursor?: string;
 }
 
 @ObjectType()

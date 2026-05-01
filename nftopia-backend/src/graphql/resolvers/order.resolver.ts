@@ -17,12 +17,14 @@ import {
   SalesAnalytics,
 } from '../types/order.types';
 import { GraphqlUserType } from '../types/user.types';
+import { GraphqlNft } from '../types/nft.types';
 import { TimeframeInput } from '../inputs/order.inputs';
 import { PaginationInput } from '../inputs/nft.inputs';
 import type { GraphqlContext } from '../context/context.interface';
 import type { OrderQueryDto } from '../../modules/order/dto/order-query.dto';
 import type { OrderInterface } from '../../modules/order/interfaces/order.interface';
 import type { User } from '../../users/user.entity';
+import type { Nft } from '../../modules/nft/entities/nft.entity';
 // import { UserRole } from '../../common/enums/user-role.enum';
 
 @Resolver(() => GraphqlOrder)
@@ -163,6 +165,23 @@ export class OrderResolver {
     return this.toGraphqlUser(seller);
   }
 
+  @ResolveField(() => GraphqlNft, {
+    name: 'nft',
+    nullable: true,
+    description: 'Resolve order NFT using request-scoped DataLoader',
+  })
+  async nft(
+    @Parent() order: GraphqlOrder,
+    @Context() context: GraphqlContext,
+  ): Promise<GraphqlNft | null> {
+    const nft = await context.loaders.nftById.load(order.nftId);
+    if (!nft) {
+      return null;
+    }
+
+    return this.toGraphqlNft(nft);
+  }
+
   private toGraphqlOrder = (order: OrderInterface): GraphqlOrder => ({
     id: order.id,
     nftId: order.nftId,
@@ -181,6 +200,27 @@ export class OrderResolver {
     username: user.username ?? null,
     email: user.email ?? null,
     walletAddress: user.walletAddress ?? user.address ?? null,
+    stellarAddress: user.walletAddress ?? user.address ?? null,
+    avatar: user.avatarUrl ?? null,
+  });
+
+  private toGraphqlNft = (nft: Nft): GraphqlNft => ({
+    id: nft.id,
+    tokenId: nft.tokenId,
+    contractAddress: nft.contractAddress,
+    name: nft.name,
+    description: nft.description ?? null,
+    image: nft.imageUrl ?? null,
+    attributes: (nft.attributes ?? []).map((attribute) => ({
+      traitType: attribute.traitType,
+      value: attribute.value,
+      ...(attribute.displayType ? { displayType: attribute.displayType } : {}),
+    })),
+    ownerId: nft.ownerId,
+    creatorId: nft.creatorId,
+    collectionId: nft.collectionId ?? null,
+    mintedAt: nft.mintedAt,
+    lastPrice: nft.lastPrice ?? null,
   });
 
   private toConnection = (orders: OrderInterface[]): OrderConnection => {
@@ -199,4 +239,3 @@ export class OrderResolver {
     };
   };
 }
-

@@ -2,8 +2,17 @@ import { NotFoundException } from '@nestjs/common';
 import { UserResolver } from './user.resolver';
 
 describe('UserResolver', () => {
+  const createResolver = () =>
+    new UserResolver(
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
   it('returns a user via DataLoader', async () => {
-    const resolver = new UserResolver();
+    const resolver = createResolver();
     const result = await resolver.user('user-1', {
       req: {} as never,
       res: {} as never,
@@ -24,7 +33,7 @@ describe('UserResolver', () => {
   });
 
   it('throws when user is missing', async () => {
-    const resolver = new UserResolver();
+    const resolver = createResolver();
 
     await expect(
       resolver.user('missing', {

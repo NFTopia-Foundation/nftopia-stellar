@@ -6,8 +6,9 @@ import {
   ObjectType,
   registerEnumType,
 } from '@nestjs/graphql';
-import { PageInfo } from './nft.types';
+import { PageInfo } from './common.types';
 import { GraphqlUserType } from './user.types';
+import { GraphqlNft } from './nft.types';
 
 export enum OrderType {
   SALE = 'SALE',
@@ -65,6 +66,9 @@ export class GraphqlOrder {
 
   @Field(() => GraphqlUserType, { nullable: true })
   seller?: GraphqlUserType | null;
+
+  @Field(() => GraphqlNft, { nullable: true })
+  nft?: GraphqlNft | null;
 }
 
 @ObjectType()

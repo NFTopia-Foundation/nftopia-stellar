@@ -283,6 +283,8 @@ export class CollectionResolver {
       username: user.username ?? null,
       email: user.email ?? null,
       walletAddress: user.walletAddress ?? user.address ?? null,
+      stellarAddress: user.walletAddress ?? user.address ?? null,
+      avatar: user.avatarUrl ?? null,
     };
   }
 

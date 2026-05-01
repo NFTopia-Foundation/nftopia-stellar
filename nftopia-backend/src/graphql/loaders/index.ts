@@ -18,8 +18,10 @@ import { createNftLoader } from './nft.loader';
 import { createCollectionLoader } from './collection.loader';
 import { createListingLoader } from './listing.loader';
 import { createAuctionLoader } from './auction.loader';
+import { createAuctionByIdLoader } from './auction-by-id.loader';
 import { createBidLoader } from './bid.loader';
 import { createOrderLoader } from './order.loader';
+import { createNftByCompositeKeyLoader } from './nft-by-composite.loader';
 
 export type GraphqlLoaders = {
   userById: DataLoader<string, User | null>;
@@ -27,8 +29,10 @@ export type GraphqlLoaders = {
   collectionById: DataLoader<string, Collection | null>;
   listingByNftId: DataLoader<string, Listing | null>;
   auctionByNftId: DataLoader<string, Auction | null>;
+  auctionById: DataLoader<string, Auction | null>;
   bidsByAuctionId: DataLoader<string, Bid[]>;
   ordersByNftId: DataLoader<string, OrderInterface[]>;
+  nftByCompositeKey: DataLoader<string, Nft | null>;
 };
 
 type CreateGraphqlLoadersDependencies = {
@@ -56,8 +60,10 @@ export function createGraphqlLoaders(
       dependencies.auctionService,
       dependencies.nftService,
     ),
+    auctionById: createAuctionByIdLoader(dependencies.auctionService),
     bidsByAuctionId: createBidLoader(dependencies.bidService),
     ordersByNftId: createOrderLoader(dependencies.orderService),
+    nftByCompositeKey: createNftByCompositeKeyLoader(dependencies.nftService),
   };
 }
 
@@ -66,5 +72,7 @@ export { createNftLoader } from './nft.loader';
 export { createCollectionLoader } from './collection.loader';
 export { createListingLoader } from './listing.loader';
 export { createAuctionLoader } from './auction.loader';
+export { createAuctionByIdLoader } from './auction-by-id.loader';
 export { createBidLoader } from './bid.loader';
 export { createOrderLoader } from './order.loader';
+export { createNftByCompositeKeyLoader } from './nft-by-composite.loader';

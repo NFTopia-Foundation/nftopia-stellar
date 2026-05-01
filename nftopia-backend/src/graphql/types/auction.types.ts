@@ -2,10 +2,14 @@ import {
   Field,
   GraphQLISODateTime,
   ID,
+  Int,
   ObjectType,
   registerEnumType,
 } from '@nestjs/graphql';
 import { AuctionStatus as AuctionStatusValue } from '../../modules/auction/interfaces/auction.interface';
+import { PageInfo } from './common.types';
+import { GraphqlNft } from './nft.types';
+import { GraphqlUserType } from './user.types';
 
 export enum AuctionStatus {
   ACTIVE = AuctionStatusValue.ACTIVE,
@@ -35,6 +39,12 @@ export class GraphqlBid {
 
   @Field(() => GraphQLISODateTime)
   createdAt: Date;
+
+  @Field(() => GraphqlAuction, { nullable: true })
+  auction?: GraphqlAuction | null;
+
+  @Field(() => GraphqlUserType, { nullable: true })
+  bidder?: GraphqlUserType | null;
 }
 
 @ObjectType('Auction')
@@ -71,4 +81,37 @@ export class GraphqlAuction {
 
   @Field(() => [GraphqlBid], { nullable: true })
   bids?: GraphqlBid[];
+
+  @Field(() => GraphqlNft, { nullable: true })
+  nft?: GraphqlNft | null;
+
+  @Field(() => GraphqlUserType, { nullable: true })
+  seller?: GraphqlUserType | null;
+
+  @Field(() => GraphqlBid, { nullable: true })
+  highestBid?: GraphqlBid | null;
+
+  @Field(() => GraphqlUserType, { nullable: true })
+  winner?: GraphqlUserType | null;
+}
+
+@ObjectType()
+export class AuctionEdge {
+  @Field(() => GraphqlAuction)
+  node: GraphqlAuction;
+
+  @Field()
+  cursor: string;
+}
+
+@ObjectType()
+export class AuctionConnection {
+  @Field(() => [AuctionEdge])
+  edges: AuctionEdge[];
+
+  @Field(() => PageInfo)
+  pageInfo: PageInfo;
+
+  @Field(() => Int)
+  totalCount: number;
 }

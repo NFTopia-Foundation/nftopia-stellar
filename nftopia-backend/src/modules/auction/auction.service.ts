@@ -6,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, Repository } from 'typeorm';
+import { Brackets, In, Repository } from 'typeorm';
 import { Auction } from './entities/auction.entity';
 import { Bid } from './entities/bid.entity';
 import { CreateAuctionDto } from './dto/create-auction.dto';
@@ -132,6 +132,15 @@ export class AuctionService {
     const auction = await this.auctionRepo.findOne({ where: { id } });
     if (!auction) throw new NotFoundException('Auction not found');
     return auction;
+  }
+
+  async findByIds(ids: string[]): Promise<Auction[]> {
+    const uniqueIds = [...new Set(ids.filter(Boolean))];
+    if (!uniqueIds.length) {
+      return [];
+    }
+
+    return this.auctionRepo.find({ where: { id: In(uniqueIds) } });
   }
 
   async findByNFTIds(nftIds: string[]): Promise<Auction[]> {

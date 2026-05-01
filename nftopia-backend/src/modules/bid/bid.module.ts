@@ -13,7 +13,11 @@ import { StellarSignatureStrategy } from '../../auth/strategies/stellar.strategy
 import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Bid, Auction, User]), StellarModule, NotificationsModule],
+  imports: [
+    TypeOrmModule.forFeature([Bid, Auction, User]),
+    StellarModule,
+    NotificationsModule,
+  ],
   providers: [
     BidService,
     BidGateway,

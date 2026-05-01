@@ -220,7 +220,9 @@ export class NftResolver {
       return null;
     }
 
-    const collection = await context.loaders.collectionById.load(nft.collectionId);
+    const collection = await context.loaders.collectionById.load(
+      nft.collectionId,
+    );
     if (!collection) {
       return null;
     }
@@ -231,7 +233,8 @@ export class NftResolver {
   @ResolveField(() => GraphqlListing, {
     name: 'listing',
     nullable: true,
-    description: 'Resolve active listing by NFT using request-scoped DataLoader',
+    description:
+      'Resolve active listing by NFT using request-scoped DataLoader',
   })
   async listing(
     @Parent() nft: GraphqlNft,
@@ -245,12 +248,48 @@ export class NftResolver {
     return this.toGraphqlListing(listing);
   }
 
+  @ResolveField(() => [GraphqlListing], {
+    name: 'listings',
+    description:
+      'Resolve NFT listings using request-scoped DataLoader (active listing only)',
+  })
+  async listings(
+    @Parent() nft: GraphqlNft,
+    @Context() context: GraphqlContext,
+  ): Promise<GraphqlListing[]> {
+    const listing = await context.loaders.listingByNftId.load(nft.id);
+    if (!listing) {
+      return [];
+    }
+
+    return [this.toGraphqlListing(listing)];
+  }
+
   @ResolveField(() => GraphqlAuction, {
     name: 'auction',
     nullable: true,
-    description: 'Resolve active auction by NFT using request-scoped DataLoader',
+    description:
+      'Resolve active auction by NFT using request-scoped DataLoader',
   })
   async auction(
+    @Parent() nft: GraphqlNft,
+    @Context() context: GraphqlContext,
+  ): Promise<GraphqlAuction | null> {
+    const auction = await context.loaders.auctionByNftId.load(nft.id);
+    if (!auction) {
+      return null;
+    }
+
+    return this.toGraphqlAuction(auction);
+  }
+
+  @ResolveField(() => GraphqlAuction, {
+    name: 'currentAuction',
+    nullable: true,
+    description:
+      'Resolve current auction by NFT using request-scoped DataLoader',
+  })
+  async currentAuction(
     @Parent() nft: GraphqlNft,
     @Context() context: GraphqlContext,
   ): Promise<GraphqlAuction | null> {
@@ -378,6 +417,8 @@ export class NftResolver {
       username: user.username ?? null,
       email: user.email ?? null,
       walletAddress: user.walletAddress ?? user.address ?? null,
+      stellarAddress: user.walletAddress ?? user.address ?? null,
+      avatar: user.avatarUrl ?? null,
     };
   }
 
