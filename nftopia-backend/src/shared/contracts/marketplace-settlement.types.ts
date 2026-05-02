@@ -30,3 +30,14 @@ export interface CreateTradeParams {
   requestedTokenId: string;
   expiresAt: string;
 }
+
+export interface AcceptOfferParams {
+  offerId: string;
+  owner: string;
+  bidder: string;
+  nftContractId: string;
+  nftTokenId: string;
+  /** XLM amount as a string (i128) */
+  amount: string;
+  currency: string;
+}

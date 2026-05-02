@@ -75,6 +75,7 @@ describe('OrderResolver', () => {
       const result = await resolver.myOrders({}, 'SALE', {
         req: {} as unknown as Request,
         res: {} as unknown as Response,
+        loaders: {} as never,
         user: { userId: 'u1' },
       });
       expect(result.edges[0].node.id).toBe('1');

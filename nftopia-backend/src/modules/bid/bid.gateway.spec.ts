@@ -26,6 +26,7 @@ const makeBidPayload = (
   override: Partial<BidPlacedEvent> = {},
 ): BidPlacedEvent => ({
   auctionId: 'auction-123',
+  sellerId: 'seller-789',
   bidderId: 'user-456',
   stellarPublicKey: 'GABC1234567890EXAMPLESTELLARKEY0000000000000000000000000',
   amount: 1_000_000,

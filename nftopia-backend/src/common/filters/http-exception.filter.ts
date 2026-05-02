@@ -7,7 +7,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
-import { PinoLogger } from 'nestjs-pino';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 interface ErrorResponse {
   statusCode: number;
@@ -19,7 +19,10 @@ interface ErrorResponse {
 
 @Catch(HttpException)
 export class HttpExceptionFilter implements ExceptionFilter {
-  constructor(private readonly logger: PinoLogger) {}
+  constructor(
+    @InjectPinoLogger(HttpExceptionFilter.name)
+    private readonly logger: PinoLogger,
+  ) {}
   catch(exception: HttpException, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const request = ctx.getRequest<Request>();

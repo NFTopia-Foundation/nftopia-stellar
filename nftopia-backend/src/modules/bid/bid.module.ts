@@ -10,9 +10,14 @@ import { BidController } from './bid.controller';
 import { BidGateway } from './bid.gateway';
 import { BidEventListener } from './listeners/bid-event.listener';
 import { StellarSignatureStrategy } from '../../auth/strategies/stellar.strategy';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Bid, Auction, User]), StellarModule],
+  imports: [
+    TypeOrmModule.forFeature([Bid, Auction, User]),
+    StellarModule,
+    NotificationsModule,
+  ],
   providers: [
     BidService,
     BidGateway,
