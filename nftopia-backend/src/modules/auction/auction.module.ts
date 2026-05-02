@@ -7,11 +7,13 @@ import { NftMetadata } from '../../nft/entities/nft-metadata.entity';
 import { AuctionService } from './auction.service';
 import { AuctionController } from './auction.controller';
 import { StellarModule } from '../stellar/stellar.module';
+import { TransactionModule } from '../transaction/transaction.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Auction, Bid, StellarNft, NftMetadata]),
     StellarModule,
+    TransactionModule,
   ],
   providers: [AuctionService],
   controllers: [AuctionController],

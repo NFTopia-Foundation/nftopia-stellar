@@ -17,6 +17,8 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { StellarNft } from '../../nft/entities/stellar-nft.entity';
 import { ConfigService } from '@nestjs/config';
 import { MarketplaceSettlementClient } from '../stellar/marketplace-settlement.client';
+import { TransactionService } from '../transaction/transaction.service';
+import { TransactionState } from '../transaction/enums/transaction-state.enum';
 
 @Injectable()
 export class AuctionService {
@@ -31,6 +33,7 @@ export class AuctionService {
     private readonly nftRepo: Repository<StellarNft>,
     private readonly configService: ConfigService,
     private readonly settlementClient: MarketplaceSettlementClient,
+    private readonly transactionService: TransactionService,
   ) {}
 
   async create(createDto: CreateAuctionDto, sellerId: string) {
@@ -281,43 +284,28 @@ export class AuctionService {
       return { settled: false, reason: 'Reserve not met' };
     }
 
-    // Transfer NFT ownership off-chain in DB; on-chain transfer should be performed separately
-    const nft = await this.nftRepo.findOne({
-      where: { contractId: auction.nftContractId, tokenId: auction.nftTokenId },
-    });
-    if (nft) {
-      nft.owner =
-        (highest.bidder && highest.bidder.address) || highest.bidderId;
-      await this.nftRepo.save(nft);
-    }
+    const transaction =
+      await this.transactionService.createAndExecuteAuctionSettlement(
+        auctionId,
+        highest.bidderId,
+        Number(highest.amount),
+      );
 
     auction.winnerId = highest.bidderId;
     auction.currentPrice = highest.amount;
-    auction.status = AuctionStatus.SETTLED;
+    auction.status =
+      transaction.state === TransactionState.COMPLETED
+        ? AuctionStatus.SETTLED
+        : AuctionStatus.COMPLETED;
     await this.auctionRepo.save(auction);
 
-    // Mock on-chain settlement hook (placeholder for Soroban integration).
-    // This uses a mock contract id for future on-chain implementation.
-    const onchainResult = await this.performOnChainSettlement(auction, highest);
-
     return {
-      settled: true,
+      settled: transaction.state === TransactionState.COMPLETED,
       winner: highest.bidderId,
       amount: highest.amount,
-      onchain: onchainResult,
+      transactionId: transaction.id,
+      transactionState: transaction.state,
     };
-  }
-
-  private async performOnChainSettlement(auction: Auction, highest: Bid) {
-    // Placeholder: call to Soroban contract would happen here.
-    const MOCK_CONTRACT_ID =
-      process.env.MOCK_AUCTION_CONTRACT_ID || 'MOCK_CONTRACT_ID';
-    this.logger.debug(
-      `Performing mock on-chain settlement for auction ${auction?.id ?? 'unknown'} winner ${highest?.bidderId ?? 'unknown'} using contract ${MOCK_CONTRACT_ID}`,
-    );
-    // Small await to satisfy lint rule requiring async functions to have an await.
-    await Promise.resolve(true);
-    return { contractId: MOCK_CONTRACT_ID, txHash: null };
   }
 
   @Cron(CronExpression.EVERY_MINUTE)
