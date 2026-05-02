@@ -15,6 +15,8 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { StellarNft } from '../../nft/entities/stellar-nft.entity';
 import { MarketplaceSettlementClient } from '../stellar/marketplace-settlement.client';
 import { CreateSaleParams } from '../shared/contracts/marketplace-settlement.types';
+import { TransactionService } from '../transaction/transaction.service';
+import { TransactionState } from '../transaction/enums/transaction-state.enum';
 
 type ListingCursorPayload = {
   createdAt: string;
@@ -32,6 +34,7 @@ export class ListingService {
     private readonly nftRepo: Repository<StellarNft>,
     private readonly configService: ConfigService,
     private readonly settlementClient: MarketplaceSettlementClient,
+    private readonly transactionService: TransactionService,
   ) {}
 
   async create(dto: CreateListingDto, sellerId: string) {
@@ -283,28 +286,6 @@ export class ListingService {
   }
 
   async buy(id: string, buyerId: string) {
-    const enableOnchain = this.configService.get<boolean>(
-      'ENABLE_ONCHAIN_SETTLEMENT',
-    );
-    if (enableOnchain) {
-      // On-chain: call contract to execute sale
-      // You may want to fetch the sale details from contract or DB for mapping
-      // For now, assume id is the contract saleId
-      const resultRaw: unknown = await this.settlementClient.executeSale(
-        Number(id),
-        buyerId,
-        undefined,
-      );
-      let result: Record<string, unknown>;
-      if (typeof resultRaw === 'object' && resultRaw !== null) {
-        result = resultRaw as Record<string, unknown>;
-      } else {
-        result = { txHash: String(resultRaw) };
-      }
-      return { success: true, result };
-    }
-
-    // Legacy DB logic
     const listing = await this.findOne(id);
     const ls = listing.status as ListingStatus;
     if (ls !== ListingStatus.ACTIVE)
@@ -312,18 +293,19 @@ export class ListingService {
     if (listing.expiresAt && new Date(listing.expiresAt) <= new Date())
       throw new BadRequestException('Listing expired');
 
-    // Transfer ownership in DB
-    const nft = await this.nftRepo.findOne({
-      where: { contractId: listing.nftContractId, tokenId: listing.nftTokenId },
-    });
-    if (!nft) throw new NotFoundException('NFT not found');
-    nft.owner = buyerId;
-    await this.nftRepo.save(nft);
+    const transaction =
+      await this.transactionService.createAndExecuteListingPurchase(
+        id,
+        buyerId,
+      );
 
-    listing.status = ListingStatus.SOLD;
-    await this.listingRepo.save(listing);
-
-    return { success: true, listingId: id, buyer: buyerId };
+    return {
+      success: transaction.state === TransactionState.COMPLETED,
+      listingId: id,
+      buyer: buyerId,
+      transactionId: transaction.id,
+      transactionState: transaction.state,
+    };
   }
 
   @Cron(CronExpression.EVERY_MINUTE)

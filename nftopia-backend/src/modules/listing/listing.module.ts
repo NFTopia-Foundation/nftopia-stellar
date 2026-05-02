@@ -6,11 +6,13 @@ import { ListingController } from './listing.controller';
 import { StellarNft } from '../../nft/entities/stellar-nft.entity';
 import { NftMetadata } from '../../nft/entities/nft-metadata.entity';
 import { StellarModule } from '../stellar/stellar.module';
+import { TransactionModule } from '../transaction/transaction.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Listing, StellarNft, NftMetadata]),
     StellarModule,
+    TransactionModule,
   ],
   providers: [ListingService],
   controllers: [ListingController],

@@ -7,6 +7,8 @@ import { ListingStatus } from './interfaces/listing.interface';
 import { CreateListingDto } from './dto/create-listing.dto';
 import { ConfigService } from '@nestjs/config';
 import { MarketplaceSettlementClient } from '../stellar/marketplace-settlement.client';
+import { TransactionService } from '../transaction/transaction.service';
+import { TransactionState } from '../transaction/enums/transaction-state.enum';
 
 const mockListingRepo = {
   findOne: jest.fn(),
@@ -25,6 +27,10 @@ const mockListingRepo = {
 const mockNftRepo = {
   findOne: jest.fn(),
   save: jest.fn().mockResolvedValue(undefined),
+};
+
+const mockTransactionService = {
+  createAndExecuteListingPurchase: jest.fn(),
 };
 
 describe('ListingService', () => {
@@ -48,12 +54,18 @@ describe('ListingService', () => {
           provide: MarketplaceSettlementClient,
           useValue: mockSettlementClient,
         },
+        {
+          provide: TransactionService,
+          useValue: mockTransactionService,
+        },
       ],
     })
       .overrideProvider(ConfigService)
       .useValue(mockConfigService)
       .overrideProvider(MarketplaceSettlementClient)
       .useValue(mockSettlementClient)
+      .overrideProvider(TransactionService)
+      .useValue(mockTransactionService)
       .compile();
 
     service = module.get<ListingService>(ListingService);
@@ -105,15 +117,17 @@ describe('ListingService', () => {
       nftTokenId: 'T',
       status: ListingStatus.ACTIVE,
     } as Listing;
+    const mockTransaction = {
+      id: 1,
+      state: TransactionState.COMPLETED,
+    };
     mockListingRepo.findOne.mockResolvedValueOnce(listing);
-    mockNftRepo.findOne.mockResolvedValueOnce({
-      contractId: 'C',
-      tokenId: 'T',
-      owner: 'old',
-    });
+    mockTransactionService.createAndExecuteListingPurchase.mockResolvedValueOnce(
+      mockTransaction,
+    );
     const res = await service.buy('l1', 'buyer1');
     expect(res.success).toBe(true);
-    expect(mockNftRepo.save).toHaveBeenCalled();
-    expect(mockListingRepo.save).toHaveBeenCalled();
+    expect(res.transactionId).toBe(1);
+    expect(res.transactionState).toBe(TransactionState.COMPLETED);
   });
 });

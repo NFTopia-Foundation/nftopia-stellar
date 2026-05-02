@@ -1,6 +1,5 @@
 # NFTopia Backend
 **Stellar API Gateway and Marketplace Services**
-//Comment
 
 ![NestJS](https://img.shields.io/badge/NestJS-11-e0234e)
 ![GraphQL](https://img.shields.io/badge/GraphQL-Apollo-e10098)

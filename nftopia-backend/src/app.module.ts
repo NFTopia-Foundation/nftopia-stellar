@@ -30,6 +30,7 @@ import { StellarModule } from './modules/stellar/stellar.module';
 import { HealthModule } from './health/health.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { OfferModule } from './modules/offer/offer.module';
+import { TransactionModule } from './modules/transaction/transaction.module';
 
 @Module({
   imports: [
@@ -108,6 +109,7 @@ import { OfferModule } from './modules/offer/offer.module';
     ListingModule,
     OrderModule,
     OfferModule,
+    TransactionModule,
     StorageModule,
     SearchModule,
     CollectionFactoryModule,
