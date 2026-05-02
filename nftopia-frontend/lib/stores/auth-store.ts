@@ -375,13 +375,7 @@ export const useAuthStore = create<AuthStore>()(
           });
 
           // Step 1: Disconnect wallet first (before API call)
-          try {
-            if (typeof window !== 'undefined' && (window as any).starknet) {
-              await (window as any).starknet.disable();
-            }
-          } catch (walletError) {
-            console.warn('Wallet disconnect failed:', walletError);
-          }
+          // Note: Legacy Starknet wallet disconnect removed; Stellar wallet cleanup handled by wallet provider
 
           // Step 2: Clear localStorage immediately
           if (typeof window !== 'undefined') {

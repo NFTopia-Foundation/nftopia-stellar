@@ -31,7 +31,7 @@
       "titlePart1": "Decentralized",
       "titlePart2": "NFT Storage",
       "titlePart3": "Management",
-      "subtitle": "Securely store, manage, and showcase your unique digital assets on Starknet blockchain with unparalleled security and true ownership.",
+      "subtitle": "Securely store, manage, and showcase your unique digital assets on Stellar blockchain with unparalleled security and true ownership.",
       "cta": "Start Creating",
       "learnMore": "Explore NFTs"
     },
@@ -42,13 +42,13 @@
     "features": {
       "title": "Why Choose NFTopia",
       "secure": "Secure",
-      "secureDesc": "Built on Starknet for maximum security",
+      "secureDesc": "Built on Stellar for maximum security",
       "fast": "Fast",
       "fastDesc": "Lightning-fast transactions",
       "affordable": "Affordable",
       "affordableDesc": "Low gas fees and costs",
       "onChain": "On-Chain",
-      "starknet": "Starknet",
+      "stellar": "Stellar",
       "ecosystem": "Ecosystem",
       "storage": "Storage"
     }
@@ -151,8 +151,8 @@
   },
   "seo": {
     "title": "NFTopia - Discover, Collect & Trade Unique Digital Art",
-    "description": "The premier NFT marketplace on Starknet. Discover, collect, and trade unique digital art with secure, fast, and affordable transactions.",
-    "keywords": "NFT, digital art, blockchain, Starknet, marketplace, collectibles"
+    "description": "The premier NFT marketplace on Stellar. Discover, collect, and trade unique digital art with secure, fast, and affordable transactions.",
+    "keywords": "NFT, digital art, blockchain, Stellar, marketplace, collectibles"
   },
   "footer": {
     "description": "Discover, collect, and trade unique digital assets on the most advanced NFT marketplace.",
@@ -226,7 +226,7 @@
     "userName": "Username (optional)",
     "alreadyHave": "Already have an account?",
     "signIn": "Sign in",
-    "starknetSecure": "100% Starknet Secure",
+    "stellarSecure": "100% Stellar Secure",
     "inputPlaceholderOne": "Connect your wallet to see address",
     "inputPlaceholderTwo": "coolcollector123",
     "connecting": "Connecting...",
@@ -237,10 +237,10 @@
   },
   "login": {
     "walletAddress": "Wallet Address",
-    "connectWallet": "Connect Starknet Wallet",
+    "connectWallet": "Connect Stellar Wallet",
     "getNonce": "Get Nonce",
     "dontHave": "Don't have an account?",
-    "registerWith": "Register with Starknet",
+    "registerWith": "Register with Stellar",
     "signingIn": "Signing in...",
     "signAndLogin": "Sign & Login",
     "inputPlaceholder": "Connect your wallet to display address"
