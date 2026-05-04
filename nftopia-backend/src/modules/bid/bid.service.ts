@@ -9,7 +9,7 @@ import {
   Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
@@ -32,6 +32,7 @@ import { User } from '../../users/user.entity';
 import { PlaceBidDto } from './dto/place-bid.dto';
 import { BidQueryDto } from './dto/bid-query.dto';
 import { StellarSignatureStrategy } from '../../auth/strategies/stellar.strategy';
+import { MarketplaceSettlementClient } from '../stellar/marketplace-settlement.client';
 import {
   BID_PLACED_EVENT,
   BID_CACHE_PREFIX,
@@ -62,6 +63,7 @@ export class BidService {
     private readonly eventEmitter: EventEmitter2,
     private readonly stellarStrategy: StellarSignatureStrategy,
     private readonly configService: ConfigService,
+    private readonly settlementClient: MarketplaceSettlementClient,
   ) {}
 
   // ─── Public API ──────────────────────────────────────────────────────────────
@@ -70,7 +72,20 @@ export class BidService {
     auctionId: string,
     bidderId: string,
     dto: PlaceBidDto,
-  ): Promise<Bid> {
+  ): Promise<Bid | { success: boolean; result: any }> {
+    const enableOnchain = this.configService.get<boolean>(
+      'ENABLE_ONCHAIN_SETTLEMENT',
+    );
+    if (enableOnchain) {
+      // On-chain: call contract to place bid
+      const result = await this.settlementClient.placeBid(
+        Number(auctionId),
+        bidderId,
+        String(dto.amount),
+      );
+      return { success: true, result };
+    }
+
     await this.enforceRateLimit(bidderId);
 
     const auction = await this.loadActiveAuction(auctionId);
@@ -117,6 +132,7 @@ export class BidService {
 
     const event: BidPlacedEvent = {
       auctionId,
+      sellerId: auction.sellerId,
       bidderId,
       stellarPublicKey: dto.publicKey,
       amount: amountXlm,
@@ -218,6 +234,18 @@ export class BidService {
   async getMyBids(auctionId: string, userId: string): Promise<Bid[]> {
     return this.bidRepo.find({
       where: { auctionId, bidderId: userId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async findByAuctionIds(auctionIds: string[]): Promise<Bid[]> {
+    const uniqueAuctionIds = [...new Set(auctionIds.filter(Boolean))];
+    if (!uniqueAuctionIds.length) {
+      return [];
+    }
+
+    return this.bidRepo.find({
+      where: { auctionId: In(uniqueAuctionIds) },
       order: { createdAt: 'DESC' },
     });
   }

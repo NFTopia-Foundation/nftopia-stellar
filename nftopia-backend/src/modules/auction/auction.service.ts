@@ -6,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Brackets, In, Repository } from 'typeorm';
 import { Auction } from './entities/auction.entity';
 import { Bid } from './entities/bid.entity';
 import { CreateAuctionDto } from './dto/create-auction.dto';
@@ -15,6 +15,10 @@ import { AuctionQueryDto } from './dto/auction-query.dto';
 import { AuctionStatus } from './interfaces/auction.interface';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { StellarNft } from '../../nft/entities/stellar-nft.entity';
+import { ConfigService } from '@nestjs/config';
+import { MarketplaceSettlementClient } from '../stellar/marketplace-settlement.client';
+import { TransactionService } from '../transaction/transaction.service';
+import { TransactionState } from '../transaction/enums/transaction-state.enum';
 
 @Injectable()
 export class AuctionService {
@@ -27,9 +31,41 @@ export class AuctionService {
     private readonly bidRepo: Repository<Bid>,
     @InjectRepository(StellarNft)
     private readonly nftRepo: Repository<StellarNft>,
+    private readonly configService: ConfigService,
+    private readonly settlementClient: MarketplaceSettlementClient,
+    private readonly transactionService: TransactionService,
   ) {}
 
   async create(createDto: CreateAuctionDto, sellerId: string) {
+    const enableOnchain = this.configService.get<boolean>(
+      'ENABLE_ONCHAIN_SETTLEMENT',
+    );
+    if (enableOnchain) {
+      // Only allow 'english' or 'dutch' for auctionType
+      const auctionType: 'english' | 'dutch' =
+        createDto.auctionType === 'dutch' ? 'dutch' : 'english';
+      const params = {
+        seller: sellerId,
+        nftContract: createDto.nftContractId,
+        tokenId: createDto.nftTokenId,
+        startPrice: String(createDto.startPrice),
+        reservePrice: String(createDto.reservePrice),
+        currency: createDto.currency || 'XLM',
+        auctionType,
+        durationSeconds:
+          createDto.endTime && createDto.startTime
+            ? Math.floor(
+                (new Date(createDto.endTime).getTime() -
+                  new Date(createDto.startTime).getTime()) /
+                  1000,
+              )
+            : 0,
+      };
+      const auctionId = await this.settlementClient.createAuction(params);
+      return { success: true, auctionId };
+    }
+
+    // Legacy DB logic
     const {
       nftContractId,
       nftTokenId,
@@ -101,6 +137,60 @@ export class AuctionService {
     return auction;
   }
 
+  async findByIds(ids: string[]): Promise<Auction[]> {
+    const uniqueIds = [...new Set(ids.filter(Boolean))];
+    if (!uniqueIds.length) {
+      return [];
+    }
+
+    return this.auctionRepo.find({ where: { id: In(uniqueIds) } });
+  }
+
+  async findByNFTIds(nftIds: string[]): Promise<Auction[]> {
+    const uniqueNftIds = [...new Set(nftIds.filter(Boolean))];
+    if (!uniqueNftIds.length) {
+      return [];
+    }
+
+    const parsed = uniqueNftIds
+      .map((nftId) => {
+        const [contractId, tokenId] = nftId.split(':');
+        if (!contractId || !tokenId) {
+          return null;
+        }
+
+        return { contractId, tokenId };
+      })
+      .filter(
+        (value): value is { contractId: string; tokenId: string } =>
+          value !== null,
+      );
+
+    if (!parsed.length) {
+      return [];
+    }
+
+    const qb = this.auctionRepo
+      .createQueryBuilder('a')
+      .where(
+        new Brackets((where) => {
+          parsed.forEach(({ contractId, tokenId }, index) => {
+            where.orWhere(
+              `(a.nftContractId = :contractId${index} AND a.nftTokenId = :tokenId${index})`,
+              {
+                [`contractId${index}`]: contractId,
+                [`tokenId${index}`]: tokenId,
+              },
+            );
+          });
+        }),
+      )
+      .andWhere('a.status = :status', { status: AuctionStatus.ACTIVE })
+      .andWhere('a.endTime > :now', { now: new Date() });
+
+    return qb.getMany();
+  }
+
   async getBids(auctionId: string) {
     return this.bidRepo.find({
       where: { auctionId },
@@ -109,6 +199,20 @@ export class AuctionService {
   }
 
   async placeBid(auctionId: string, bidderId: string, dto: PlaceBidDto) {
+    const enableOnchain = this.configService.get<boolean>(
+      'ENABLE_ONCHAIN_SETTLEMENT',
+    );
+    if (enableOnchain) {
+      // On-chain: call contract to place bid
+      const result = await this.settlementClient.placeBid(
+        Number(auctionId),
+        bidderId,
+        String(dto.amount),
+      );
+      return { success: true, result };
+    }
+
+    // Legacy DB logic
     const auction = await this.auctionRepo.findOne({
       where: { id: auctionId },
     });
@@ -180,43 +284,28 @@ export class AuctionService {
       return { settled: false, reason: 'Reserve not met' };
     }
 
-    // Transfer NFT ownership off-chain in DB; on-chain transfer should be performed separately
-    const nft = await this.nftRepo.findOne({
-      where: { contractId: auction.nftContractId, tokenId: auction.nftTokenId },
-    });
-    if (nft) {
-      nft.owner =
-        (highest.bidder && highest.bidder.address) || highest.bidderId;
-      await this.nftRepo.save(nft);
-    }
+    const transaction =
+      await this.transactionService.createAndExecuteAuctionSettlement(
+        auctionId,
+        highest.bidderId,
+        Number(highest.amount),
+      );
 
     auction.winnerId = highest.bidderId;
     auction.currentPrice = highest.amount;
-    auction.status = AuctionStatus.SETTLED;
+    auction.status =
+      transaction.state === TransactionState.COMPLETED
+        ? AuctionStatus.SETTLED
+        : AuctionStatus.COMPLETED;
     await this.auctionRepo.save(auction);
 
-    // Mock on-chain settlement hook (placeholder for Soroban integration).
-    // This uses a mock contract id for future on-chain implementation.
-    const onchainResult = await this.performOnChainSettlement(auction, highest);
-
     return {
-      settled: true,
+      settled: transaction.state === TransactionState.COMPLETED,
       winner: highest.bidderId,
       amount: highest.amount,
-      onchain: onchainResult,
+      transactionId: transaction.id,
+      transactionState: transaction.state,
     };
-  }
-
-  private async performOnChainSettlement(auction: Auction, highest: Bid) {
-    // Placeholder: call to Soroban contract would happen here.
-    const MOCK_CONTRACT_ID =
-      process.env.MOCK_AUCTION_CONTRACT_ID || 'MOCK_CONTRACT_ID';
-    this.logger.debug(
-      `Performing mock on-chain settlement for auction ${auction?.id ?? 'unknown'} winner ${highest?.bidderId ?? 'unknown'} using contract ${MOCK_CONTRACT_ID}`,
-    );
-    // Small await to satisfy lint rule requiring async functions to have an await.
-    await Promise.resolve(true);
-    return { contractId: MOCK_CONTRACT_ID, txHash: null };
   }
 
   @Cron(CronExpression.EVERY_MINUTE)

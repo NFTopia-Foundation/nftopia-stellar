@@ -33,7 +33,7 @@ describe('CollectionResolver', () => {
   });
 
   it('returns a single collection mapped to the GraphQL shape', async () => {
-    mockCollectionService.findById.mockResolvedValue({
+    const mockCollection = {
       id: 'collection-1',
       contractAddress: 'C'.repeat(56),
       name: 'NFTopia Genesis',
@@ -45,13 +45,23 @@ describe('CollectionResolver', () => {
       floorPrice: '1.2500000',
       totalSupply: 12,
       createdAt: new Date('2026-03-24T10:00:00.000Z'),
-    });
+    };
 
-    const result = await resolver.collection('collection-1');
+    const loadCollection = jest.fn().mockResolvedValue(mockCollection);
+
+    const result = await resolver.collection('collection-1', {
+      req: {} as never,
+      res: {} as never,
+      loaders: {
+        collectionById: {
+          load: loadCollection,
+        },
+      } as never,
+    });
 
     expect(result.image).toBe('https://example.com/collection.png');
     expect(result.totalVolume).toBe('25.5000000');
-    expect(mockCollectionService.findById).toHaveBeenCalledWith('collection-1');
+    expect(loadCollection).toHaveBeenCalledWith('collection-1');
   });
 
   it('builds a connection response for paginated collections', async () => {
@@ -232,6 +242,7 @@ describe('CollectionResolver', () => {
       {
         req: {} as never,
         res: {} as never,
+        loaders: {} as never,
         user: { userId: 'creator-1' },
       },
     );
@@ -256,6 +267,7 @@ describe('CollectionResolver', () => {
         {
           req: {} as never,
           res: {} as never,
+          loaders: {} as never,
         },
       ),
     ).rejects.toThrow(UnauthorizedException);

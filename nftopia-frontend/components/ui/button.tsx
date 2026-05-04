@@ -3,15 +3,6 @@ import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../../lib/utils";
 
-// Declare JSX namespace to fix TypeScript errors
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      [elemName: string]: any;
-    }
-  }
-}
-
 type ButtonLoadingState = {
   loading?: boolean;
   loadingText?: string;
@@ -35,6 +26,22 @@ const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline active:text-primary/80",
         cosmic:
           "bg-gradient-to-br from-purple-600/90 to-purple-700 text-white shadow-lg shadow-purple-500/20 dark:shadow-purple-500/10 hover:scale-[1.02] hover:shadow-xl hover:shadow-purple-500/30 dark:hover:shadow-purple-500/20 active:scale-[0.98] border border-purple-400/20",
+        /**
+         * wallet — used for wallet connect / disconnect actions.
+         * Matches the purple gradient used across wallet UI.
+         */
+        wallet:
+          "bg-gradient-to-r from-[#4e3bff] to-[#9747ff] text-white shadow-lg shadow-purple-500/20 hover:opacity-90 hover:shadow-purple-500/40 active:scale-[0.98] transition-opacity",
+        /**
+         * wallet-outline — connected wallet pill / secondary wallet actions.
+         */
+        "wallet-outline":
+          "bg-[#4e3bff]/20 border border-[#4e3bff]/40 text-white hover:bg-[#4e3bff]/30 active:scale-[0.98]",
+        /**
+         * danger-ghost — destructive ghost for inline actions like disconnect.
+         */
+        "danger-ghost":
+          "text-red-400 hover:bg-red-500/10 hover:text-red-300 active:scale-[0.98]",
       },
       size: {
         default:
@@ -42,6 +49,7 @@ const buttonVariants = cva(
         sm: "h-10 rounded-md px-4 text-xs min-h-[48px] min-w-[48px] text-[clamp(0.95rem,2vw,1.05rem)]",
         lg: "h-14 rounded-lg px-8 text-base min-h-[48px] min-w-[48px] text-[clamp(1.05rem,2vw,1.2rem)]",
         icon: "h-12 w-12 min-h-[48px] min-w-[48px] text-[clamp(1rem,2vw,1.1rem)]",
+        pill: "h-10 rounded-full px-6 py-2 min-h-[48px] min-w-[48px] text-sm",
       },
     },
     defaultVariants: {
@@ -57,6 +65,8 @@ export interface ButtonProps
     ButtonLoadingState {
   asChild?: boolean;
   children?: React.ReactNode;
+  /** Indicates a toggle button's pressed state */
+  pressed?: boolean;
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
@@ -69,20 +79,30 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       loading = false,
       loadingText,
       children,
+      pressed,
+      disabled,
+      "aria-label": ariaLabel,
       ...props
     },
     ref
   ) => {
     const Comp = asChild ? Slot : "button";
+    const isDisabled = loading || disabled;
+
     return (
       <Comp
         className={cn(
           buttonVariants({ variant, size, className }),
-          loading && "cursor-wait opacity-80"
+          loading && "cursor-wait opacity-80",
+          // Explicit disabled visual state (covers aria-disabled usage too)
+          isDisabled && "opacity-50 pointer-events-none"
         )}
         ref={ref}
-        disabled={loading || props.disabled}
-        aria-busy={loading}
+        disabled={isDisabled}
+        aria-busy={loading || undefined}
+        aria-disabled={isDisabled || undefined}
+        aria-pressed={pressed}
+        aria-label={ariaLabel}
         {...props}
       >
         {loading ? (
@@ -92,6 +112,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
               xmlns="http://www.w3.org/2000/svg"
               fill="none"
               viewBox="0 0 24 24"
+              aria-hidden="true"
             >
               <circle
                 className="opacity-25"
@@ -107,6 +128,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
               />
             </svg>
+            <span className="sr-only">Loading</span>
             {loadingText || children}
           </>
         ) : (

@@ -8,6 +8,12 @@ import {
   Scalar,
 } from '@nestjs/graphql';
 import { Kind, type ValueNode, GraphQLError, GraphQLScalarType } from 'graphql';
+import { GraphqlCollection } from './collection.types';
+import { GraphqlListing } from './listing.types';
+import { GraphqlOrder } from './order.types';
+import { GraphqlAuction } from './auction.types';
+import { GraphqlUserType } from './user.types';
+import { PageInfo } from './common.types';
 
 function parseLiteralNode(node: ValueNode): unknown {
   switch (node.kind) {
@@ -107,18 +113,30 @@ export class GraphqlNft {
 
   @Field(() => String, { nullable: true })
   lastPrice?: string | null;
-}
 
-@ObjectType()
-export class PageInfo {
-  @Field()
-  hasNextPage: boolean;
+  @Field(() => GraphqlUserType, { nullable: true })
+  owner?: GraphqlUserType | null;
 
-  @Field(() => String, { nullable: true })
-  startCursor?: string;
+  @Field(() => GraphqlUserType, { nullable: true })
+  creator?: GraphqlUserType | null;
 
-  @Field(() => String, { nullable: true })
-  endCursor?: string;
+  @Field(() => GraphqlCollection, { nullable: true })
+  collection?: GraphqlCollection | null;
+
+  @Field(() => GraphqlListing, { nullable: true })
+  listing?: GraphqlListing | null;
+
+  @Field(() => [GraphqlListing], { nullable: true })
+  listings?: GraphqlListing[];
+
+  @Field(() => GraphqlAuction, { nullable: true })
+  auction?: GraphqlAuction | null;
+
+  @Field(() => GraphqlAuction, { nullable: true })
+  currentAuction?: GraphqlAuction | null;
+
+  @Field(() => [GraphqlOrder], { nullable: true })
+  orders?: GraphqlOrder[];
 }
 
 @ObjectType()

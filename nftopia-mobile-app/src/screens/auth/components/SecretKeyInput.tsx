@@ -30,9 +30,9 @@ export const SecretKeyInput: React.FC<SecretKeyInputProps> = ({
       <View
         style={[
           styles.inputRow,
-          showValidation && isValid && styles.inputValid,
-          showValidation && !isValid && styles.inputInvalid,
-          error && styles.inputInvalid,
+          showValidation && isValid ? styles.inputValid : undefined,
+          showValidation && !isValid ? styles.inputInvalid : undefined,
+          error ? styles.inputInvalid : undefined,
         ]}
       >
         <TextInput

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { CacheModule } from '@nestjs/cache-manager';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -6,6 +7,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { ContractEventIndexerJob, IndexerModule } from './jobs';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { CollectionModule } from './modules/collection/collection.module';
@@ -23,9 +25,17 @@ import { RedisRateGuard } from './common/guards/redis-rate.guard';
 import { SearchModule } from './search/search.module';
 import { SorobanRpcService } from './services/soroban-rpc.service';
 import { StellarAccountService } from './services/stellar-account.service';
+import { CollectionFactoryModule } from './modules/collection-factory/collection-factory.module';
+import { StellarModule } from './modules/stellar/stellar.module';
+import { HealthModule } from './health/health.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { OfferModule } from './modules/offer/offer.module';
+import { TransactionModule } from './modules/transaction/transaction.module';
 
 @Module({
   imports: [
+    HealthModule,
+    ScheduleModule.forRoot(),
     LoggerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
@@ -98,12 +108,18 @@ import { StellarAccountService } from './services/stellar-account.service';
     BidModule,
     ListingModule,
     OrderModule,
-    CollectionModule,
+    OfferModule,
+    TransactionModule,
     StorageModule,
     SearchModule,
+    CollectionFactoryModule,
+    StellarModule,
+    NotificationsModule,
+    IndexerModule,
   ],
   controllers: [AppController],
   providers: [
+    ContractEventIndexerJob,
     AppService,
     SorobanRpcService,
     StellarAccountService,

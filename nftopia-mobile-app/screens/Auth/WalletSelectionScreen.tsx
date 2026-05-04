@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import AuthButton from './components/AuthButton';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '@/navigation/AuthNavigator';
 
@@ -15,38 +16,24 @@ export default function WalletSelectionScreen({ navigation }: Props) {
 
       <View style={styles.wallets}>
         {/* Create New Wallet */}
-        <TouchableOpacity
-          style={styles.walletCard}
+        <AuthButton
+          title="Create New Wallet"
           onPress={() => navigation.navigate('WalletCreate')}
-        >
-          <View style={styles.walletIcon}>
-            <Text style={styles.walletIconText}>🆕</Text>
-          </View>
-          <View style={styles.walletInfo}>
-            <Text style={styles.walletName}>Create New Wallet</Text>
-            <Text style={styles.walletDescription}>
-              Generate a new Stellar wallet securely on your device
-            </Text>
-          </View>
-          <Text style={styles.arrow}>→</Text>
-        </TouchableOpacity>
+          style={styles.walletCard}
+          textStyle={{ color: '#1a1a1a', fontWeight: '600', fontSize: 16 }}
+          icon={<Text style={styles.walletIconText}>🆕</Text>}
+          variant="secondary"
+        />
 
         {/* Import Existing Wallet */}
-        <TouchableOpacity
-          style={styles.walletCard}
+        <AuthButton
+          title="Import Wallet"
           onPress={() => navigation.navigate('WalletImport')}
-        >
-          <View style={styles.walletIcon}>
-            <Text style={styles.walletIconText}>📥</Text>
-          </View>
-          <View style={styles.walletInfo}>
-            <Text style={styles.walletName}>Import Wallet</Text>
-            <Text style={styles.walletDescription}>
-              Import your existing Stellar wallet using secret key
-            </Text>
-          </View>
-          <Text style={styles.arrow}>→</Text>
-        </TouchableOpacity>
+          style={styles.walletCard}
+          textStyle={{ color: '#1a1a1a', fontWeight: '600', fontSize: 16 }}
+          icon={<Text style={styles.walletIconText}>📥</Text>}
+          variant="secondary"
+        />
       </View>
 
       <View style={styles.divider}>
@@ -55,19 +42,21 @@ export default function WalletSelectionScreen({ navigation }: Props) {
         <View style={styles.line} />
       </View>
 
-      <TouchableOpacity
-        style={styles.emailButton}
+      <AuthButton
+        title="Sign in with Email"
         onPress={() => navigation.navigate('EmailLogin')}
-      >
-        <Text style={styles.emailButtonText}>Sign in with Email</Text>
-      </TouchableOpacity>
+        style={styles.emailButton}
+        textStyle={{ color: '#333' }}
+        variant="secondary"
+      />
 
-      <TouchableOpacity
-        style={styles.backButton}
+      <AuthButton
+        title="← Back"
         onPress={() => navigation.goBack()}
-      >
-        <Text style={styles.backButtonText}>← Back</Text>
-      </TouchableOpacity>
+        style={styles.backButton}
+        textStyle={{ color: '#666' }}
+        variant="secondary"
+      />
     </ScrollView>
   );
 }

@@ -51,10 +51,12 @@ function createValidationPipe() {
 
 async function bootstrapRestApi() {
   const app = await NestFactory.create(AppModule);
-  app.useLogger(app.get(PinoLogger));
+  app.useLogger(app.get<PinoLogger>(PinoLogger));
 
-  const sorobanRpcService = app.get(SorobanRpcService);
-  const stellarAccountService = app.get(StellarAccountService);
+  const sorobanRpcService = app.get<SorobanRpcService>(SorobanRpcService);
+  const stellarAccountService = app.get<StellarAccountService>(
+    StellarAccountService,
+  );
 
   app.useGlobalInterceptors(
     new StellarErrorInterceptor(sorobanRpcService),
@@ -73,6 +75,7 @@ async function bootstrapRestApi() {
     .setTitle('NFTopia API')
     .setDescription('NFTopia Stellar NFT Marketplace API Documentation')
     .setVersion('1.0')
+    .addTag('health', 'Liveness and readiness probes')
     .addTag('nft', 'NFT operations')
     .addTag('marketplace', 'Marketplace operations')
     .addTag('users', 'User operations')
@@ -84,10 +87,12 @@ async function bootstrapRestApi() {
   SwaggerModule.setup('api/docs', app, document);
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
-  const logger = app.get(PinoLogger);
+  const logger = app.get<PinoLogger>(PinoLogger);
 
-  logger.log(`Application is running on: ...`);
-  logger.log(`Swagger documentation available at: ...`);
+  logger.log(`Application is running on: http://localhost:${port}/api/v1`);
+  logger.log(
+    `Swagger documentation available at: http://localhost:${port}/api/docs`,
+  );
 
   return app;
 }

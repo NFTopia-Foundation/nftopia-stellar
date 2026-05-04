@@ -4,7 +4,7 @@ module.exports = {
     "^.+\\.(js|jsx|ts|tsx)$": "babel-jest",
   },
   transformIgnorePatterns: [
-    "node_modules/(?!(@starknet-react|starknetkit|eventemitter3)/)",
+    "node_modules/(?!(eventemitter3)/)",
   ],
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/$1",
