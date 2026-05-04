@@ -9,6 +9,7 @@ const inter = Inter({
 });
 
 export const metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || 'https://nftopia.app'),
   title: 'NFTopia - NFT Marketplace',
   description: 'Discover, collect, and trade unique NFTs on the most innovative blockchain marketplace',
   manifest: '/manifest.json',

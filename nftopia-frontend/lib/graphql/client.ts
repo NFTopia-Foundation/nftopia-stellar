@@ -103,7 +103,7 @@ export function createApolloClient(): ApolloClient<NormalizedCacheObject> {
         },
       },
     }),
-    connectToDevTools: process.env.NODE_ENV !== "production",
+    devtools: { enabled: process.env.NODE_ENV !== "production" },
     defaultOptions: {
       watchQuery: {
         errorPolicy: "all",
