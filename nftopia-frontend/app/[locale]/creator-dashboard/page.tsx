@@ -165,21 +165,29 @@ export default function CreatorDashboardPage() {
         <div className="bg-card border border-border rounded-xl p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-card-foreground">
-              {t("creatorDashboard.createCollection")}
+              {t("creatorDashboard.manageMarketplace") || "Manage Marketplace"}
             </h3>
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
               <Users className="h-4 w-4 text-primary-foreground" />
             </div>
           </div>
           <p className="text-muted-foreground mb-4">
-            {t("creatorDashboard.collectionDescription")}
+            {t("creatorDashboard.manageMarketplaceDescription") || "List NFTs and review sales activity from your creator dashboard."}
           </p>
-          <Link
-            href="/creator-dashboard/create-your-collection"
-            className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors"
-          >
-            {t("creatorDashboard.createCollection")}
-          </Link>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Link
+              href="/creator-dashboard/list-nfts-for-sale"
+              className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors"
+            >
+              {t("creatorDashboard.listForSale") || "List NFTs for Sale"}
+            </Link>
+            <Link
+              href="/creator-dashboard/sales"
+              className="inline-flex items-center px-4 py-2 rounded-lg border border-border bg-background text-foreground hover:bg-slate-100 transition-colors"
+            >
+              {t("creatorDashboard.sales") || "Sales"}
+            </Link>
+          </div>
         </div>
       </div>
     </div>
