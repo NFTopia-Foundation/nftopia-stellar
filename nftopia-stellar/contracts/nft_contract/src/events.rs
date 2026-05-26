@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, Env, contractevent};
+use soroban_sdk::{contractevent, Address, Env};
 
 #[contractevent]
 #[derive(Clone, Debug)]

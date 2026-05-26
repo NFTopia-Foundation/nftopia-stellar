@@ -3,7 +3,7 @@
 //! to avoid redundant re-computation during batch operations.
 
 use crate::types::GasEstimate;
-use soroban_sdk::{Env, contracttype};
+use soroban_sdk::{contracttype, Env};
 
 #[derive(Clone)]
 #[contracttype]

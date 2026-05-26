@@ -2,7 +2,7 @@
 //! transaction so auditors can reconstruct the exact lifecycle.
 
 use crate::types::TransactionState;
-use soroban_sdk::{Env, Vec, contracttype};
+use soroban_sdk::{contracttype, Env, Vec};
 
 #[derive(Clone)]
 #[contracttype]

@@ -1,9 +1,9 @@
 use crate::collection::{NftCollection, NftCollectionClient};
 use crate::factory::{CollectionFactory, CollectionFactoryClient};
 use crate::types::CollectionConfig;
-use soroban_sdk::TryFromVal;
 use soroban_sdk::testutils::Events;
-use soroban_sdk::{Address, Env, String, Symbol, Vec, symbol_short, testutils::Address as _};
+use soroban_sdk::TryFromVal;
+use soroban_sdk::{symbol_short, testutils::Address as _, Address, Env, String, Symbol, Vec};
 // no_std: no vec import, no catch_unwind import
 
 #[test]

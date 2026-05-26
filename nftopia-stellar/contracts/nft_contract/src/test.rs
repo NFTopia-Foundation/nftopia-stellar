@@ -1,6 +1,6 @@
 use crate::types::{CollectionConfig, RoyaltyInfo, TokenAttribute};
 use crate::{NftContract, NftContractClient};
-use soroban_sdk::{Address, Env, String, Vec, testutils::Address as _};
+use soroban_sdk::{testutils::Address as _, Address, Env, String, Vec};
 
 fn make_config(env: &Env) -> CollectionConfig {
     CollectionConfig {

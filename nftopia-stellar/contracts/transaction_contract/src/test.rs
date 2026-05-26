@@ -2,7 +2,7 @@
 
 extern crate std;
 
-use soroban_sdk::{Address, Env, String, Vec, map, testutils::Address as _, vec};
+use soroban_sdk::{map, testutils::Address as _, vec, Address, Env, String, Vec};
 
 use crate::transaction_core::{TransactionContract, TransactionContractClient};
 use crate::types::{GasOptimizationConfig, RecoveryStrategy, TransactionBlueprint};
@@ -373,8 +373,8 @@ fn various_operation_types_all_execute() {
 #[should_panic(expected = "HostError: Error(Auth, InvalidAction)")]
 fn test_unauthorized_creator_add_operation() {
     use soroban_sdk::{
-        IntoVal,
         testutils::{MockAuth, MockAuthInvoke},
+        IntoVal,
     };
     let env = Env::default();
     let (client, creator) = make_client(&env);

@@ -2,7 +2,7 @@ use crate::error::ContractError;
 use crate::events;
 use crate::storage::DataKey;
 use crate::types::{CollectionConfig, CollectionInfo};
-use soroban_sdk::{Address, BytesN, Env, Val, Vec, contract, contractimpl, panic_with_error};
+use soroban_sdk::{contract, contractimpl, panic_with_error, Address, BytesN, Env, Val, Vec};
 
 #[contract]
 pub struct CollectionFactory;

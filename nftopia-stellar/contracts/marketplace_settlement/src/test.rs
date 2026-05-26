@@ -15,7 +15,9 @@ pub struct MockToken;
 #[soroban_sdk::contractimpl]
 impl MockToken {
     pub fn transfer(_env: Env, _from: Address, _to: Address, _amount: i128) {}
-    pub fn balance(_env: Env, _id: Address) -> i128 { 100_000_000 }
+    pub fn balance(_env: Env, _id: Address) -> i128 {
+        100_000_000
+    }
 }
 
 #[soroban_sdk::contract]
@@ -27,8 +29,8 @@ impl MockNft {
         // we'll just store and return the current caller, or for testing we can just
         // return the expected owner. We'll use a hack to get an address.
         Address::generate(&env) // This will fail the owner check if not careful!
-        // Actually, to make tests pass, we can just skip the real check in mock or
-        // store the owner.
+                                // Actually, to make tests pass, we can just skip the real check in mock or
+                                // store the owner.
     }
     pub fn transfer(_env: Env, _from: Address, _to: Address, _token_id: u64) {}
 }
@@ -55,14 +57,13 @@ fn reg(env: &Env, cid: &Address, nft: &Address, creator: &Address, admin: &Addre
     let client = MarketplaceSettlementClient::new(env, cid);
     client.add_allowed_nft_contract(admin, nft);
     client.add_allowed_token_contract(admin, &asset.contract);
-    
+
     env.as_contract(cid, || {
         let _ = RoyaltyDistributor::set_royalty_info(env, nft, 1, creator, 500, creator);
     });
 }
 
 // ─── Init ────────────────────────────────────────────────────────────────────
-
 
 #[test]
 fn test_initialize_success() {
