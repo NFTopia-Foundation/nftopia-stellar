@@ -57,30 +57,30 @@ export class OrderResolver {
   ): Promise<OrderConnection> {
     const userId = context.user?.userId;
     if (!userId) throw new BadRequestException('User not authenticated');
-    // Map PaginationInput to OrderQueryDto fields
-    const query: OrderQueryDto = {};
-    if (pagination?.first) query.limit = pagination.first;
-    if (pagination?.after) query.page = Number(pagination.after) || 1;
+    const base: OrderQueryDto = {
+      limit: pagination?.first ?? 20,
+      page: Number(pagination?.after) || 1,
+    };
     if (type === 'SALE') {
-      query.sellerId = userId;
+      return this.toConnection(
+        await this.orderService.findAllWithCount({ ...base, sellerId: userId }),
+      );
     } else if (type === 'PURCHASE') {
-      query.buyerId = userId;
+      return this.toConnection(
+        await this.orderService.findAllWithCount({ ...base, buyerId: userId }),
+      );
     } else {
-      // If neither, fetch both as separate queries and merge
-      const sellerQuery: OrderQueryDto = { ...pagination, sellerId: userId };
-      const buyerQuery: OrderQueryDto = { ...pagination, buyerId: userId };
-      const [sellerOrders, buyerOrders] = await Promise.all([
-        this.orderService.findAll(sellerQuery),
-        this.orderService.findAll(buyerQuery),
+      // Merge seller + buyer pages; totalCount is approximate (sum of both)
+      const [seller, buyer] = await Promise.all([
+        this.orderService.findAllWithCount({ ...base, sellerId: userId }),
+        this.orderService.findAllWithCount({ ...base, buyerId: userId }),
       ]);
-      // Remove duplicates by id
       const merged: Record<string, OrderInterface> = {};
-      sellerOrders.forEach((o) => (merged[o.id] = o));
-      buyerOrders.forEach((o) => (merged[o.id] = o));
-      return this.toConnection(Object.values(merged));
+      seller.items.forEach((o) => (merged[o.id] = o));
+      buyer.items.forEach((o) => (merged[o.id] = o));
+      const totalCount = seller.totalCount + buyer.totalCount;
+      return this.toConnection({ items: Object.values(merged), totalCount, page: base.page!, limit: base.limit! });
     }
-    const orders = await this.orderService.findAll(query);
-    return this.toConnection(orders);
   }
 
   @Query(() => OrderConnection, {
@@ -93,9 +93,12 @@ export class OrderResolver {
     @Args('pagination', { type: () => PaginationInput, nullable: true })
     pagination: PaginationInput,
   ): Promise<OrderConnection> {
-    const query: OrderQueryDto = { ...pagination, buyerId: userId };
-    const orders = await this.orderService.findAll(query);
-    return this.toConnection(orders);
+    const query: OrderQueryDto = {
+      buyerId: userId,
+      limit: pagination?.first ?? 20,
+      page: Number(pagination?.after) || 1,
+    };
+    return this.toConnection(await this.orderService.findAllWithCount(query));
   }
 
   @Query(() => [GraphqlOrder], {
@@ -223,19 +226,29 @@ export class OrderResolver {
     lastPrice: nft.lastPrice ?? null,
   });
 
-  private toConnection = (orders: OrderInterface[]): OrderConnection => {
-    const edges = orders.map((order) => ({
+  private toConnection = ({
+    items,
+    totalCount,
+    page,
+    limit,
+  }: {
+    items: OrderInterface[];
+    totalCount: number;
+    page: number;
+    limit: number;
+  }): OrderConnection => {
+    const edges = items.map((order) => ({
       node: this.toGraphqlOrder(order),
       cursor: order.id,
     }));
     return {
       edges,
       pageInfo: {
-        hasNextPage: false, // TODO: implement real pagination
+        hasNextPage: page * limit < totalCount,
         startCursor: edges[0]?.cursor,
         endCursor: edges.at(-1)?.cursor,
       },
-      totalCount: orders.length,
+      totalCount,
     };
   };
 }

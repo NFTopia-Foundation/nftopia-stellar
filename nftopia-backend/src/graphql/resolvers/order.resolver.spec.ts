@@ -4,9 +4,30 @@ import { OrderService } from '../../modules/order/order.service';
 import { GqlAuthGuard } from '../../common/guards/gql-auth.guard';
 import type { Request, Response } from 'express';
 
+const makeOrder = (overrides = {}) => ({
+  id: '1',
+  nftId: 'nft1',
+  buyerId: 'b1',
+  sellerId: 's1',
+  price: '10',
+  currency: 'XLM',
+  type: 'SALE',
+  status: 'COMPLETED',
+  transactionHash: 'tx',
+  createdAt: new Date(),
+  ...overrides,
+});
+
+const makePagedResult = (items: ReturnType<typeof makeOrder>[], totalCount = items.length, page = 1, limit = 20) => ({
+  items,
+  totalCount,
+  page,
+  limit,
+});
+
 describe('OrderResolver', () => {
   let resolver: OrderResolver;
-  let service: OrderService;
+  let service: jest.Mocked<Pick<OrderService, 'findOne' | 'findAll' | 'findAllWithCount' | 'getSalesAnalytics'>>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -17,6 +38,7 @@ describe('OrderResolver', () => {
           useValue: {
             findOne: jest.fn(),
             findAll: jest.fn(),
+            findAllWithCount: jest.fn(),
             getSalesAnalytics: jest.fn(),
           },
         },
@@ -27,7 +49,7 @@ describe('OrderResolver', () => {
       .compile();
 
     resolver = module.get<OrderResolver>(OrderResolver);
-    service = module.get<OrderService>(OrderService);
+    service = module.get(OrderService);
   });
 
   it('should be defined', () => {
@@ -36,18 +58,7 @@ describe('OrderResolver', () => {
 
   describe('order', () => {
     it('should fetch a single order by ID', async () => {
-      const mockOrder = {
-        id: '1',
-        nftId: 'nft1',
-        buyerId: 'b1',
-        sellerId: 's1',
-        price: '10',
-        currency: 'XLM',
-        type: 'SALE',
-        status: 'COMPLETED',
-        transactionHash: 'tx',
-        createdAt: new Date(),
-      };
+      const mockOrder = makeOrder();
       (service.findOne as jest.Mock).mockResolvedValue(mockOrder);
       const result = await resolver.order('1');
       expect(result.id).toBe('1');
@@ -56,70 +67,56 @@ describe('OrderResolver', () => {
   });
 
   describe('myOrders', () => {
-    it('should fetch current user orders', async () => {
-      const mockOrders = [
-        {
-          id: '1',
-          nftId: 'nft1',
-          buyerId: 'u1',
-          sellerId: 's1',
-          price: '10',
-          currency: 'XLM',
-          type: 'SALE',
-          status: 'COMPLETED',
-          transactionHash: 'tx',
-          createdAt: new Date(),
-        },
-      ];
-      (service.findAll as jest.Mock).mockResolvedValue(mockOrders);
-      const result = await resolver.myOrders({}, 'SALE', {
-        req: {} as unknown as Request,
-        res: {} as unknown as Response,
-        loaders: {} as never,
-        user: { userId: 'u1' },
-      });
-      expect(result.edges[0].node.id).toBe('1');
+    const ctx = {
+      req: {} as unknown as Request,
+      res: {} as unknown as Response,
+      loaders: {} as never,
+      user: { userId: 'u1' },
+    };
+
+    it('should return hasNextPage: true when more pages exist', async () => {
+      const orders = Array.from({ length: 2 }, (_, i) => makeOrder({ id: String(i) }));
+      (service.findAllWithCount as jest.Mock).mockResolvedValue(makePagedResult(orders, 5, 1, 2));
+      const result = await resolver.myOrders({ first: 2, after: '1' }, 'SALE', ctx);
+      expect(result.pageInfo.hasNextPage).toBe(true);
+      expect(result.totalCount).toBe(5);
+    });
+
+    it('should return hasNextPage: false on last page', async () => {
+      const orders = [makeOrder()];
+      (service.findAllWithCount as jest.Mock).mockResolvedValue(makePagedResult(orders, 1, 1, 20));
+      const result = await resolver.myOrders({}, 'SALE', ctx);
+      expect(result.pageInfo.hasNextPage).toBe(false);
+    });
+
+    it('should fetch PURCHASE orders for current user', async () => {
+      const orders = [makeOrder({ buyerId: 'u1', type: 'PURCHASE' })];
+      (service.findAllWithCount as jest.Mock).mockResolvedValue(makePagedResult(orders, 1, 1, 20));
+      const result = await resolver.myOrders({}, 'PURCHASE', ctx);
+      expect(result.edges[0].node.buyerId).toBe('u1');
     });
   });
 
   describe('userOrders', () => {
-    it('should fetch orders for a specific user', async () => {
-      const mockOrders = [
-        {
-          id: '1',
-          nftId: 'nft1',
-          buyerId: 'u2',
-          sellerId: 's1',
-          price: '10',
-          currency: 'XLM',
-          type: 'PURCHASE',
-          status: 'COMPLETED',
-          transactionHash: 'tx',
-          createdAt: new Date(),
-        },
-      ];
-      (service.findAll as jest.Mock).mockResolvedValue(mockOrders);
+    it('should fetch orders for a specific user with correct pagination', async () => {
+      const orders = [makeOrder({ buyerId: 'u2', type: 'PURCHASE' })];
+      (service.findAllWithCount as jest.Mock).mockResolvedValue(makePagedResult(orders, 1, 1, 20));
       const result = await resolver.userOrders('u2', {});
       expect(result.edges[0].node.buyerId).toBe('u2');
+      expect(result.totalCount).toBe(1);
+    });
+
+    it('should return hasNextPage: true when more pages exist', async () => {
+      const orders = Array.from({ length: 5 }, (_, i) => makeOrder({ id: String(i) }));
+      (service.findAllWithCount as jest.Mock).mockResolvedValue(makePagedResult(orders, 12, 1, 5));
+      const result = await resolver.userOrders('u2', { first: 5, after: '1' });
+      expect(result.pageInfo.hasNextPage).toBe(true);
     });
   });
 
   describe('nftOrders', () => {
     it('should fetch order history for NFT', async () => {
-      const mockOrders = [
-        {
-          id: '1',
-          nftId: 'nft1',
-          buyerId: 'b1',
-          sellerId: 's1',
-          price: '10',
-          currency: 'XLM',
-          type: 'SALE',
-          status: 'COMPLETED',
-          transactionHash: 'tx',
-          createdAt: new Date(),
-        },
-      ];
+      const mockOrders = [makeOrder({ nftId: 'nft1' })];
       (service.findAll as jest.Mock).mockResolvedValue(mockOrders);
       const result = await resolver.nftOrders('nft1');
       expect(result[0].nftId).toBe('nft1');

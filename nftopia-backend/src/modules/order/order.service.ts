@@ -55,7 +55,7 @@ export class OrderService {
     return this.toOrderInterface(saved);
   }
 
-  async findAll(query: OrderQueryDto): Promise<OrderInterface[]> {
+  private buildOrderQuery(query: OrderQueryDto) {
     const qb = this.orderRepository.createQueryBuilder('order');
     if (query.nftId)
       qb.andWhere('order.nftId = :nftId', { nftId: query.nftId });
@@ -75,11 +75,27 @@ export class OrderService {
         `order.${query.sortBy}`,
         query.sortOrder === 'DESC' ? 'DESC' : 'ASC',
       );
-    if (query.page && query.limit) {
-      qb.skip((query.page - 1) * query.limit).take(query.limit);
-    }
+    return qb;
+  }
+
+  async findAll(query: OrderQueryDto): Promise<OrderInterface[]> {
+    const qb = this.buildOrderQuery(query);
+    const page = Math.max(1, query.page ?? 1);
+    const limit = query.limit;
+    if (limit) qb.skip((page - 1) * limit).take(limit);
     const orders = await qb.getMany();
     return orders.map(this.toOrderInterface);
+  }
+
+  async findAllWithCount(
+    query: OrderQueryDto,
+  ): Promise<{ items: OrderInterface[]; totalCount: number; page: number; limit: number }> {
+    const page = Math.max(1, query.page ?? 1);
+    const limit = query.limit ?? 20;
+    const qb = this.buildOrderQuery(query);
+    qb.skip((page - 1) * limit).take(limit);
+    const [orders, totalCount] = await qb.getManyAndCount();
+    return { items: orders.map(this.toOrderInterface), totalCount, page, limit };
   }
 
   async findOne(id: string): Promise<OrderInterface> {

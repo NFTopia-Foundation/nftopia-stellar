@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Horizon } from 'stellar-sdk';
 import { SystemSettings } from './system-settings.entity';
 import { StellarNft } from '../nft/entities/stellar-nft.entity';
+import { ContractEventDlqService } from './contract-event-dlq.service';
 
 const LAST_LEDGER_KEY = 'last_ingested_ledger';
 const HORIZON_URL =
@@ -21,6 +22,7 @@ export class IndexerService implements OnModuleInit {
     private readonly settingsRepo: Repository<SystemSettings>,
     @InjectRepository(StellarNft)
     private readonly nftRepo: Repository<StellarNft>,
+    private readonly dlqService: ContractEventDlqService,
   ) {}
 
   onModuleInit() {
@@ -84,6 +86,10 @@ export class IndexerService implements OnModuleInit {
         this.logger.warn(
           `Failed to fetch txs for ${contractId}: ${String(err)}`,
         );
+        await this.dlqService.enqueue(
+          { contractId, eventType: 'fetch_transactions', payload: { lastLedger } },
+          err,
+        );
       }
     }
 
@@ -107,16 +113,28 @@ export class IndexerService implements OnModuleInit {
       `Processing ${eventType} event from contract ${contractId}`,
     );
 
-    switch (eventType) {
-      case 'mint':
-        await this.handleMint(tx, contractId);
-        break;
-      case 'sale':
-        await this.handleSale(tx, contractId);
-        break;
-      case 'transfer':
-        await this.handleTransfer(tx, contractId);
-        break;
+    try {
+      switch (eventType) {
+        case 'mint':
+          await this.handleMint(tx, contractId);
+          break;
+        case 'sale':
+          await this.handleSale(tx, contractId);
+          break;
+        case 'transfer':
+          await this.handleTransfer(tx, contractId);
+          break;
+      }
+    } catch (err) {
+      await this.dlqService.enqueue(
+        {
+          contractId,
+          txHash: tx.hash,
+          eventType,
+          payload: { memo, sourceAccount: tx.source_account },
+        },
+        err,
+      );
     }
   }
 
