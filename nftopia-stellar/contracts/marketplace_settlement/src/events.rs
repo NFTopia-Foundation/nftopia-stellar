@@ -246,6 +246,22 @@ pub struct AdminConfigUpdatedEvent {
     pub timestamp: u64,
 }
 
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UnauthorizedAccessAttemptEvent {
+    pub caller: Address,
+    pub action: Bytes,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RejectedContractTargetEvent {
+    pub contract: Address,
+    pub target_type: Bytes,
+    pub timestamp: u64,
+}
+
 // Event emission functions
 #[allow(deprecated)]
 pub fn emit_sale_created(env: &Env, event: SaleCreatedEvent) {
@@ -389,4 +405,16 @@ pub fn emit_fee_config_updated(env: &Env, event: FeeConfigUpdatedEvent) {
 pub fn emit_admin_config_updated(env: &Env, event: AdminConfigUpdatedEvent) {
     env.events()
         .publish(("MarketplaceSettlement", symbol_short!("admin_upd")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_unauthorized_access(env: &Env, event: UnauthorizedAccessAttemptEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("unauth")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_rejected_contract(env: &Env, event: RejectedContractTargetEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("rej_cont")), event);
 }
