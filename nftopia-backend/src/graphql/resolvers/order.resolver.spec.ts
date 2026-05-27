@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { OrderResolver } from './order.resolver';
 import { OrderService } from '../../modules/order/order.service';
 import { GqlAuthGuard } from '../../common/guards/gql-auth.guard';
+import { BadRequestException } from '@nestjs/common';
 import type { Request, Response } from 'express';
 
 describe('OrderResolver', () => {
@@ -127,14 +128,40 @@ describe('OrderResolver', () => {
   });
 
   describe('salesAnalytics', () => {
-    it('should fetch sales analytics', async () => {
+    it('should fetch sales analytics with valid timeframe', async () => {
       const mockStats = { volume: '100', count: 5, averagePrice: '20' };
-      (service.getSalesAnalytics as jest.Mock).mockReturnValue(mockStats);
+      (service.getSalesAnalytics as jest.Mock).mockResolvedValue(mockStats);
       const timeframe = { periodStart: '2024-01-01', periodEnd: '2024-01-31' };
       const result = await resolver.salesAnalytics(timeframe);
       expect(result.totalVolume).toBe('100');
       expect(result.totalSales).toBe(5);
       expect(result.averagePrice).toBe('20');
+      expect(service.getSalesAnalytics).toHaveBeenCalledWith(
+        new Date('2024-01-01'),
+        new Date('2024-01-31'),
+      );
+    });
+
+    it('should throw BadRequestException for invalid timeframe (end < start)', async () => {
+      const timeframe = { periodStart: '2024-01-31', periodEnd: '2024-01-01' };
+      await expect(resolver.salesAnalytics(timeframe)).rejects.toThrow(
+        BadRequestException,
+      );
+      await expect(resolver.salesAnalytics(timeframe)).rejects.toThrow(
+        'Invalid timeframe: periodEnd must be after periodStart',
+      );
+    });
+
+    it('should accept timeframe with equal start and end dates', async () => {
+      const mockStats = { volume: '50', count: 1, averagePrice: '50' };
+      (service.getSalesAnalytics as jest.Mock).mockResolvedValue(mockStats);
+      const timeframe = { periodStart: '2024-01-01', periodEnd: '2024-01-01' };
+      const result = await resolver.salesAnalytics(timeframe);
+      expect(result.totalVolume).toBe('50');
+      expect(service.getSalesAnalytics).toHaveBeenCalledWith(
+        new Date('2024-01-01'),
+        new Date('2024-01-01'),
+      );
     });
   });
 });
