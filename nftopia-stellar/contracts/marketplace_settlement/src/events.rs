@@ -1,5 +1,5 @@
 use crate::types::*;
-use soroban_sdk::{contracttype, symbol_short, Address, Bytes, Env, Vec};
+use soroban_sdk::{contracttype, symbol_short, Address, Bytes, Env, Symbol, Vec};
 
 // Sale Events
 #[contracttype]
@@ -212,6 +212,16 @@ pub struct FrontRunningDetectedEvent {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RateLimitExceededEvent {
+    pub caller: Address,
+    pub function: Symbol,
+    pub window_seconds: u64,
+    pub limit: u32,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EmergencyWithdrawalEvent {
     pub transaction_id: u64,
     pub reason: Bytes,
@@ -371,6 +381,12 @@ pub fn emit_reentrancy_detected(env: &Env, event: ReentrancyDetectedEvent) {
 pub fn emit_front_running_detected(env: &Env, event: FrontRunningDetectedEvent) {
     env.events()
         .publish(("MarketplaceSettlement", symbol_short!("frontrun")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_rate_limit_exceeded(env: &Env, event: RateLimitExceededEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("rt_limit")), event);
 }
 
 #[allow(deprecated)]

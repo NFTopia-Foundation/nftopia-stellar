@@ -89,6 +89,12 @@ impl MarketplaceSettlement {
     ) -> Result<u64, SettlementError> {
         seller.require_auth();
         ReentrancyGuard::execute(&env, &seller, "create_sale", || {
+            crate::security::rate_limiter::RateLimiter::check_rate_limit(
+                &env,
+                &seller,
+                &Symbol::new(&env, "create_sale"),
+            )?;
+
             // Validate inputs
             asset_utils::validate_asset(&currency, &Vec::new(&env), &env)?;
             asset_utils::validate_nft_contract(&nft_address, &env)?;
@@ -221,6 +227,12 @@ impl MarketplaceSettlement {
     ) -> Result<u64, SettlementError> {
         seller.require_auth();
         ReentrancyGuard::execute(&env, &seller, "create_auction", || {
+            crate::security::rate_limiter::RateLimiter::check_rate_limit(
+                &env,
+                &seller,
+                &Symbol::new(&env, "create_auction"),
+            )?;
+
             AuctionEngine::create_auction(
                 &env,
                 auction_type,
@@ -246,6 +258,12 @@ impl MarketplaceSettlement {
     ) -> Result<(), SettlementError> {
         bidder.require_auth();
         ReentrancyGuard::execute(&env, &bidder, "place_bid", || {
+            crate::security::rate_limiter::RateLimiter::check_rate_limit(
+                &env,
+                &bidder,
+                &Symbol::new(&env, "place_bid"),
+            )?;
+
             AuctionEngine::place_bid(&env, auction_id, &bidder, bid_amount, commitment_hash)
         })
     }
@@ -260,6 +278,12 @@ impl MarketplaceSettlement {
     ) -> Result<(), SettlementError> {
         bidder.require_auth();
         ReentrancyGuard::execute(&env, &bidder, "reveal_bid", || {
+            crate::security::rate_limiter::RateLimiter::check_rate_limit(
+                &env,
+                &bidder,
+                &Symbol::new(&env, "reveal_bid"),
+            )?;
+
             AuctionEngine::reveal_bid(&env, auction_id, &bidder, bid_amount, &salt)
         })
     }
@@ -283,6 +307,12 @@ impl MarketplaceSettlement {
     ) -> Result<u64, SettlementError> {
         initiator.require_auth();
         ReentrancyGuard::execute(&env, &initiator, "create_trade", || {
+            crate::security::rate_limiter::RateLimiter::check_rate_limit(
+                &env,
+                &initiator,
+                &Symbol::new(&env, "create_trade"),
+            )?;
+
             // Validate trade parameters
             if initiator_nfts.is_empty() {
                 return Err(SettlementError::InvalidAmount);
@@ -311,6 +341,12 @@ impl MarketplaceSettlement {
     pub fn accept_trade(env: Env, trade_id: u64, acceptor: Address) -> Result<(), SettlementError> {
         acceptor.require_auth();
         ReentrancyGuard::execute(&env, &acceptor.clone(), "accept_trade", || {
+            crate::security::rate_limiter::RateLimiter::check_rate_limit(
+                &env,
+                &acceptor,
+                &Symbol::new(&env, "accept_trade"),
+            )?;
+
             let mut trade = TradeTransactionStore::get(&env, trade_id)?;
 
             if trade.state != crate::types::TransactionState::Pending {
@@ -337,6 +373,12 @@ impl MarketplaceSettlement {
     ) -> Result<(), SettlementError> {
         executor.require_auth();
         ReentrancyGuard::execute(&env, &executor, "execute_trade", || {
+            crate::security::rate_limiter::RateLimiter::check_rate_limit(
+                &env,
+                &executor,
+                &Symbol::new(&env, "execute_trade"),
+            )?;
+
             let mut trade = TradeTransactionStore::get(&env, trade_id)?;
 
             if trade.state != crate::types::TransactionState::Funded {
@@ -526,6 +568,42 @@ impl MarketplaceSettlement {
         }
 
         FeeManager::withdraw_platform_fees(&env, &asset, &recipient, &admin)
+    }
+
+    /// Update rate limit configuration for a specific function (admin only)
+    pub fn update_rate_limit(
+        env: Env,
+        function: Symbol,
+        limit: u32,
+        window_seconds: u64,
+        admin: Address,
+    ) -> Result<(), SettlementError> {
+        // Check admin permissions
+        let admin_config: AdminConfig = env
+            .storage()
+            .instance()
+            .get(&symbol_short!("admin_cfg"))
+            .ok_or(SettlementError::Unauthorized)?;
+
+        if admin_config.admin != admin {
+            return Err(SettlementError::Unauthorized);
+        }
+
+        crate::security::rate_limiter::RateLimiter::set_config(
+            &env,
+            &function,
+            limit,
+            window_seconds,
+        );
+        Ok(())
+    }
+
+    /// Get rate limit configuration for a specific function
+    pub fn get_rate_limit_config(
+        env: Env,
+        function: Symbol,
+    ) -> Option<crate::security::rate_limiter::RateLimitConfig> {
+        crate::security::rate_limiter::RateLimiter::get_config(&env, &function)
     }
 
     /// Get transaction details
