@@ -12,13 +12,19 @@ pub fn native_asset() -> Asset {
 
 /// Validate that an asset is supported
 pub fn validate_asset(
-    _asset: &Asset,
-    _supported_assets: &Vec<Asset>,
+    asset: &Asset,
+    supported_assets: &Vec<Asset>,
     _env: &Env,
 ) -> Result<(), SettlementError> {
-    // Accept all assets – supported-asset filtering is enforced at the
-    // settlement layer; cross-contract validation is out of scope here.
-    Ok(())
+    if supported_assets.is_empty() {
+        return Err(SettlementError::AssetNotSupported);
+    }
+    for i in 0..supported_assets.len() {
+        if assets_equal(asset, &supported_assets.get(i).unwrap()) {
+            return Ok(());
+        }
+    }
+    Err(SettlementError::AssetNotSupported)
 }
 
 /// Check if two assets are the same

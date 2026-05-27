@@ -88,7 +88,11 @@ impl MarketplaceSettlement {
     ) -> Result<u64, SettlementError> {
         ReentrancyGuard::execute(&env, &seller, "create_sale", || {
             // Validate inputs
-            asset_utils::validate_asset(&currency, &Vec::new(&env), &env)?;
+            let supported = env.storage().persistent()
+                .get::<_, Vec<Asset>>(&Symbol::new(&env, crate::storage::SUPPORTED_ASSETS_KEY))
+                .unwrap_or_else(|| Vec::new(&env));
+            asset_utils::validate_asset(&currency, &supported, &env)?;
+
             asset_utils::validate_nft_contract(&nft_address, &env)?;
             time_utils::validate_transaction_timing(
                 env.ledger().timestamp(),
@@ -217,6 +221,11 @@ impl MarketplaceSettlement {
         currency: Asset,
     ) -> Result<u64, SettlementError> {
         ReentrancyGuard::execute(&env, &seller, "create_auction", || {
+            let supported = env.storage().persistent()
+                .get::<_, Vec<Asset>>(&Symbol::new(&env, crate::storage::SUPPORTED_ASSETS_KEY))
+                .unwrap_or_else(|| Vec::new(&env));
+            asset_utils::validate_asset(&currency, &supported, &env)?;
+
             AuctionEngine::create_auction(
                 &env,
                 auction_type,
@@ -355,6 +364,11 @@ impl MarketplaceSettlement {
             if items.is_empty() {
                 return Err(SettlementError::InvalidAmount);
             }
+
+            let supported = env.storage().persistent()
+                .get::<_, Vec<Asset>>(&Symbol::new(&env, crate::storage::SUPPORTED_ASSETS_KEY))
+                .unwrap_or_else(|| Vec::new(&env));
+            asset_utils::validate_asset(&currency, &supported, &env)?;
 
             let bundle_id = BundleTransactionStore::next_id(&env);
 
@@ -538,5 +552,82 @@ impl MarketplaceSettlement {
     /// Cleanup expired commitments
     pub fn cleanup_expired_commitments(env: Env) -> Result<(), SettlementError> {
         AuctionEngine::cleanup_expired_commitments(&env)
+    }
+
+    /// Add a supported asset to the whitelist (admin only)
+    pub fn add_supported_asset(env: Env, admin: Address, asset: Asset) -> Result<(), SettlementError> {
+        admin.require_auth();
+
+        let admin_config: AdminConfig = env
+            .storage()
+            .instance()
+            .get(&symbol_short!("admin_cfg"))
+            .ok_or(SettlementError::Unauthorized)?;
+
+        if admin_config.admin != admin {
+            return Err(SettlementError::Unauthorized);
+        }
+
+        let key = Symbol::new(&env, crate::storage::SUPPORTED_ASSETS_KEY);
+        let mut supported = env.storage().persistent()
+            .get::<_, Vec<Asset>>(&key)
+            .unwrap_or_else(|| Vec::new(&env));
+
+        for i in 0..supported.len() {
+            if asset_utils::assets_equal(&asset, &supported.get(i).unwrap()) {
+                return Err(SettlementError::AlreadyExists);
+            }
+        }
+
+        supported.push_back(asset);
+        env.storage().persistent().set(&key, &supported);
+        Ok(())
+    }
+
+    /// Remove a supported asset from the whitelist (admin only)
+    pub fn remove_supported_asset(env: Env, admin: Address, asset: Asset) -> Result<(), SettlementError> {
+        admin.require_auth();
+
+        let admin_config: AdminConfig = env
+            .storage()
+            .instance()
+            .get(&symbol_short!("admin_cfg"))
+            .ok_or(SettlementError::Unauthorized)?;
+
+        if admin_config.admin != admin {
+            return Err(SettlementError::Unauthorized);
+        }
+
+        let key = Symbol::new(&env, crate::storage::SUPPORTED_ASSETS_KEY);
+        let supported = env.storage().persistent()
+            .get::<_, Vec<Asset>>(&key)
+            .unwrap_or_else(|| Vec::new(&env));
+
+        let mut new_supported = Vec::new(&env);
+        let mut found = false;
+
+        for i in 0..supported.len() {
+            let item = supported.get(i).unwrap();
+            if asset_utils::assets_equal(&asset, &item) {
+                found = true;
+            } else {
+                new_supported.push_back(item);
+            }
+        }
+
+        if !found {
+            return Err(SettlementError::NotFound);
+        }
+
+        env.storage().persistent().set(&key, &new_supported);
+        Ok(())
+    }
+
+    /// Get all supported assets from the whitelist
+    pub fn get_supported_assets(env: Env) -> Vec<Asset> {
+        let key = Symbol::new(&env, crate::storage::SUPPORTED_ASSETS_KEY);
+        env.storage().persistent()
+            .get::<_, Vec<Asset>>(&key)
+            .unwrap_or_else(|| Vec::new(&env))
     }
 }
