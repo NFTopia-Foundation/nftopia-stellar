@@ -90,7 +90,9 @@ impl MarketplaceSettlement {
         seller.require_auth();
         ReentrancyGuard::execute(&env, &seller, "create_sale", || {
             // Validate inputs
-            let supported = env.storage().persistent()
+            let supported = env
+                .storage()
+                .persistent()
                 .get::<_, Vec<Asset>>(&Symbol::new(&env, crate::storage::SUPPORTED_ASSETS_KEY))
                 .unwrap_or_else(|| Vec::new(&env));
             asset_utils::validate_asset(&currency, &supported, &env)?;
@@ -225,7 +227,9 @@ impl MarketplaceSettlement {
     ) -> Result<u64, SettlementError> {
         seller.require_auth();
         ReentrancyGuard::execute(&env, &seller, "create_auction", || {
-            let supported = env.storage().persistent()
+            let supported = env
+                .storage()
+                .persistent()
                 .get::<_, Vec<Asset>>(&Symbol::new(&env, crate::storage::SUPPORTED_ASSETS_KEY))
                 .unwrap_or_else(|| Vec::new(&env));
             asset_utils::validate_asset(&currency, &supported, &env)?;
@@ -376,7 +380,9 @@ impl MarketplaceSettlement {
                 return Err(SettlementError::InvalidAmount);
             }
 
-            let supported = env.storage().persistent()
+            let supported = env
+                .storage()
+                .persistent()
                 .get::<_, Vec<Asset>>(&Symbol::new(&env, crate::storage::SUPPORTED_ASSETS_KEY))
                 .unwrap_or_else(|| Vec::new(&env));
             asset_utils::validate_asset(&currency, &supported, &env)?;
@@ -573,7 +579,11 @@ impl MarketplaceSettlement {
     }
 
     /// Add a supported asset to the whitelist (admin only)
-    pub fn add_supported_asset(env: Env, admin: Address, asset: Asset) -> Result<(), SettlementError> {
+    pub fn add_supported_asset(
+        env: Env,
+        admin: Address,
+        asset: Asset,
+    ) -> Result<(), SettlementError> {
         admin.require_auth();
         let admin_config: AdminConfig = env
             .storage()
@@ -585,7 +595,9 @@ impl MarketplaceSettlement {
         }
 
         let key = Symbol::new(&env, crate::storage::SUPPORTED_ASSETS_KEY);
-        let mut supported = env.storage().persistent()
+        let mut supported = env
+            .storage()
+            .persistent()
             .get::<_, Vec<Asset>>(&key)
             .unwrap_or_else(|| Vec::new(&env));
 
@@ -601,7 +613,11 @@ impl MarketplaceSettlement {
     }
 
     /// Remove a supported asset from the whitelist (admin only)
-    pub fn remove_supported_asset(env: Env, admin: Address, asset: Asset) -> Result<(), SettlementError> {
+    pub fn remove_supported_asset(
+        env: Env,
+        admin: Address,
+        asset: Asset,
+    ) -> Result<(), SettlementError> {
         admin.require_auth();
         let admin_config: AdminConfig = env
             .storage()
@@ -613,7 +629,9 @@ impl MarketplaceSettlement {
         }
 
         let key = Symbol::new(&env, crate::storage::SUPPORTED_ASSETS_KEY);
-        let supported = env.storage().persistent()
+        let supported = env
+            .storage()
+            .persistent()
             .get::<_, Vec<Asset>>(&key)
             .unwrap_or_else(|| Vec::new(&env));
 
@@ -640,7 +658,8 @@ impl MarketplaceSettlement {
     /// Get all supported assets from the whitelist
     pub fn get_supported_assets(env: Env) -> Vec<Asset> {
         let key = Symbol::new(&env, crate::storage::SUPPORTED_ASSETS_KEY);
-        env.storage().persistent()
+        env.storage()
+            .persistent()
             .get::<_, Vec<Asset>>(&key)
             .unwrap_or_else(|| Vec::new(&env))
     }

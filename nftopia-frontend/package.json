@@ -87,6 +87,6 @@
     "webpack-bundle-analyzer": "^4.10.2"
   },
   "optionalDependencies": {
-    "utf-8-validate": "^5.0.10"
+    "utf-8-validate": "5.0.10"
   }
 }

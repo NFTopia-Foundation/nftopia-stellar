@@ -523,27 +523,20 @@ fn test_whitelist_starts_empty_and_rejects_sale() {
     let seller = Address::generate(&env);
     let nft = env.register(MockNft, ());
     let creator = Address::generate(&env);
-    
+
     // We register the contracts on the allowlist
     client.add_allowed_nft_contract(&admin, &nft);
     let asset = mk_asset(&env);
     client.add_allowed_token_contract(&admin, &asset.contract);
-    
+
     env.as_contract(&cid, || {
         let _ = RoyaltyDistributor::set_royalty_info(&env, &nft, 1, &creator, 500, &creator);
     });
-    
+
     MockNftClient::new(&env, &nft).set_owner(&seller);
 
     // Whitelist starts empty, so creating a sale must fail with AssetNotSupported
-    let res = client.try_create_sale(
-        &seller,
-        &nft,
-        &1u64,
-        &1_000_000i128,
-        &asset,
-        &86400u64,
-    );
+    let res = client.try_create_sale(&seller, &nft, &1u64, &1_000_000i128, &asset, &86400u64);
     assert!(res.is_err());
     let err = res.err().unwrap().unwrap();
     assert_eq!(err, SettlementError::AssetNotSupported);
@@ -557,12 +550,12 @@ fn test_add_and_get_supported_assets() {
     let cid = env.register(MarketplaceSettlement, ());
     let client = MarketplaceSettlementClient::new(&env, &cid);
     client.initialize(&admin);
-    
+
     let asset = mk_asset(&env);
-    
+
     // Admin adds the asset
     client.add_supported_asset(&admin, &asset);
-    
+
     // Retrieve list
     let list = client.get_supported_assets();
     assert_eq!(list.len(), 1);
@@ -577,13 +570,13 @@ fn test_remove_supported_asset() {
     let cid = env.register(MarketplaceSettlement, ());
     let client = MarketplaceSettlementClient::new(&env, &cid);
     client.initialize(&admin);
-    
+
     let asset = mk_asset(&env);
     client.add_supported_asset(&admin, &asset);
-    
+
     // Remove it
     client.remove_supported_asset(&admin, &asset);
-    
+
     let list = client.get_supported_assets();
     assert_eq!(list.len(), 0);
 }
@@ -596,10 +589,10 @@ fn test_duplicate_add_fails() {
     let cid = env.register(MarketplaceSettlement, ());
     let client = MarketplaceSettlementClient::new(&env, &cid);
     client.initialize(&admin);
-    
+
     let asset = mk_asset(&env);
     client.add_supported_asset(&admin, &asset);
-    
+
     let res = client.try_add_supported_asset(&admin, &asset);
     assert!(res.is_err());
     let err = res.err().unwrap().unwrap();
@@ -614,7 +607,7 @@ fn test_remove_nonexistent_fails() {
     let cid = env.register(MarketplaceSettlement, ());
     let client = MarketplaceSettlementClient::new(&env, &cid);
     client.initialize(&admin);
-    
+
     let asset = mk_asset(&env);
     let res = client.try_remove_supported_asset(&admin, &asset);
     assert!(res.is_err());
@@ -631,7 +624,7 @@ fn test_unauthorized_add_fails() {
     let cid = env.register(MarketplaceSettlement, ());
     let client = MarketplaceSettlementClient::new(&env, &cid);
     client.initialize(&admin);
-    
+
     let asset = mk_asset(&env);
     let res = client.try_add_supported_asset(&attacker, &asset);
     assert!(res.is_err());
