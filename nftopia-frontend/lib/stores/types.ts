@@ -51,6 +51,14 @@ export type AuthStore = {
   ) => Promise<void>;
   logout: () => Promise<void>;
   refreshToken: () => Promise<string>;
+  register: (email: string, password: string, username?: string) => Promise<void>;
+  emailLogin: (email: string, password: string) => Promise<void>;
+  getWalletChallenge: (walletAddress: string, walletProvider?: string) => Promise<any>;
+  verifyWalletSignature: (walletAddress: string, nonce: string, signature: string, walletProvider?: string) => Promise<any>;
+  linkWallet: (walletAddress: string, nonce: string, signature: string, walletProvider?: string) => Promise<any>;
+  unlinkWallet: (walletAddress: string) => Promise<any>;
+  listWallets: () => Promise<any>;
+  getCurrentUser: () => User | null;
 };
 
 // Collection Store Types

@@ -85,7 +85,7 @@ export const useAuthStore = create<AuthStore>()(
         set({ loading: true, error: null });
         try {
           const csrfToken = await getCookie();
-          const res = await fetchWithAuth(`${API_CONFIG.baseUrl}/auth/wallet-challenge`, {
+          const res = await fetchWithAuth(`${API_CONFIG.baseUrl}/auth/wallet/challenge`, {
             method: 'POST',
             credentials: 'include',
             headers: {
@@ -99,7 +99,7 @@ export const useAuthStore = create<AuthStore>()(
             throw new Error(errorData.message || 'Failed to get wallet challenge');
           }
           const result = await res.json();
-          return result.data.data; // { sessionId, walletAddress, nonce, message, expiresAt }
+          return result.data.data; // { nonce, message, expiresAt }
         } catch (error) {
           set({ error: error instanceof Error ? error.message : 'Failed to get wallet challenge', loading: false });
           throw error;
@@ -177,7 +177,7 @@ export const useAuthStore = create<AuthStore>()(
         set({ loading: true, error: null });
         try {
           const csrfToken = await getCookie();
-          const res = await fetchWithAuth(`${API_CONFIG.baseUrl}/auth/link-wallet`, {
+          const res = await fetchWithAuth(`${API_CONFIG.baseUrl}/auth/wallet/link`, {
             method: 'POST',
             credentials: 'include',
             headers: {
@@ -202,8 +202,8 @@ export const useAuthStore = create<AuthStore>()(
         set({ loading: true, error: null });
         try {
           const csrfToken = await getCookie();
-          const res = await fetchWithAuth(`${API_CONFIG.baseUrl}/auth/unlink-wallet`, {
-            method: 'POST',
+          const res = await fetchWithAuth(`${API_CONFIG.baseUrl}/auth/wallet/unlink`, {
+            method: 'DELETE',
             credentials: 'include',
             headers: {
               'Content-Type': 'application/json',

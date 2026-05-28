@@ -3,7 +3,7 @@ import { WalletProvider } from "@/types/stellar";
 import { WalletAuthResult } from "@/types/auth";
 
 export interface SignatureVerificationPayload {
-  publicKey: string;
+  walletAddress: string;
   signature: string;
   nonce: string;
   provider: WalletProvider;
@@ -26,7 +26,8 @@ export async function verifyWalletSignature(
     throw new Error(err.message || "Signature verification failed");
   }
 
-  return res.json();
+  const data = await res.json();
+  return data.data.data;
 }
 
 export async function linkWalletToAccount(
@@ -48,5 +49,6 @@ export async function linkWalletToAccount(
     throw new Error(err.message || "Failed to link wallet to account");
   }
 
-  return res.json();
+  const data = await res.json();
+  return data.data.data;
 }

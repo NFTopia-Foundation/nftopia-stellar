@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { API_CONFIG } from "@/lib/config";
-import { cn } from "@/lib/utils";
+import { cn, useLocale, localizedRoute } from "@/lib/utils";
 import { useToast } from "@/lib/stores";
 import { uploadToFirebase } from "@/lib/firebase/uploadtofirebase";
 import { getCookie } from "@/lib/CSRFTOKEN";
@@ -34,6 +34,7 @@ interface FormErrors {
 export default function CreateYourCollection() {
   const { t } = useTranslation();
   const router = useRouter();
+  const locale = useLocale();
   const { showSuccess, showError } = useToast();
 
   const [form, setForm] = useState<CreateCollectionForm>({
@@ -130,7 +131,7 @@ export default function CreateYourCollection() {
       setSelectedFiles([]);
 
       setTimeout(() => {
-        router.push("/creator-dashboard/collections");
+        router.push(localizedRoute(locale, "/creator-dashboard/collections"));
       }, 2000);
     } catch (error) {
       console.error("Error creating collection:", error);

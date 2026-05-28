@@ -1,4 +1,5 @@
 import { API_CONFIG } from "@/lib/config";
+import { WalletProvider } from "@/types/stellar";
 
 export interface NonceChallenge {
   nonce: string;
@@ -6,12 +7,12 @@ export interface NonceChallenge {
   message: string;
 }
 
-export async function requestAuthChallenge(publicKey: string): Promise<NonceChallenge> {
+export async function requestAuthChallenge(walletAddress: string, walletProvider?: WalletProvider): Promise<NonceChallenge> {
   const res = await fetch(`${API_CONFIG.baseUrl}/auth/wallet/challenge`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ publicKey }),
+    body: JSON.stringify({ walletAddress, walletProvider }),
   });
 
   if (!res.ok) {
@@ -22,14 +23,14 @@ export async function requestAuthChallenge(publicKey: string): Promise<NonceChal
   const data = await res.json();
 
   return {
-    nonce: data.nonce,
-    expiresAt: data.expiresAt,
-    message: buildSignMessage(publicKey, data.nonce),
+    nonce: data.data.data.nonce,
+    expiresAt: data.data.data.expiresAt,
+    message: data.data.data.message,
   };
 }
 
-export function buildSignMessage(publicKey: string, nonce: string): string {
-  return `NFTopia Authentication\nPublic Key: ${publicKey}\nNonce: ${nonce}`;
+export function buildSignMessage(walletAddress: string, nonce: string): string {
+  return `NFTopia Authentication\nPublic Key: ${walletAddress}\nNonce: ${nonce}`;
 }
 
 export function isNonceExpired(expiresAt: number): boolean {

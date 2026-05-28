@@ -5,10 +5,12 @@ import { useTranslation } from "@/hooks/useTranslation";
 import { TrendingUp, Users, DollarSign, Package } from "lucide-react";
 import Link from "next/link";
 import { useTheme } from "@/lib/stores/preferences-store";
+import { useLocale, localizedRoute } from "@/lib/utils";
 
 export default function CreatorDashboardPage() {
   const { t } = useTranslation();
   const { theme } = useTheme();
+  const locale = useLocale();
 
   const dashboardCards = [
     {
@@ -155,7 +157,7 @@ export default function CreatorDashboardPage() {
             {t("creatorDashboard.singleOrBatch")}
           </p>
           <Link
-            href="/creator-dashboard/mint-nft"
+            href={localizedRoute(locale, "/creator-dashboard/mint-nft")}
             className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors"
           >
             {t("creatorDashboard.goToMint")}
@@ -175,7 +177,7 @@ export default function CreatorDashboardPage() {
             {t("creatorDashboard.collectionDescription")}
           </p>
           <Link
-            href="/creator-dashboard/create-your-collection"
+            href={localizedRoute(locale, "/creator-dashboard/create-your-collection")}
             className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors"
           >
             {t("creatorDashboard.createCollection")}

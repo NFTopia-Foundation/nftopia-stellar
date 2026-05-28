@@ -4,6 +4,7 @@ import {
   signTransaction,
   requestAccess,
   getNetwork,
+  signMessage,
 } from "@stellar/freighter-api";
 import { StellarNetwork } from "@/types/stellar";
 
@@ -55,6 +56,17 @@ export async function signWithFreighter(
   }
 
   return result.signedTxXdr;
+}
+
+export async function signMessageWithFreighter(
+  message: string
+): Promise<string> {
+  const result = await signMessage(message);
+  if (result.error) {
+    throw new Error(result.error);
+  }
+  // Check both possible response formats
+  return (result as any).signature || (result as any).signedXdr;
 }
 
 export async function isFreighterConnected(): Promise<boolean> {

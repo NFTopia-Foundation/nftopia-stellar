@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Wallet,
   Link2,
@@ -9,29 +9,34 @@ import {
   CheckCircle2,
   AlertCircle,
   Plus,
+  Trash2,
 } from "lucide-react";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useStellarWallet } from "@/components/wallet/hooks/useStellarWallet";
-import { useStellarAuth } from "@/components/wallet/hooks/useStellarAuth";
 import { WalletModal } from "@/components/wallet/WalletModal";
 import { WalletBalance } from "@/components/wallet/WalletBalance";
 import { WalletNetworkStatus } from "@/components/wallet/WalletNetworkStatus";
-import { linkWalletToAccount } from "@/lib/stellar/auth/signature";
 import { getExplorerUrl } from "@/lib/stellar/network";
-import { LinkedWallet } from "@/types/auth";
-
+import { useAuthStore } from "@/lib/stores/auth-store";
+import { signMessageWithFreighter } from "@/lib/stellar/wallet/freighter";
+import { signMessageWithAlbedo } from "@/lib/stellar/wallet/albedo";
+import { UserWallet } from "@/types/auth";
 
 function useCurrentUser() {
+  const { user } = useAuthStore();
   return {
-    user: null as null | { id: string; email?: string; linkedWallets?: LinkedWallet[] },
+    user,
     token: typeof window !== "undefined" ? localStorage.getItem("auth_token") : null,
   };
 }
 
 export default function ProfilePage() {
   const { t } = useTranslation();
-  const { user, token } = useCurrentUser();
-  const linkedWallets: LinkedWallet[] = user?.linkedWallets ?? [];
+  const { user } = useCurrentUser();
+  const { getWalletChallenge, linkWallet, unlinkWallet, listWallets } = useAuthStore();
+
+  const [linkedWallets, setLinkedWallets] = useState<UserWallet[]>([]);
+  const [loadingWallets, setLoadingWallets] = useState(false);
 
   const {
     connected,
@@ -43,15 +48,30 @@ export default function ProfilePage() {
     clearError,
   } = useStellarWallet();
 
-  const { authenticateWithWallet, loading: authLoading } = useStellarAuth();
-
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [linkError, setLinkError] = useState<string | null>(null);
   const [linkSuccess, setLinkSuccess] = useState<string | null>(null);
   const [linking, setLinking] = useState(false);
+  const [unlinking, setUnlinking] = useState<string | null>(null);
+
+  // Load linked wallets on mount
+  useEffect(() => {
+    const loadWallets = async () => {
+      try {
+        setLoadingWallets(true);
+        const wallets = await listWallets();
+        setLinkedWallets(wallets);
+      } catch (err) {
+        console.error("Failed to load linked wallets:", err);
+      } finally {
+        setLoadingWallets(false);
+      }
+    };
+    loadWallets();
+  }, [listWallets]);
 
   const handleLinkWallet = async () => {
-    if (!address || !provider || !token) {
+    if (!address || !provider) {
       setLinkError("Connect your wallet first, and make sure you are logged in.");
       return;
     }
@@ -61,20 +81,52 @@ export default function ProfilePage() {
     setLinkSuccess(null);
 
     try {
-      // 1. Auth-sign to prove ownership
-      const result = await authenticateWithWallet(address, provider);
+      // 1. Get challenge from backend
+      const challenge = await getWalletChallenge(address, provider);
 
-      // 2. Link to account
-      await linkWalletToAccount(
-        { publicKey: address, signature: "", nonce: "", provider },
-        token
-      );
+      // 2. Sign the challenge message
+      let signature: string;
+      if (provider === "freighter") {
+        signature = await signMessageWithFreighter(challenge.message);
+      } else if (provider === "albedo") {
+        const result = await signMessageWithAlbedo(challenge.message);
+        signature = result.signature;
+      } else {
+        throw new Error(`Signing with "${provider}" is not yet supported`);
+      }
+
+      // 3. Link the wallet
+      await linkWallet(address, challenge.nonce, signature, provider);
+
+      // 4. Refresh the linked wallets list
+      const updatedWallets = await listWallets();
+      setLinkedWallets(updatedWallets);
 
       setLinkSuccess(`Wallet ${address.slice(0, 6)}…${address.slice(-4)} linked successfully.`);
     } catch (err) {
       setLinkError(err instanceof Error ? err.message : "Failed to link wallet.");
     } finally {
       setLinking(false);
+    }
+  };
+
+  const handleUnlinkWallet = async (walletAddress: string) => {
+    setUnlinking(walletAddress);
+    setLinkError(null);
+    setLinkSuccess(null);
+
+    try {
+      await unlinkWallet(walletAddress);
+
+      // Refresh the linked wallets list
+      const updatedWallets = await listWallets();
+      setLinkedWallets(updatedWallets);
+
+      setLinkSuccess(`Wallet ${walletAddress.slice(0, 6)}…${walletAddress.slice(-4)} unlinked successfully.`);
+    } catch (err) {
+      setLinkError(err instanceof Error ? err.message : "Failed to unlink wallet.");
+    } finally {
+      setUnlinking(null);
     }
   };
 
@@ -127,10 +179,12 @@ export default function ProfilePage() {
           )}
 
           {/* Existing linked wallets */}
-          {linkedWallets.length > 0 ? (
+          {loadingWallets ? (
+            <p className="text-sm text-muted-foreground mb-5">Loading wallets…</p>
+          ) : linkedWallets.length > 0 ? (
             <div className="space-y-3 mb-5">
               {linkedWallets.map((w) => (
-                <LinkedWalletRow key={w.walletAddress} wallet={w} />
+                <LinkedWalletRow key={w.walletAddress} wallet={w} onUnlink={handleUnlinkWallet} unlinking={unlinking === w.walletAddress} />
               ))}
             </div>
           ) : (
@@ -162,11 +216,11 @@ export default function ProfilePage() {
                 {!isAlreadyLinked && (
                   <button
                     onClick={handleLinkWallet}
-                    disabled={linking || authLoading}
+                    disabled={linking}
                     className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-gradient-to-r from-[#4e3bff] to-[#9747ff] text-white font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
                   >
                     <Link2 className="h-4 w-4" />
-                    {linking || authLoading ? "Linking…" : t("profile.linkWallet") || "Link to Account"}
+                    {linking ? "Linking…" : t("profile.linkWallet") || "Link to Account"}
                   </button>
                 )}
                 <button
@@ -194,7 +248,7 @@ export default function ProfilePage() {
   );
 }
 
-function LinkedWalletRow({ wallet }: { wallet: LinkedWallet }) {
+function LinkedWalletRow({ wallet, onUnlink, unlinking }: { wallet: UserWallet; onUnlink: (addr: string) => void; unlinking: boolean }) {
   const network = wallet.walletAddress.startsWith("G") ? "mainnet" : "testnet";
 
   return (
@@ -215,18 +269,27 @@ function LinkedWalletRow({ wallet }: { wallet: LinkedWallet }) {
             )}
           </div>
           <p className="text-xs text-muted-foreground capitalize">
-            {wallet.walletProvider} · Linked {new Date(wallet.lastUsedAt).toLocaleDateString()}
+            {wallet.walletProvider} · Last used {new Date(wallet.lastUsedAt).toLocaleDateString()}
           </p>
         </div>
       </div>
-      <a
-        href={getExplorerUrl(network as "testnet" | "mainnet", undefined, wallet.walletAddress)}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-purple-400 hover:text-purple-300 transition-colors ml-2"
-      >
-        <ExternalLink className="h-4 w-4" />
-      </a>
+      <div className="flex items-center gap-2">
+        <a
+          href={getExplorerUrl(wallet.walletAddress.startsWith("G") ? "mainnet" : "testnet", undefined, wallet.walletAddress)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-purple-400 hover:text-purple-300 transition-colors"
+        >
+          <ExternalLink className="h-4 w-4" />
+        </a>
+        <button
+          onClick={() => onUnlink(wallet.walletAddress)}
+          disabled={unlinking}
+          className="text-red-400 hover:text-red-300 transition-colors disabled:opacity-50"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
     </div>
   );
 }

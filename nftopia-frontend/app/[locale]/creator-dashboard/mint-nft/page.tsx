@@ -11,10 +11,12 @@ import { Collection } from "@/lib/interfaces";
 import { API_CONFIG } from "@/lib/config";
 import { useAuthStore } from "@/lib/stores/auth-store";
 import { useTranslation } from "@/hooks/useTranslation";
+import { useLocale, localizedRoute } from "@/lib/utils";
 
 export default function MintNFTPage() {
   const { t } = useTranslation();
   const router = useRouter();
+  const locale = useLocale();
   const { user, isAuthenticated } = useAuthStore();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -29,9 +31,9 @@ export default function MintNFTPage() {
   // Redirect if not authenticated
   useEffect(() => {
     if (!isAuthenticated) {
-      router.push("/auth/login");
+      router.push(localizedRoute(locale, "/auth/login"));
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, router, locale]);
 
   // Fetch user's collections when user is available
   useEffect(() => {
@@ -102,7 +104,7 @@ export default function MintNFTPage() {
         throw new Error(errorData.message || t("mintNFT.errors.mintingFailed"));
       }
 
-      router.push("/collections");
+      router.push(localizedRoute(locale, "/collections"));
     } catch (err) {
       console.error("Mint error:", err);
       setError(
