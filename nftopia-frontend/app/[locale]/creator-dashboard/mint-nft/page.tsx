@@ -12,14 +12,25 @@ import { API_CONFIG } from "@/lib/config";
 import { useAuthStore } from "@/lib/stores/auth-store";
 import { useTranslation } from "@/hooks/useTranslation";
 
+/** Minimal shape matching backend CreateNftDto */
+interface CreateNftDto {
+  tokenId: string;
+  contractAddress: string;
+  name: string;
+  description?: string;
+  imageUrl: string;
+  ownerId: string;
+  creatorId: string;
+  collectionId?: string;
+}
+
 export default function MintNFTPage() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { user, isAuthenticated } = useAuthStore();
-  const [title, setTitle] = useState("");
+  const { user, isAuthenticated, accessToken } = useAuthStore();
+  const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [price, setPrice] = useState("");
-  const [currency, setCurrency] = useState("STK");
+  const [contractAddress, setContractAddress] = useState("");
   const [files, setFiles] = useState<FileWithMeta[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -41,7 +52,11 @@ export default function MintNFTPage() {
         .then((data) => {
           if (data.data?.data?.collections?.length > 0) {
             setCollections(data.data.data.collections);
-            setSelectedCollectionId(data.data.data.collections[0]?.id);
+            setSelectedCollectionId(data.data.data.collections[0]?.id ?? "");
+            // Pre-fill contract address from first collection if available
+            const firstContract =
+              data.data.data.collections[0]?.contractAddress ?? "";
+            if (firstContract) setContractAddress(firstContract);
           }
         })
         .catch((err) => console.error("Error fetching collections:", err));
@@ -58,8 +73,8 @@ export default function MintNFTPage() {
       setError(t("mintNFT.errors.uploadImage"));
       return;
     }
-    if (!selectedCollectionId) {
-      setError(t("mintNFT.errors.selectCollection"));
+    if (!contractAddress.trim()) {
+      setError(t("mintNFT.errors.contractAddressRequired") ?? "Contract address is required.");
       return;
     }
 
@@ -68,38 +83,42 @@ export default function MintNFTPage() {
 
     try {
       const csrfToken = await getCookie();
-      const firebaseUrl = await uploadToFirebase(files[0].file);
+      const imageUrl = await uploadToFirebase(files[0].file);
 
-      const mintData = {
-        imageUrl: firebaseUrl,
-        price,
-        currency,
-        title,
-        description,
-        metadata: {
-          name: title,
-          description,
-          image: firebaseUrl,
-          attributes: [],
-        },
+      // Generate a deterministic tokenId: userId + timestamp
+      const tokenId = `${user.sub}-${Date.now()}`;
+
+      const payload: CreateNftDto = {
+        tokenId,
+        contractAddress: contractAddress.trim(),
+        name,
+        description: description || undefined,
+        imageUrl,
+        ownerId: user.sub,
+        creatorId: user.sub,
+        ...(selectedCollectionId ? { collectionId: selectedCollectionId } : {}),
       };
 
-      const res = await fetch(
-        `${API_CONFIG.baseUrl}/nfts/mint/${user.sub}/${selectedCollectionId}`,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-            "X-CSRF-Token": csrfToken,
-          },
-          body: JSON.stringify(mintData),
-        }
-      );
+      const token = accessToken ?? (typeof window !== "undefined" ? localStorage.getItem("access_token") : null);
+
+      const res = await fetch(`${API_CONFIG.baseUrl}/nfts`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(payload),
+      });
 
       if (!res.ok) {
         const errorData = await res.json();
-        throw new Error(errorData.message || t("mintNFT.errors.mintingFailed"));
+        const msg =
+          Array.isArray(errorData.message)
+            ? errorData.message.join(", ")
+            : errorData.message || t("mintNFT.errors.mintingFailed");
+        throw new Error(msg);
       }
 
       router.push("/collections");
@@ -140,7 +159,13 @@ export default function MintNFTPage() {
             </label>
             <select
               value={selectedCollectionId}
-              onChange={(e) => setSelectedCollectionId(e.target.value)}
+              onChange={(e) => {
+                setSelectedCollectionId(e.target.value);
+                const col = collections.find((c) => c.id === e.target.value);
+                if ((col as any)?.contractAddress) {
+                  setContractAddress((col as any).contractAddress);
+                }
+              }}
               className="w-full px-4 py-2 rounded bg-nftopia-background text-nftopia-text border border-nftopia-border focus:outline-none focus:ring-2 focus:ring-nftopia-primary"
               required
             >
@@ -159,8 +184,8 @@ export default function MintNFTPage() {
           </label>
           <input
             type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
             className="w-full px-4 py-2 rounded bg-nftopia-background text-nftopia-text border border-nftopia-border focus:outline-none focus:ring-2 focus:ring-nftopia-primary"
             required
           />
@@ -174,40 +199,22 @@ export default function MintNFTPage() {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             className="w-full px-4 py-2 rounded bg-nftopia-background text-nftopia-text border border-nftopia-border focus:outline-none focus:ring-2 focus:ring-nftopia-primary"
-            required
             rows={4}
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <div>
-            <label className="block text-sm text-nftopia-subtext mb-1">
-              {t("mintNFT.price")}
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              className="w-full px-4 py-2 rounded bg-nftopia-background text-nftopia-text border border-nftopia-border focus:outline-none focus:ring-2 focus:ring-nftopia-primary"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-nftopia-subtext mb-1">
-              {t("mintNFT.currency")}
-            </label>
-            <select
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-              className="w-full px-4 py-2 rounded bg-nftopia-background text-nftopia-text border border-nftopia-border focus:outline-none focus:ring-2 focus:ring-nftopia-primary"
-            >
-              <option value="STK">STK</option>
-              <option value="ETH">ETH</option>
-              <option value="USD">USD</option>
-            </select>
-          </div>
+        <div className="mb-4">
+          <label className="block text-sm text-nftopia-subtext mb-1">
+            Contract Address
+          </label>
+          <input
+            type="text"
+            value={contractAddress}
+            onChange={(e) => setContractAddress(e.target.value)}
+            placeholder="G... (56-char Stellar address)"
+            className="w-full px-4 py-2 rounded bg-nftopia-background text-nftopia-text border border-nftopia-border focus:outline-none focus:ring-2 focus:ring-nftopia-primary"
+            required
+          />
         </div>
 
         <div className="mb-6">
@@ -232,12 +239,7 @@ export default function MintNFTPage() {
 
         <button
           type="submit"
-          disabled={
-            loading ||
-            !isAuthenticated ||
-            files.length === 0 ||
-            collections.length === 0
-          }
+          disabled={loading || !isAuthenticated || files.length === 0}
           className="w-full flex items-center justify-center gap-2 bg-nftopia-primary text-nftopia-text py-2 px-4 rounded-lg hover:bg-nftopia-hover transition disabled:opacity-50"
         >
           <UploadCloud size={18} />
