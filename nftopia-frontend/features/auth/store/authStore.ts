@@ -64,6 +64,7 @@ export const useAuthStore = create<AuthStore>()(
           refreshToken: async () => {
             throw new Error("Not implemented");
           },
+          getCurrentUser: () => get().user,
         }))
       ),
       {
