@@ -5,6 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import {
+  AcceptOfferParams,
   CreateAuctionParams,
   CreateTradeParams,
   CreateSaleParams,
@@ -327,6 +328,82 @@ export class MarketplaceSettlementClient {
         args,
       );
       return result.returnValue;
+    });
+  }
+
+  /**
+   * Fetch contract events emitted since a given ledger sequence via Soroban RPC.
+   * Returns { events, latestLedger } so the caller can advance its cursor even
+   * when no events are returned.
+   */
+  async getEventsSince(
+    fromLedger: number,
+  ): Promise<{ events: Record<string, unknown>[]; latestLedger: number }> {
+    const startLedger = fromLedger > 0 ? fromLedger : undefined;
+    const server = this.sorobanService.getRpcServer();
+
+    const fetchStart = Date.now();
+    this.logger.debug(
+      `getEventsSince: fetching events from ledger=${fromLedger}`,
+    );
+
+    const response = await server.getEvents({
+      startLedger,
+      filters: [{ type: 'contract', contractIds: [this.contractId] }],
+    });
+
+    const latestLedger: number =
+      (response as unknown as { latestLedger?: number }).latestLedger ??
+      fromLedger;
+
+    const events = (response.events ?? []).map((e) =>
+      e as unknown as Record<string, unknown>,
+    );
+
+    this.logger.log(
+      `getEventsSince: fromLedger=${fromLedger} latestLedger=${latestLedger} ` +
+        `eventsCount=${events.length} durationMs=${Date.now() - fetchStart}`,
+    );
+
+    return { events, latestLedger };
+  }
+
+  /**
+   * Build the Soroban transaction XDR for accepting a direct XLM offer on an NFT.
+   * Returns the unsigned transaction XDR for the owner to sign and broadcast.
+   */
+  async acceptOffer(params: AcceptOfferParams): Promise<string> {
+    return this.withRetry(async () => {
+      if (
+        !params ||
+        typeof params !== 'object' ||
+        typeof params.offerId !== 'string' ||
+        typeof params.owner !== 'string' ||
+        typeof params.bidder !== 'string' ||
+        typeof params.nftContractId !== 'string' ||
+        typeof params.nftTokenId !== 'string' ||
+        typeof params.amount !== 'string' ||
+        typeof params.currency !== 'string'
+      ) {
+        throw new BadRequestException('Invalid AcceptOfferParams');
+      }
+      const args: SorobanContractArg[] = [
+        { type: 'string', value: params.offerId },
+        { type: 'address', value: params.owner },
+        { type: 'address', value: params.bidder },
+        { type: 'string', value: params.nftContractId },
+        { type: 'string', value: params.nftTokenId },
+        { type: 'i128', value: params.amount },
+        { type: 'string', value: params.currency },
+      ];
+      const result = await this.sorobanService.invokeContract(
+        this.contractId,
+        'accept_offer',
+        args,
+        { submit: false },
+      );
+      const tx = result.transaction as { transactionXdr?: string } | undefined;
+      return tx?.transactionXdr ?? '';
     });
   }
 

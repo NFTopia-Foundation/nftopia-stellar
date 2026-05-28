@@ -2,6 +2,8 @@ import { BidSorobanStatus } from '../../../modules/auction/entities/bid.entity';
 
 export interface BidPlacedEvent {
   auctionId: string;
+  /** The seller who created the auction — used to push "New Bid" notifications. */
+  sellerId: string;
   bidderId: string;
   stellarPublicKey: string;
   amount: number;

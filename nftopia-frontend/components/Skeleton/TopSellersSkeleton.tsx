@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { OptimizedImage } from '../image';
 
 
 const SellerSkeleton = () => (
@@ -130,12 +131,14 @@ const TopSellersSection = () => {
                 >
                   <div className="flex items-center p-4 gap-3">
                     <div className="relative w-12 h-12 rounded-full overflow-hidden border-2 border-white/20">
-                      {/* <Image
+                      <OptimizedImage
                         src={seller.avatar}
                         alt={seller.name}
-                        fill
+                        width={48}
+                        height={48}
                         className="object-cover"
-                      /> */}
+                        fallbackSrc="/images/fallbacks/avatar-fallback.svg"
+                      />
                     </div>
 
                     <div className="flex-1 min-w-0">

@@ -106,7 +106,7 @@ export function MainHero() {
               <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zm0-15v5l4.5 2.5"></path>
             </svg>
             <div className="text-xl sm:text-2xl font-bold text-white mb-1 truncate">
-              {t("homepage.features.starknet")}
+              {t("homepage.features.stellar")}
             </div>
             <div className="text-xs sm:text-sm text-purple-400 font-medium">
               {t("homepage.features.ecosystem")}

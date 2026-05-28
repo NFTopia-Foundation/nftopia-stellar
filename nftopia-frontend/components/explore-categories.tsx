@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import { OptimizedImage } from './image';
 import Link from "next/link";
 import { useTranslation } from "@/hooks/useTranslation";
 
@@ -117,12 +117,16 @@ function ExploreCategories() {
                       className="col-span-3 relative overflow-hidden rounded-xl"
                       style={{ height: "140px" }}
                     >
-                      {/* <Image
+                      <OptimizedImage
                         src={category.images[0]}
                         alt={`${category.name} main artwork`}
-                        fill
+                        width={600}
+                        height={140}
+                        sizes="(max-width: 768px) 100vw, 50vw"
                         className="object-cover transition-transform duration-500 group-hover:scale-105"
-                      /> */}
+                        containerClassName="absolute inset-0"
+                        fallbackSrc="/images/fallbacks/category-fallback.svg"
+                      />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
                     </div>
 
@@ -133,12 +137,15 @@ function ExploreCategories() {
                         className="relative overflow-hidden rounded-lg"
                         style={{ height: "70px" }}
                       >
-                        {/* <Image
-                          src={image[0]}
+                        <OptimizedImage
+                          src={image}
                           alt={`${category.name} artwork ${index + 1}`}
-                          fill
-                          className="object-cover transition-transform duration-500 group-hover:scale-110"
-                        /> */}
+                          width={180}
+                          height={70}
+                          sizes="(max-width: 768px) 33vw, 16vw"
+                          containerClassName="w-full h-full"
+                          fallbackSrc="/images/fallbacks/category-fallback.svg"
+                        />
                       </div>
                     ))}
                   </div>

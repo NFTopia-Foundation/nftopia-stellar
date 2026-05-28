@@ -239,6 +239,10 @@ export class SorobanService {
     }
   }
 
+  getRpcServer(): SorobanServer {
+    return this.createRpcServer();
+  }
+
   private createRpcServer(): SorobanServer {
     const rpcUrl =
       this.configService.get<string>('SOROBAN_RPC_URL') ||

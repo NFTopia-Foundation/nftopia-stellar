@@ -1,6 +1,16 @@
-import { Args, Context, ID, Mutation, Query, Resolver } from '@nestjs/graphql';
+import {
+  Args,
+  Context,
+  ID,
+  Mutation,
+  Parent,
+  Query,
+  ResolveField,
+  Resolver,
+} from '@nestjs/graphql';
 import {
   BadRequestException,
+  NotFoundException,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
@@ -15,6 +25,16 @@ import {
 import { GraphqlNft, NFTConnection } from '../types/nft.types';
 import { NftService } from '../../modules/nft/nft.service';
 import type { Nft } from '../../modules/nft/entities/nft.entity';
+import { GraphqlCollection } from '../types/collection.types';
+import type { Collection } from '../../modules/collection/entities/collection.entity';
+import { GraphqlListing, ListingStatus } from '../types/listing.types';
+import type { Listing } from '../../modules/listing/entities/listing.entity';
+import { GraphqlOrder } from '../types/order.types';
+import type { OrderInterface } from '../../modules/order/interfaces/order.interface';
+import { GraphqlUserType } from '../types/user.types';
+import { GraphqlAuction, AuctionStatus } from '../types/auction.types';
+import type { User } from '../../users/user.entity';
+import type { Auction } from '../../modules/auction/entities/auction.entity';
 
 type CursorPayload = {
   createdAt: string;
@@ -29,8 +49,15 @@ export class NftResolver {
     name: 'nft',
     description: 'Fetch a single NFT by ID',
   })
-  async nft(@Args('id', { type: () => ID }) id: string): Promise<GraphqlNft> {
-    const nft = await this.nftService.findById(id);
+  async nft(
+    @Args('id', { type: () => ID }) id: string,
+    @Context() context: GraphqlContext,
+  ): Promise<GraphqlNft> {
+    const nft = await context.loaders.nftById.load(id);
+    if (!nft) {
+      throw new NotFoundException('NFT not found');
+    }
+
     return this.toGraphqlNft(nft);
   }
 
@@ -146,6 +173,146 @@ export class NftResolver {
     return this.toGraphqlNft(nft);
   }
 
+  @ResolveField(() => GraphqlUserType, {
+    name: 'owner',
+    nullable: true,
+    description: 'Resolve NFT owner using request-scoped DataLoader',
+  })
+  async owner(
+    @Parent() nft: GraphqlNft,
+    @Context() context: GraphqlContext,
+  ): Promise<GraphqlUserType | null> {
+    const owner = await context.loaders.userById.load(nft.ownerId);
+    if (!owner) {
+      return null;
+    }
+
+    return this.toGraphqlUser(owner);
+  }
+
+  @ResolveField(() => GraphqlUserType, {
+    name: 'creator',
+    nullable: true,
+    description: 'Resolve NFT creator using request-scoped DataLoader',
+  })
+  async creator(
+    @Parent() nft: GraphqlNft,
+    @Context() context: GraphqlContext,
+  ): Promise<GraphqlUserType | null> {
+    const creator = await context.loaders.userById.load(nft.creatorId);
+    if (!creator) {
+      return null;
+    }
+
+    return this.toGraphqlUser(creator);
+  }
+
+  @ResolveField(() => GraphqlCollection, {
+    name: 'collection',
+    nullable: true,
+    description: 'Resolve NFT collection using request-scoped DataLoader',
+  })
+  async collection(
+    @Parent() nft: GraphqlNft,
+    @Context() context: GraphqlContext,
+  ): Promise<GraphqlCollection | null> {
+    if (!nft.collectionId) {
+      return null;
+    }
+
+    const collection = await context.loaders.collectionById.load(
+      nft.collectionId,
+    );
+    if (!collection) {
+      return null;
+    }
+
+    return this.toGraphqlCollection(collection);
+  }
+
+  @ResolveField(() => GraphqlListing, {
+    name: 'listing',
+    nullable: true,
+    description:
+      'Resolve active listing by NFT using request-scoped DataLoader',
+  })
+  async listing(
+    @Parent() nft: GraphqlNft,
+    @Context() context: GraphqlContext,
+  ): Promise<GraphqlListing | null> {
+    const listing = await context.loaders.listingByNftId.load(nft.id);
+    if (!listing) {
+      return null;
+    }
+
+    return this.toGraphqlListing(listing);
+  }
+
+  @ResolveField(() => [GraphqlListing], {
+    name: 'listings',
+    description:
+      'Resolve NFT listings using request-scoped DataLoader (active listing only)',
+  })
+  async listings(
+    @Parent() nft: GraphqlNft,
+    @Context() context: GraphqlContext,
+  ): Promise<GraphqlListing[]> {
+    const listing = await context.loaders.listingByNftId.load(nft.id);
+    if (!listing) {
+      return [];
+    }
+
+    return [this.toGraphqlListing(listing)];
+  }
+
+  @ResolveField(() => GraphqlAuction, {
+    name: 'auction',
+    nullable: true,
+    description:
+      'Resolve active auction by NFT using request-scoped DataLoader',
+  })
+  async auction(
+    @Parent() nft: GraphqlNft,
+    @Context() context: GraphqlContext,
+  ): Promise<GraphqlAuction | null> {
+    const auction = await context.loaders.auctionByNftId.load(nft.id);
+    if (!auction) {
+      return null;
+    }
+
+    return this.toGraphqlAuction(auction);
+  }
+
+  @ResolveField(() => GraphqlAuction, {
+    name: 'currentAuction',
+    nullable: true,
+    description:
+      'Resolve current auction by NFT using request-scoped DataLoader',
+  })
+  async currentAuction(
+    @Parent() nft: GraphqlNft,
+    @Context() context: GraphqlContext,
+  ): Promise<GraphqlAuction | null> {
+    const auction = await context.loaders.auctionByNftId.load(nft.id);
+    if (!auction) {
+      return null;
+    }
+
+    return this.toGraphqlAuction(auction);
+  }
+
+  @ResolveField(() => [GraphqlOrder], {
+    name: 'orders',
+    description: 'Resolve NFT orders using request-scoped DataLoader',
+  })
+  async orders(
+    @Parent() nft: GraphqlNft,
+    @Context() context: GraphqlContext,
+  ): Promise<GraphqlOrder[]> {
+    const orders = await context.loaders.ordersByNftId.load(nft.id);
+    return orders.map((order) => this.toGraphqlOrder(order));
+  }
+
   private getAuthenticatedUserId(context: GraphqlContext): string {
     const userId = context.user?.userId;
     if (!userId) {
@@ -197,6 +364,91 @@ export class NftResolver {
       mintedAt: nft.mintedAt,
       lastPrice: nft.lastPrice ?? null,
     };
+  }
+
+  private toGraphqlCollection(collection: Collection): GraphqlCollection {
+    return {
+      id: collection.id,
+      contractAddress: collection.contractAddress,
+      name: collection.name,
+      symbol: collection.symbol,
+      description: collection.description ?? null,
+      image: collection.imageUrl,
+      creatorId: collection.creatorId,
+      totalVolume: this.toDecimalString(collection.totalVolume),
+      floorPrice: this.toDecimalString(collection.floorPrice),
+      totalSupply: collection.totalSupply,
+      createdAt: collection.createdAt,
+      nfts: undefined,
+    };
+  }
+
+  private toGraphqlListing(listing: Listing): GraphqlListing {
+    return {
+      id: listing.id,
+      nftId: `${listing.nftContractId}:${listing.nftTokenId}`,
+      sellerId: listing.sellerId,
+      price: this.toDecimalString(listing.price),
+      currency: listing.currency,
+      status: listing.status as ListingStatus,
+      createdAt: listing.createdAt,
+      expiresAt: listing.expiresAt ?? null,
+    };
+  }
+
+  private toGraphqlOrder(order: OrderInterface): GraphqlOrder {
+    return {
+      id: order.id,
+      nftId: order.nftId,
+      buyerId: order.buyerId,
+      sellerId: order.sellerId,
+      price: order.price,
+      currency: order.currency,
+      type: order.type,
+      status: order.status,
+      transactionHash: order.transactionHash,
+      createdAt: order.createdAt,
+    };
+  }
+
+  private toGraphqlUser(user: User): GraphqlUserType {
+    return {
+      id: user.id,
+      username: user.username ?? null,
+      email: user.email ?? null,
+      walletAddress: user.walletAddress ?? user.address ?? null,
+      stellarAddress: user.walletAddress ?? user.address ?? null,
+      avatar: user.avatarUrl ?? null,
+    };
+  }
+
+  private toGraphqlAuction(auction: Auction): GraphqlAuction {
+    return {
+      id: auction.id,
+      nftId: `${auction.nftContractId}:${auction.nftTokenId}`,
+      sellerId: auction.sellerId,
+      startPrice: this.toDecimalString(auction.startPrice),
+      currentPrice: this.toDecimalString(auction.currentPrice),
+      reservePrice: this.toDecimalString(auction.reservePrice),
+      startTime: auction.startTime,
+      endTime: auction.endTime,
+      status: auction.status as AuctionStatus,
+      winnerId: auction.winnerId ?? null,
+      bids: undefined,
+    };
+  }
+
+  private toDecimalString(value: string | number | null | undefined): string {
+    if (value === null || value === undefined) {
+      return '0.0000000';
+    }
+
+    const parsed = Number(value);
+    if (Number.isNaN(parsed)) {
+      return '0.0000000';
+    }
+
+    return parsed.toFixed(7);
   }
 
   private encodeCursor(nft: Pick<Nft, 'createdAt' | 'id'>): string {

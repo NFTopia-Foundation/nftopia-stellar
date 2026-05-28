@@ -26,7 +26,7 @@ describe('NftResolver', () => {
   });
 
   it('returns a single NFT mapped to the GraphQL shape', async () => {
-    mockNftService.findById.mockResolvedValue({
+    const mockNft = {
       id: 'nft-1',
       tokenId: 'token-1',
       contractAddress: 'C'.repeat(56),
@@ -39,15 +39,25 @@ describe('NftResolver', () => {
       mintedAt: new Date('2026-03-20T10:00:00.000Z'),
       lastPrice: '12.5000000',
       attributes: [{ traitType: 'Rarity', value: 'Legendary' }],
-    });
+    };
 
-    const result = await resolver.nft('nft-1');
+    const loadNft = jest.fn().mockResolvedValue(mockNft);
+
+    const result = await resolver.nft('nft-1', {
+      req: {} as never,
+      res: {} as never,
+      loaders: {
+        nftById: {
+          load: loadNft,
+        },
+      } as never,
+    });
 
     expect(result.image).toBe('https://example.com/nft.png');
     expect(result.attributes).toEqual([
       { traitType: 'Rarity', value: 'Legendary' },
     ]);
-    expect(mockNftService.findById).toHaveBeenCalledWith('nft-1');
+    expect(loadNft).toHaveBeenCalledWith('nft-1');
   });
 
   it('builds a connection response for paginated NFTs', async () => {
@@ -137,6 +147,7 @@ describe('NftResolver', () => {
       {
         req: {} as never,
         res: {} as never,
+        loaders: {} as never,
         user: { userId: 'owner-1' },
       },
     );
@@ -155,6 +166,7 @@ describe('NftResolver', () => {
         {
           req: {} as never,
           res: {} as never,
+          loaders: {} as never,
         },
       ),
     ).rejects.toThrow(UnauthorizedException);

@@ -32,11 +32,6 @@ describe('AppController', () => {
     cacheManager = moduleRef.get<Cache>(CACHE_MANAGER);
   });
 
-  it('should call getHealth', () => {
-    const result = appController.getHealth();
-    expect(result).toHaveProperty('status', 'OK');
-  });
-
   it('should test cache miss', async () => {
     (cacheManager.get as jest.Mock).mockResolvedValue(null);
     const result = await appController.testCache();

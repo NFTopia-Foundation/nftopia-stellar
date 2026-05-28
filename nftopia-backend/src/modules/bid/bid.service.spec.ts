@@ -9,7 +9,11 @@ import {
   NotFoundException,
   HttpException,
 } from '@nestjs/common';
-import { Keypair } from 'stellar-sdk';
+import * as StellarSdk from 'stellar-sdk';
+import { Account, Keypair } from 'stellar-sdk';
+import { Server as SorobanServer } from 'stellar-sdk/rpc';
+
+const validContractId = StellarSdk.StrKey.encodeContract(Buffer.alloc(32, 1));
 
 // Prevent real Horizon HTTP calls — verifyBalance falls back to testnet URL even
 // when STELLAR_HORIZON_URL is undefined, so we stub the server at module level.
@@ -18,6 +22,7 @@ jest.mock('stellar-sdk', () => {
     jest.requireActual<typeof import('stellar-sdk')>('stellar-sdk');
   return {
     ...actual,
+    scValToNative: jest.fn(actual.scValToNative),
     Horizon: {
       ...actual.Horizon,
       Server: jest.fn().mockImplementation(() => ({
@@ -121,7 +126,7 @@ describe('BidService', () => {
 
   const mockConfig = {
     get: jest.fn((key: string) => {
-      const cfg: Record<string, string | undefined> = {
+      const cfg: Record<string, string | boolean | undefined> = {
         AUCTION_CONTRACT_ID: undefined,
         SOROBAN_RPC_URL: undefined,
         STELLAR_HORIZON_URL: undefined,
@@ -284,6 +289,29 @@ describe('BidService', () => {
         service.placeBid(auctionId, bidderId, makeDto()),
       ).rejects.toThrow(NotFoundException);
     });
+
+    it('uses onchain settlement path when feature flag is enabled', async () => {
+      const dto = makeDto();
+      mockConfig.get.mockImplementation((key: string) =>
+        key === 'ENABLE_ONCHAIN_SETTLEMENT' ? true : undefined,
+      );
+
+      const settlementClientMock = (
+        service as unknown as {
+          settlementClient: { placeBid: jest.Mock };
+        }
+      ).settlementClient;
+      settlementClientMock.placeBid.mockResolvedValueOnce({ txHash: 'tx-1' });
+
+      const result = await service.placeBid(auctionId, bidderId, dto);
+
+      expect(settlementClientMock.placeBid).toHaveBeenCalledWith(
+        Number(auctionId),
+        bidderId,
+        dto.amount,
+      );
+      expect(result).toEqual({ success: true, result: { txHash: 'tx-1' } });
+    });
   });
 
   // ── getHighestBid ────────────────────────────────────────────────────────────
@@ -379,6 +407,198 @@ describe('BidService', () => {
 
       expect(result.data).toHaveLength(3);
       expect(result.total).toBe(3);
+    });
+
+    it('applies cursor and computes nextCursor when hasMore', async () => {
+      const auction = makeAuction();
+      const bids = [
+        makeBid({ id: 'bid-1', ledgerSequence: 12 }),
+        makeBid({ id: 'bid-2', ledgerSequence: 11 }),
+        makeBid({ id: 'bid-3', ledgerSequence: 10 }),
+      ];
+      mockAuctionRepo.findOne.mockResolvedValue(auction);
+      mockBidRepo.count.mockResolvedValue(10);
+
+      const qbMock = {
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue(bids),
+      };
+      mockBidRepo.createQueryBuilder.mockReturnValue(qbMock);
+
+      const result = await service.getBidsByAuction('auction-uuid-1', {
+        limit: 2,
+        cursor: 30,
+      });
+
+      expect(qbMock.andWhere).toHaveBeenCalled();
+      expect(result.data).toHaveLength(2);
+      expect(result.nextCursor).toBe(11);
+    });
+  });
+
+  describe('findByAuctionIds', () => {
+    it('returns empty array when input is empty or invalid', async () => {
+      await expect(service.findByAuctionIds([])).resolves.toEqual([]);
+      await expect(service.findByAuctionIds([''])).resolves.toEqual([]);
+    });
+
+    it('returns bids for unique auction ids', async () => {
+      const rows = [makeBid({ auctionId: 'a1' }), makeBid({ auctionId: 'a2' })];
+      mockBidRepo.find.mockResolvedValue(rows);
+
+      const result = await service.findByAuctionIds(['a1', 'a2', 'a1']);
+
+      expect(result).toEqual(rows);
+      expect(mockBidRepo.find).toHaveBeenCalled();
+    });
+  });
+
+  describe('Soroban integration paths', () => {
+    it('submitBidToSoroban returns SKIPPED when contract is missing', async () => {
+      const result = await (
+        service as unknown as {
+          submitBidToSoroban: (
+            auctionId: string,
+            bidderPublicKey: string,
+            amountInStroops: number,
+          ) => Promise<{ status: BidSorobanStatus }>;
+        }
+      ).submitBidToSoroban('auction-uuid-1', testKeypair.publicKey(), 100);
+
+      expect(result.status).toBe(BidSorobanStatus.SKIPPED);
+    });
+
+    it('submitBidToSoroban returns FAILED when simulation reports error', async () => {
+      mockConfig.get.mockImplementation((key: string) => {
+        if (key === 'AUCTION_CONTRACT_ID') return validContractId;
+        if (key === 'SOROBAN_RPC_URL') return 'https://rpc.test';
+        if (key === 'STELLAR_NETWORK_PASSPHRASE')
+          return 'Test SDF Network ; September 2015';
+        return undefined;
+      });
+
+      jest
+        .spyOn(SorobanServer.prototype, 'getAccount')
+        .mockResolvedValue(new Account(testKeypair.publicKey(), '1'));
+      jest
+        .spyOn(SorobanServer.prototype, 'simulateTransaction')
+        .mockResolvedValue({ error: 'sim-fail' } as never);
+
+      const result = await (
+        service as unknown as {
+          submitBidToSoroban: (
+            auctionId: string,
+            bidderPublicKey: string,
+            amountInStroops: number,
+          ) => Promise<{ status: BidSorobanStatus }>;
+        }
+      ).submitBidToSoroban('auction-uuid-1', testKeypair.publicKey(), 100);
+
+      expect(result.status).toBe(BidSorobanStatus.FAILED);
+    });
+
+    it('submitBidToSoroban returns PENDING after simulation when no signing key', async () => {
+      mockConfig.get.mockImplementation((key: string) => {
+        if (key === 'AUCTION_CONTRACT_ID') return validContractId;
+        if (key === 'SOROBAN_RPC_URL') return 'https://rpc.test';
+        if (key === 'STELLAR_NETWORK_PASSPHRASE')
+          return 'Test SDF Network ; September 2015';
+        if (key === 'AUCTION_SIGNING_SECRET') return undefined;
+        return undefined;
+      });
+
+      jest
+        .spyOn(SorobanServer.prototype, 'getAccount')
+        .mockResolvedValue(new Account(testKeypair.publicKey(), '1'));
+      jest
+        .spyOn(SorobanServer.prototype, 'simulateTransaction')
+        .mockResolvedValue({ minResourceFee: '100' } as never);
+
+      const result = await (
+        service as unknown as {
+          submitBidToSoroban: (
+            auctionId: string,
+            bidderPublicKey: string,
+            amountInStroops: number,
+          ) => Promise<{ status: BidSorobanStatus }>;
+        }
+      ).submitBidToSoroban('auction-uuid-1', testKeypair.publicKey(), 100);
+
+      expect(result.status).toBe(BidSorobanStatus.PENDING);
+    });
+
+    it('submitBidToSoroban returns FAILED when submission status is ERROR', async () => {
+      mockConfig.get.mockImplementation((key: string) => {
+        if (key === 'AUCTION_CONTRACT_ID') return validContractId;
+        if (key === 'SOROBAN_RPC_URL') return 'https://rpc.test';
+        if (key === 'STELLAR_NETWORK_PASSPHRASE')
+          return 'Test SDF Network ; September 2015';
+        if (key === 'AUCTION_SIGNING_SECRET') return 'invalid-secret';
+        return undefined;
+      });
+
+      jest
+        .spyOn(SorobanServer.prototype, 'getAccount')
+        .mockResolvedValue(new Account(testKeypair.publicKey(), '1'));
+      jest
+        .spyOn(SorobanServer.prototype, 'simulateTransaction')
+        .mockResolvedValue({ minResourceFee: '100' } as never);
+
+      const result = await (
+        service as unknown as {
+          submitBidToSoroban: (
+            auctionId: string,
+            bidderPublicKey: string,
+            amountInStroops: number,
+          ) => Promise<{ status: BidSorobanStatus }>;
+        }
+      ).submitBidToSoroban('auction-uuid-1', testKeypair.publicKey(), 100);
+
+      expect(result.status).toBe(BidSorobanStatus.FAILED);
+    });
+
+    it('queryHighestBidFromContract returns null when contract data is empty', async () => {
+      mockConfig.get.mockImplementation((key: string) => {
+        if (key === 'AUCTION_CONTRACT_ID') return validContractId;
+        if (key === 'SOROBAN_RPC_URL') return 'https://rpc.test';
+        return undefined;
+      });
+
+      jest
+        .spyOn(SorobanServer.prototype, 'getContractData')
+        .mockResolvedValue(null as never);
+
+      const result = await (
+        service as unknown as {
+          queryHighestBidFromContract: (auctionId: string) => Promise<unknown>;
+        }
+      ).queryHighestBidFromContract('auction-uuid-1');
+
+      expect(result).toBeNull();
+    });
+
+    it('queryHighestBidFromContract returns null on rpc error', async () => {
+      mockConfig.get.mockImplementation((key: string) => {
+        if (key === 'AUCTION_CONTRACT_ID') return validContractId;
+        if (key === 'SOROBAN_RPC_URL') return 'https://rpc.test';
+        return undefined;
+      });
+
+      jest
+        .spyOn(SorobanServer.prototype, 'getContractData')
+        .mockRejectedValue(new Error('rpc error'));
+
+      const result = await (
+        service as unknown as {
+          queryHighestBidFromContract: (auctionId: string) => Promise<unknown>;
+        }
+      ).queryHighestBidFromContract('auction-uuid-1');
+
+      expect(result).toBeNull();
     });
   });
 });

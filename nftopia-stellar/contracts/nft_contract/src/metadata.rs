@@ -49,10 +49,8 @@ pub fn set_token_uri(
         .get(&DataKey::TokenOwner(token_id))
         .ok_or(ContractError::TokenNotFound)?;
 
-    // Allow token owner OR a metadata-updater role
-    let is_owner = caller == &owner;
-    let has_role = access_control::require_metadata_updater(env, caller).is_ok();
-    if !is_owner && !has_role {
+    // Only the token owner may update the URI
+    if caller != &owner {
         return Err(ContractError::NotAuthorized);
     }
 

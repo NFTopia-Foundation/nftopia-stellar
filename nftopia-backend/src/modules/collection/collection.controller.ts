@@ -16,7 +16,10 @@ import { CollectionService } from './collection.service';
 import { CreateCollectionDto } from './dto/create-collection.dto';
 import { UpdateCollectionDto } from './dto/update-collection.dto';
 import { CollectionQueryDto } from './dto/collection-query.dto';
-import { SubmitVerificationRequestDto, ReviewVerificationRequestDto } from './dto/verification-request.dto';
+import {
+  SubmitVerificationRequestDto,
+  ReviewVerificationRequestDto,
+} from './dto/verification-request.dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import {
   CollectionConnectionResult,

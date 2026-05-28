@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Order } from './entities/order.entity';
 import { CreateOrderDto, OrderStatus, OrderType } from './dto/create-order.dto';
 import { OrderQueryDto } from './dto/order-query.dto';
@@ -88,6 +88,20 @@ export class OrderService {
     return this.toOrderInterface(order);
   }
 
+  async findByNFTIds(nftIds: string[]): Promise<OrderInterface[]> {
+    const uniqueNftIds = [...new Set(nftIds.filter(Boolean))];
+    if (!uniqueNftIds.length) {
+      return [];
+    }
+
+    const orders = await this.orderRepository.find({
+      where: { nftId: In(uniqueNftIds) },
+      order: { createdAt: 'DESC' },
+    });
+
+    return orders.map(this.toOrderInterface);
+  }
+
   async updateStatus(id: string, status: string): Promise<OrderInterface> {
     const order = await this.orderRepository.findOne({ where: { id } });
     if (!order) throw new NotFoundException('Order not found');
@@ -123,13 +137,33 @@ export class OrderService {
     };
   }
 
-  // Placeholder for sales analytics
-  getSalesAnalytics() {
-    // TODO: Implement real analytics logic
+  async getSalesAnalytics(periodStart: Date, periodEnd: Date): Promise<{
+    volume: string;
+    count: number;
+    averagePrice: string;
+  }> {
+    const qb = this.orderRepository
+      .createQueryBuilder('order')
+      .select('SUM(order.price)', 'volume')
+      .addSelect('COUNT(order.id)', 'count')
+      .addSelect('AVG(order.price)', 'averagePrice')
+      .where('order.type = :type', { type: OrderType.SALE })
+      .andWhere('order.status = :status', { status: OrderStatus.COMPLETED })
+      .andWhere('order.createdAt BETWEEN :periodStart AND :periodEnd', {
+        periodStart,
+        periodEnd,
+      });
+
+    const stats = ((await qb.getRawOne()) as {
+      volume: string | null;
+      count: string | null;
+      averagePrice: string | null;
+    }) || { volume: '0', count: '0', averagePrice: '0' };
+
     return {
-      volume: '0',
-      count: 0,
-      averagePrice: '0',
+      volume: stats.volume ?? '0',
+      count: Number(stats.count ?? 0),
+      averagePrice: stats.averagePrice ?? '0',
     };
   }
 }

@@ -5,7 +5,9 @@ import {
   Int,
   ObjectType,
 } from '@nestjs/graphql';
-import { NFTConnection, PageInfo } from './nft.types';
+import { NFTConnection } from './nft.types';
+import { PageInfo } from './common.types';
+import { GraphqlUserType } from './user.types';
 
 @ObjectType('Collection')
 export class GraphqlCollection {
@@ -41,6 +43,9 @@ export class GraphqlCollection {
 
   @Field(() => GraphQLISODateTime)
   createdAt: Date;
+
+  @Field(() => GraphqlUserType, { nullable: true })
+  creator?: GraphqlUserType | null;
 
   @Field(() => NFTConnection, {
     nullable: true,

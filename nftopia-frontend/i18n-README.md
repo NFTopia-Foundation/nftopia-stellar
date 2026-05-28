@@ -157,7 +157,7 @@ t('items', { count: 5 }) // "5 items"
   "homepage": {
     "hero": {
       "title": "Discover, Collect & Trade Unique Digital Art",
-      "subtitle": "The premier NFT marketplace on Starknet"
+      "subtitle": "The premier NFT marketplace on Stellar"
     }
   },
   "common": {
@@ -180,7 +180,7 @@ t('items', { count: 5 }) // "5 items"
   "homepage": {
     "hero": {
       "title": "Découvrez, Collectez et Échangez de l'Art Numérique Unique",
-      "subtitle": "Le marché NFT principal sur Starknet"
+      "subtitle": "Le marché NFT principal sur Stellar"
     }
   },
   "common": {

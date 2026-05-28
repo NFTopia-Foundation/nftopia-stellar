@@ -1,0 +1,45 @@
+{
+  "wallet": {
+    "connect": {
+      "label": "Connect Stellar Wallet"
+    },
+    "disconnect": {
+      "label": "Disconnect Stellar Wallet"
+    },
+    "address": {
+      "label": "Your Stellar account address"
+    }
+  },
+  "network": {
+    "mainnet": {
+      "label": "Stellar Mainnet"
+    },
+    "testnet": {
+      "label": "Stellar Testnet"
+    }
+  },
+  "explorer": {
+    "tx": {
+      "label": "View on Stellar Explorer"
+    },
+    "account": {
+      "label": "View Stellar Account"
+    }
+  },
+  "onboarding": {
+    "welcome": "Welcome to Stellar NFT Admin",
+    "walletHelp": "Connect your Stellar wallet to get started"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "collections": "Collections",
+    "settings": "Settings"
+  },
+  "table": {
+    "header": {
+      "name": "Name",
+      "status": "Status",
+      "date": "Date"
+    }
+  }
+}

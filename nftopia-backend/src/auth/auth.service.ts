@@ -155,8 +155,12 @@ export class AuthService {
       expiresAt: expiresAt.toISOString(),
       ipAddress: requestIp,
     };
-    
-    await this.cacheManager.set(sessionKey, sessionData, this.challengeTtlSeconds * 1000);
+
+    await this.cacheManager.set(
+      sessionKey,
+      sessionData,
+      this.challengeTtlSeconds * 1000,
+    );
 
     return {
       sessionId: sessionKey,

@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, SelectQueryBuilder } from 'typeorm';
+import { Brackets, In, Repository, SelectQueryBuilder } from 'typeorm';
 import { Nft } from './entities/nft.entity';
 import { NftMetadata } from './entities/nft-metadata.entity';
 import { CreateNftDto } from './dto/create-nft.dto';
@@ -87,6 +87,45 @@ export class NftService {
     }
 
     return nft;
+  }
+
+  async findByIds(ids: string[]): Promise<Nft[]> {
+    const uniqueIds = [...new Set(ids.filter(Boolean))];
+    if (!uniqueIds.length) {
+      return [];
+    }
+
+    return this.nftRepository.find({
+      where: { id: In(uniqueIds) },
+      relations: ['attributes'],
+    });
+  }
+
+  async findByContractAddressAndTokenIds(
+    keys: { contractAddress: string; tokenId: string }[],
+  ): Promise<Nft[]> {
+    if (!keys.length) {
+      return [];
+    }
+
+    const qb = this.nftRepository
+      .createQueryBuilder('nft')
+      .leftJoinAndSelect('nft.attributes', 'attributes')
+      .where(
+        new Brackets((where) => {
+          keys.forEach(({ contractAddress, tokenId }, index) => {
+            where.orWhere(
+              `(nft.contractAddress = :ca${index} AND nft.tokenId = :ti${index})`,
+              {
+                [`ca${index}`]: contractAddress,
+                [`ti${index}`]: tokenId,
+              },
+            );
+          });
+        }),
+      );
+
+    return qb.getMany();
   }
 
   async findByTokenId(tokenId: string): Promise<Nft> {
@@ -248,6 +287,34 @@ export class NftService {
       isBurned: nft.isBurned,
       burnedAt: new Date().toISOString(),
     };
+  }
+
+  async updateOwnershipViaContract(
+    id: string,
+    newOwnerId: string,
+    saleAmount?: string,
+  ): Promise<Nft> {
+    const nft = await this.findById(id);
+
+    if (nft.isBurned) {
+      throw new BadRequestException('Cannot transfer ownership of burned NFT');
+    }
+
+    const owner = await this.userRepository.findOne({
+      where: { id: newOwnerId },
+    });
+    if (!owner) {
+      throw new NotFoundException('New owner not found');
+    }
+
+    nft.ownerId = newOwnerId;
+    if (saleAmount !== undefined) {
+      nft.lastPrice = saleAmount;
+    }
+
+    const saved = await this.nftRepository.save(nft);
+    this.emitSearchEvent('search.nft.upsert', { nftId: saved.id });
+    return saved;
   }
 
   async getAttributes(id: string): Promise<NftMetadata[]> {

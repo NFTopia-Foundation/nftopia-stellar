@@ -1,4 +1,4 @@
-import Image from "next/image";
+import { OptimizedImage } from './image';
 import { Button } from "@/components/ui/button";
 
 export interface NFTItem {
@@ -18,13 +18,16 @@ export default function NFTCard({ id, image, name, price, desc }: NFTItem) {
       {/* Card content */}
       <div className="relative flex flex-col h-full bg-gradient-to-b from-[#0d0f1a] via-[#1a1d33] to-[#0d0f1a] backdrop-blur-sm rounded-xl z-10 border border-[#ffffff10]">
         {/* NFT Image with futuristic frame */}
-        <div className="relative w-[290px] h-[240px] p-2">
+          <div className="relative w-[290px] h-[240px] p-2">
           <div className="absolute inset-0 rounded-t-xl bg-[#ffffff05] border-b border-[#00c6fb30]" />
-          <Image
+          <OptimizedImage
             src={image}
-            fill
-            className="object-cover rounded-t-xl"
             alt={name}
+            width={290}
+            height={240}
+            className="object-cover rounded-t-xl"
+            sizes="(max-width: 640px) 100vw, 290px"
+            fallbackSrc="/images/fallbacks/nft-fallback.svg"
           />
         </div>
 

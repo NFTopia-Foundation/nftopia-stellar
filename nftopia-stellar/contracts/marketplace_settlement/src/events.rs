@@ -1,5 +1,5 @@
 use crate::types::*;
-use soroban_sdk::{contracttype, symbol_short, Address, Bytes, Env, Vec};
+use soroban_sdk::{contracttype, symbol_short, Address, Bytes, Env, Symbol, Vec};
 
 // Sale Events
 #[contracttype]
@@ -212,6 +212,16 @@ pub struct FrontRunningDetectedEvent {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RateLimitExceededEvent {
+    pub caller: Address,
+    pub function: Symbol,
+    pub window_seconds: u64,
+    pub limit: u32,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EmergencyWithdrawalEvent {
     pub transaction_id: u64,
     pub reason: Bytes,
@@ -233,6 +243,22 @@ pub struct FeeConfigUpdatedEvent {
 pub struct AdminConfigUpdatedEvent {
     pub updated_fields: Bytes,
     pub updated_by: Address,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UnauthorizedAccessAttemptEvent {
+    pub caller: Address,
+    pub action: Bytes,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RejectedContractTargetEvent {
+    pub contract: Address,
+    pub target_type: Bytes,
     pub timestamp: u64,
 }
 
@@ -358,6 +384,12 @@ pub fn emit_front_running_detected(env: &Env, event: FrontRunningDetectedEvent) 
 }
 
 #[allow(deprecated)]
+pub fn emit_rate_limit_exceeded(env: &Env, event: RateLimitExceededEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("rt_limit")), event);
+}
+
+#[allow(deprecated)]
 pub fn emit_emergency_withdrawal(env: &Env, event: EmergencyWithdrawalEvent) {
     env.events()
         .publish(("MarketplaceSettlement", symbol_short!("emerg_wd")), event);
@@ -373,4 +405,16 @@ pub fn emit_fee_config_updated(env: &Env, event: FeeConfigUpdatedEvent) {
 pub fn emit_admin_config_updated(env: &Env, event: AdminConfigUpdatedEvent) {
     env.events()
         .publish(("MarketplaceSettlement", symbol_short!("admin_upd")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_unauthorized_access(env: &Env, event: UnauthorizedAccessAttemptEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("unauth")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_rejected_contract(env: &Env, event: RejectedContractTargetEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("rej_cont")), event);
 }

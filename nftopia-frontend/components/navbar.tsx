@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
+import { OptimizedImage } from './image';
 import { ModernSearchInput } from "@/components/ui/modern-search-input";
 import {
   Menu,
@@ -103,12 +103,14 @@ export function Navbar() {
 
           {/* Logo */}
           <Link href={`/${locale}`} className="flex items-center">
-            <Image
+            <OptimizedImage
               src="/nftopia-04.svg"
               alt="NFTopia Logo"
               width={120}
               height={32}
               className="h-8 w-auto"
+              priority
+              fallbackSrc="/images/fallbacks/collection-fallback.svg"
             />
           </Link>
 

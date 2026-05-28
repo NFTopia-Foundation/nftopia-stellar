@@ -1,4 +1,10 @@
-import { IsArray, IsOptional, IsString, IsUrl, MaxLength } from 'class-validator';
+import {
+  IsArray,
+  IsOptional,
+  IsString,
+  IsUrl,
+  MaxLength,
+} from 'class-validator';
 
 export class SubmitVerificationRequestDto {
   @IsArray()

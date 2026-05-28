@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
+import { CacheModule } from '@nestjs/cache-manager';
 import { ConfigModule } from '@nestjs/config';
+import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { GraphQLSchemaBuilderModule } from '@nestjs/graphql';
@@ -10,8 +12,11 @@ import { GqlAuthGuard } from '../common/guards/gql-auth.guard';
 import { CollectionModule } from '../modules/collection/collection.module';
 import { ListingModule } from '../modules/listing/listing.module';
 import { NftModule } from '../modules/nft/nft.module';
+import { AuctionModule } from '../modules/auction/auction.module';
+import { BidModule } from '../modules/bid/bid.module';
 import { SearchModule } from '../search/search.module';
 import { OrderModule } from '../modules/order/order.module';
+import { UsersModule } from '../users/users.module';
 import { GraphqlContextFactory } from './context/context.factory';
 import { GraphqlAuthMiddleware } from './middleware/auth.middleware';
 import { GraphqlLoggingMiddleware } from './middleware/logging.middleware';
@@ -25,6 +30,18 @@ const jwtAccessExpiresInSeconds = parseInt(
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    CacheModule.registerAsync({
+      isGlobal: true,
+      inject: [ConfigService],
+      useFactory: async (config: ConfigService) => ({
+        store: (await import('cache-manager-redis-store')).default,
+        host: config.get('REDIS_HOST') || 'localhost',
+        port: parseInt(config.get('REDIS_PORT') || '6379', 10),
+        password: config.get('REDIS_PASSWORD'),
+        db: parseInt(config.get('REDIS_DB') || '0', 10),
+        ttl: parseInt(config.get('CACHE_TTL') || '300', 10),
+      }),
+    }),
     PassportModule,
     GraphQLSchemaBuilderModule,
     EventEmitterModule.forRoot(),
@@ -52,8 +69,11 @@ const jwtAccessExpiresInSeconds = parseInt(
     CollectionModule,
     ListingModule,
     NftModule,
+    AuctionModule,
+    BidModule,
     SearchModule,
     OrderModule,
+    UsersModule,
   ],
   providers: [
     JwtStrategy,

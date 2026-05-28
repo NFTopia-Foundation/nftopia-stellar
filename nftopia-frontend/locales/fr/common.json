@@ -31,7 +31,7 @@
       "titlePart1": "Décentralisé",
       "titlePart2": "Stockage NFT",
       "titlePart3": "Gestion",
-      "subtitle": "Stockez, gérez et présentez en toute sécurité vos actifs numériques uniques sur la blockchain Starknet avec une sécurité inégalée et une véritable propriété.",
+      "subtitle": "Stockez, gérez et présentez en toute sécurité vos actifs numériques uniques sur la blockchain Stellar avec une sécurité inégalée et une véritable propriété.",
       "cta": "Commencer à créer",
       "learnMore": "Explorer les NFTs"
     },
@@ -42,13 +42,13 @@
     "features": {
       "title": "Pourquoi choisir NFTopia",
       "secure": "Sécurisé",
-      "secureDesc": "Construit sur Starknet pour une sécurité maximale",
+      "secureDesc": "Construit sur Stellar pour une sécurité maximale",
       "fast": "Rapide",
       "fastDesc": "Transactions ultra-rapides",
       "affordable": "Abordable",
       "affordableDesc": "Frais de gaz et coûts réduits",
       "onChain": "Sur la chaîne",
-      "starknet": "Starknet",
+      "stellar": "Stellar",
       "ecosystem": "Écosystème",
       "storage": "Stockage"
     }
@@ -151,8 +151,8 @@
   },
   "seo": {
     "title": "NFTopia - Découvrez, Collectez et Échangez de l'Art Numérique Unique",
-    "description": "Le marché NFT principal sur Starknet. Découvrez, collectez et échangez de l'art numérique unique avec des transactions sécurisées, rapides et abordables.",
-    "keywords": "NFT, art numérique, blockchain, Starknet, marché, collections"
+    "description": "Le marché NFT principal sur Stellar. Découvrez, collectez et échangez de l'art numérique unique avec des transactions sécurisées, rapides et abordables.",
+    "keywords": "NFT, art numérique, blockchain, Stellar, marché, collections"
   },
   "footer": {
     "description": "Découvrez, collectez et échangez des actifs numériques uniques sur le marché NFT le plus avancé.",
@@ -226,7 +226,7 @@
       "userName": "Nom d'utilisateur (optionnel)",
       "alreadyHave": "Vous avez déjà un compte ?",
       "signIn": "Se connecter",
-      "starknetSecure": "100% sécurisé par Starknet",
+      "stellarSecure": "100% sécurisé par Stellar",
       "inputPlaceholderOne": "Connectez votre portefeuille pour voir l'adresse",
       "inputPlaceholderTwo": "collectionneurcool123",
       "connecting": "Connexion en cours...",
@@ -237,10 +237,10 @@
     },
     "login": {
       "walletAddress": "Adresse du portefeuille",
-      "connectWallet": "Connecter le portefeuille Starknet",
+      "connectWallet": "Connecter le portefeuille Stellar",
       "getNonce": "Obtenir un nonce",
       "dontHave": "Vous n'avez pas de compte ?",
-      "registerWith": "S'inscrire avec Starknet",
+      "registerWith": "S'inscrire avec Stellar",
       "signingIn": "Connexion en cours...",
       "signAndLogin": "Signer et se connecter",
       "inputPlaceholder": "Connectez votre portefeuille pour afficher l'adresse"

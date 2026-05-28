@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useEffect, useState } from "react";
-import Image from "next/image";
+import { OptimizedImage } from './image';
 import { cn } from "@/lib/utils";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { usePathname } from "next/navigation";
@@ -205,12 +205,13 @@ export function TopSellers() {
               <div
                 className={`w-16 h-16 rounded-2xl ${seller.bgColor} mb-3 relative overflow-hidden flex items-center justify-center`}
               >
-                <Image
+                <OptimizedImage
                   src="/nftopia-03.svg"
                   alt={seller.name}
                   width={40}
                   height={40}
                   className="opacity-80"
+                  fallbackSrc="/images/fallbacks/avatar-fallback.svg"
                 />
               </div>
               <h3 className="text-sm font-medium text-center whitespace-nowrap">

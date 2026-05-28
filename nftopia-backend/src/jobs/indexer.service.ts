@@ -6,7 +6,8 @@ import { SystemSettings } from './system-settings.entity';
 import { StellarNft } from '../nft/entities/stellar-nft.entity';
 
 const LAST_LEDGER_KEY = 'last_ingested_ledger';
-const HORIZON_URL = process.env.HORIZON_URL ?? 'https://horizon-testnet.stellar.org';
+const HORIZON_URL =
+  process.env.HORIZON_URL ?? 'https://horizon-testnet.stellar.org';
 const FACTORY_CONTRACT = process.env.FACTORY_CONTRACT_ID ?? '';
 const MARKETPLACE_CONTRACT = process.env.MARKETPLACE_CONTRACT_ID ?? '';
 
@@ -73,13 +74,16 @@ export class IndexerService implements OnModuleInit {
           if (ledger > maxLedger) maxLedger = ledger;
         }
       } catch (err: unknown) {
-        const status = (err as { response?: { status?: number } })?.response?.status;
+        const status = (err as { response?: { status?: number } })?.response
+          ?.status;
         if (status === 429) {
           this.logger.warn('Horizon rate limit hit, backing off');
           await this.sleep(10000);
           return;
         }
-        this.logger.warn(`Failed to fetch txs for ${contractId}: ${String(err)}`);
+        this.logger.warn(
+          `Failed to fetch txs for ${contractId}: ${String(err)}`,
+        );
       }
     }
 
@@ -99,7 +103,9 @@ export class IndexerService implements OnModuleInit {
 
     if (!eventType) return;
 
-    this.logger.debug(`Processing ${eventType} event from contract ${contractId}`);
+    this.logger.debug(
+      `Processing ${eventType} event from contract ${contractId}`,
+    );
 
     switch (eventType) {
       case 'mint':
@@ -187,7 +193,10 @@ export class IndexerService implements OnModuleInit {
   }
 
   private async setLastIngestedLedger(ledger: number): Promise<void> {
-    await this.settingsRepo.save({ key: LAST_LEDGER_KEY, value: String(ledger) });
+    await this.settingsRepo.save({
+      key: LAST_LEDGER_KEY,
+      value: String(ledger),
+    });
   }
 
   private sleep(ms: number): Promise<void> {

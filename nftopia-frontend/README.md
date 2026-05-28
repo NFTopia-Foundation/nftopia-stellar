@@ -168,5 +168,5 @@ Useful companion docs in this workspace:
 
 ## 📌 Repository Notes
 
-- Some translation copy and older implementation artifacts still mention Starknet. The active wallet, network, and backend integration code is now aligned around Stellar and Soroban.
+- The active wallet, network, and backend integration code is aligned around Stellar and Soroban. Translation strings and UI copy reflect Stellar branding throughout.
 - The project supports four locale folders: EN, FR, ES, and DE.
