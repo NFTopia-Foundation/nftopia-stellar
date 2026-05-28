@@ -332,19 +332,40 @@ export class MarketplaceSettlementClient {
   }
 
   /**
-   * Fetch contract events emitted since a given ledger sequence.
-   *
-   * TODO(#248): Replace this stub with a real Soroban RPC getEvents call.
-   * Returns { events, latestLedger } where latestLedger is the highest ledger
-   * examined so the caller can advance its cursor even when no events exist.
+   * Fetch contract events emitted since a given ledger sequence via Soroban RPC.
+   * Returns { events, latestLedger } so the caller can advance its cursor even
+   * when no events are returned.
    */
-  getEventsSince(
+  async getEventsSince(
     fromLedger: number,
   ): Promise<{ events: Record<string, unknown>[]; latestLedger: number }> {
+    const startLedger = fromLedger > 0 ? fromLedger : undefined;
+    const server = this.sorobanService.getRpcServer();
+
+    const fetchStart = Date.now();
     this.logger.debug(
-      `getEventsSince stub called with fromLedger=${fromLedger}`,
+      `getEventsSince: fetching events from ledger=${fromLedger}`,
     );
-    return Promise.resolve({ events: [], latestLedger: fromLedger });
+
+    const response = await server.getEvents({
+      startLedger,
+      filters: [{ type: 'contract', contractIds: [this.contractId] }],
+    });
+
+    const latestLedger: number =
+      (response as unknown as { latestLedger?: number }).latestLedger ??
+      fromLedger;
+
+    const events = (response.events ?? []).map((e) =>
+      e as unknown as Record<string, unknown>,
+    );
+
+    this.logger.log(
+      `getEventsSince: fromLedger=${fromLedger} latestLedger=${latestLedger} ` +
+        `eventsCount=${events.length} durationMs=${Date.now() - fetchStart}`,
+    );
+
+    return { events, latestLedger };
   }
 
   /**

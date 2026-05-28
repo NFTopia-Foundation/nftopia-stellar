@@ -509,22 +509,24 @@ impl MarketplaceSettlement {
         admin: Address,
     ) -> Result<(), SettlementError> {
         admin.require_auth();
-        // Check admin permissions
-        let admin_config: AdminConfig = env
-            .storage()
-            .instance()
-            .get(&symbol_short!("admin_cfg"))
-            .ok_or(SettlementError::Unauthorized)?;
+        ReentrancyGuard::execute(&env, &admin, "emergency_withdraw", || {
+            // Check admin permissions
+            let admin_config: AdminConfig = env
+                .storage()
+                .instance()
+                .get(&symbol_short!("admin_cfg"))
+                .ok_or(SettlementError::Unauthorized)?;
 
-        if admin_config.admin != admin {
-            return Err(SettlementError::Unauthorized);
-        }
+            if admin_config.admin != admin {
+                return Err(SettlementError::Unauthorized);
+            }
 
-        if !admin_config.emergency_withdrawal_enabled {
-            return Err(SettlementError::InvalidState);
-        }
+            if !admin_config.emergency_withdrawal_enabled {
+                return Err(SettlementError::InvalidState);
+            }
 
-        AtomicSwapEngine::emergency_withdraw(&env, transaction_id, &admin, &reason)
+            AtomicSwapEngine::emergency_withdraw(&env, transaction_id, &admin, &reason)
+        })
     }
 
     /// Update fee configuration (admin only)
@@ -534,18 +536,20 @@ impl MarketplaceSettlement {
         admin: Address,
     ) -> Result<(), SettlementError> {
         admin.require_auth();
-        // Check admin permissions
-        let admin_config: AdminConfig = env
-            .storage()
-            .instance()
-            .get(&symbol_short!("admin_cfg"))
-            .ok_or(SettlementError::Unauthorized)?;
+        ReentrancyGuard::execute(&env, &admin, "update_fee_config", || {
+            // Check admin permissions
+            let admin_config: AdminConfig = env
+                .storage()
+                .instance()
+                .get(&symbol_short!("admin_cfg"))
+                .ok_or(SettlementError::Unauthorized)?;
 
-        if admin_config.admin != admin {
-            return Err(SettlementError::Unauthorized);
-        }
+            if admin_config.admin != admin {
+                return Err(SettlementError::Unauthorized);
+            }
 
-        FeeManager::update_fee_config(&env, &new_config, &admin)
+            FeeManager::update_fee_config(&env, &new_config, &admin)
+        })
     }
 
     /// Withdraw platform fees (admin only)
@@ -556,18 +560,20 @@ impl MarketplaceSettlement {
         admin: Address,
     ) -> Result<i128, SettlementError> {
         admin.require_auth();
-        // Check admin permissions
-        let admin_config: AdminConfig = env
-            .storage()
-            .instance()
-            .get(&symbol_short!("admin_cfg"))
-            .ok_or(SettlementError::Unauthorized)?;
+        ReentrancyGuard::execute(&env, &admin, "withdraw_platform_fees", || {
+            // Check admin permissions
+            let admin_config: AdminConfig = env
+                .storage()
+                .instance()
+                .get(&symbol_short!("admin_cfg"))
+                .ok_or(SettlementError::Unauthorized)?;
 
-        if admin_config.admin != admin {
-            return Err(SettlementError::Unauthorized);
-        }
+            if admin_config.admin != admin {
+                return Err(SettlementError::Unauthorized);
+            }
 
-        FeeManager::withdraw_platform_fees(&env, &asset, &recipient, &admin)
+            FeeManager::withdraw_platform_fees(&env, &asset, &recipient, &admin)
+        })
     }
 
     /// Update rate limit configuration for a specific function (admin only)
