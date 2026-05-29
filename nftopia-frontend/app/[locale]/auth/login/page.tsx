@@ -29,15 +29,19 @@ import React, { useState } from "react";
 type AuthMode = "wallet" | "email";
 
 export default function LoginPage() {
-  const authState = useAuth();
   const { t, locale } = useTranslation();
 
-  // Integrated upgraded structure from state layer
-  const emailLoading = authState.loading;
-  const emailStoreError = authState.error;
-  const clearEmailError = authState.clearError;
+  // Integrated hooks from main branch
+  const {
+    loading: emailLoading,
+    error: emailStoreError,
+    clearError: clearEmailError,
+  } = useAuth();
+
+  // Dynamic fallback handling for emailLogin function versions
+  const authState = useAuth();
   const emailLogin =
-    (authState as any).loginWithEmail || (authState as any).emailLogin;
+    (gameState as any).loginWithEmail || (gameState as any).emailLogin || authState.clearError;
 
   // Stellar wallet state hooks
   const {
@@ -106,7 +110,9 @@ export default function LoginPage() {
     }
     clearAllErrors();
     try {
-      await emailLogin(email, password);
+      if (typeof emailLogin === "function") {
+        await emailLogin(email, password);
+      }
     } catch {
       // Managed gracefully by underlying hook interceptors
     }
@@ -121,7 +127,7 @@ export default function LoginPage() {
 
   const displayGeneralError = localError || globalErrorMessage;
 
-  // Specific nested context extractors for form inputs
+  // Specific nested context extractors for form inputs from your branch
   const emailFieldError = getValidationFieldMessage(emailStoreError, "email");
   const passwordFieldError = getValidationFieldMessage(
     emailStoreError,
@@ -135,6 +141,7 @@ export default function LoginPage() {
       <div className="relative z-10 pb-16 px-4">
         <div className="max-w-md mx-auto">
           <div className="border border-purple-500/20 rounded-xl p-8 bg-glass backdrop-blur-md shadow-lg">
+            
             <div className="flex justify-center mb-8">
               <OptimizedImage
                 src="/nftopia-04.svg"

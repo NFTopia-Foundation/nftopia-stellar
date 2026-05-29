@@ -49,6 +49,7 @@
     "next": "^13.5.1",
     "next-pwa": "^5.6.0",
     "postcss": "8.4.30",
+    "posthog-js": "^1.376.4",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "react-loading-skeleton": "^3.5.0",

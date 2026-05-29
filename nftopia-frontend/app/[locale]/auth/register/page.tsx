@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
+import { authInstrumentation } from "@/lib/telemetry/auth-instrumentation";
 import { useRouter } from "next/navigation";
 import { API_CONFIG } from "@/lib/config";
 import { Button } from "@/components/ui/button";
@@ -51,6 +52,9 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  // Telemetry state
+  const attemptIdRef = useRef<string | null>(null);
+  const startMsRef = useRef<number>(0);
 
   const clearAllErrors = () => {
     setError("");
@@ -66,11 +70,33 @@ export default function RegisterPage() {
   const handleWalletRegister = async () => {
     if (!address) {
       setError("Please connect your Stellar wallet first");
+      // Telemetry: validation failure
+      const attempt_id = authInstrumentation.submitRegister({
+        auth_method: "wallet",
+        surface: "register_page",
+        has_optional_username: !!username,
+        has_connected_wallet: false,
+      });
+      authInstrumentation.registerFailed({
+        auth_method: "wallet",
+        attempt_id,
+        startMs: Date.now(),
+        error: "wallet not connected",
+        failure_stage: "validation",
+        validation_error_count: 1,
+      });
       return;
     }
     clearAllErrors();
     setLoading(true);
-
+    // Telemetry: submit
+    attemptIdRef.current = authInstrumentation.submitRegister({
+      auth_method: "wallet",
+      surface: "register_page",
+      has_optional_username: !!username,
+      has_connected_wallet: true,
+    });
+    startMsRef.current = Date.now();
     try {
       // Fetch CSRF token
       const csrfRes = await fetch(`${API_CONFIG.baseUrl}/auth/csrf-token`, {
@@ -100,11 +126,26 @@ export default function RegisterPage() {
       }
 
       setSuccess(t("register.success") || "Account created! Redirecting to login…");
+      // Telemetry: success
+      authInstrumentation.registerSuccess({
+        auth_method: "wallet",
+        attempt_id: attemptIdRef.current!,
+        startMs: startMsRef.current,
+        redirects_to_login: true,
+      });
       setTimeout(() => router.push(`/${locale}/auth/login`), 2500);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Registration failed. Please try again."
       );
+      // Telemetry: failure
+      authInstrumentation.registerFailed({
+        auth_method: "wallet",
+        attempt_id: attemptIdRef.current!,
+        startMs: startMsRef.current,
+        error: err,
+        failure_stage: "response",
+      });
     } finally {
       setLoading(false);
     }
@@ -114,19 +155,71 @@ export default function RegisterPage() {
   const handleEmailRegister = async () => {
     if (!email || !password) {
       setError("Please fill in all required fields");
+      // Telemetry: validation failure
+      const attempt_id = authInstrumentation.submitRegister({
+        auth_method: "email",
+        surface: "register_page",
+        has_optional_username: !!username,
+        has_connected_wallet: !!(connected && address),
+      });
+      authInstrumentation.registerFailed({
+        auth_method: "email",
+        attempt_id,
+        startMs: Date.now(),
+        error: "missing required fields",
+        failure_stage: "validation",
+        validation_error_count: 2,
+      });
       return;
     }
     if (password !== confirmPassword) {
       setError("Passwords do not match");
+      // Telemetry: validation failure
+      const attempt_id = authInstrumentation.submitRegister({
+        auth_method: "email",
+        surface: "register_page",
+        has_optional_username: !!username,
+        has_connected_wallet: !!(connected && address),
+      });
+      authInstrumentation.registerFailed({
+        auth_method: "email",
+        attempt_id,
+        startMs: Date.now(),
+        error: "password mismatch",
+        failure_stage: "validation",
+        validation_error_count: 1,
+      });
       return;
     }
     if (password.length < 8) {
       setError("Password must be at least 8 characters");
+      // Telemetry: validation failure
+      const attempt_id = authInstrumentation.submitRegister({
+        auth_method: "email",
+        surface: "register_page",
+        has_optional_username: !!username,
+        has_connected_wallet: !!(connected && address),
+      });
+      authInstrumentation.registerFailed({
+        auth_method: "email",
+        attempt_id,
+        startMs: Date.now(),
+        error: "password too short",
+        failure_stage: "validation",
+        validation_error_count: 1,
+      });
       return;
     }
     clearAllErrors();
     setLoading(true);
-
+    // Telemetry: submit
+    attemptIdRef.current = authInstrumentation.submitRegister({
+      auth_method: "email",
+      surface: "register_page",
+      has_optional_username: !!username,
+      has_connected_wallet: !!(connected && address),
+    });
+    startMsRef.current = Date.now();
     try {
       const csrfRes = await fetch(`${API_CONFIG.baseUrl}/auth/csrf-token`, {
         credentials: "include",
@@ -158,9 +251,24 @@ export default function RegisterPage() {
       }
 
       setSuccess(t("register.success") || "Account created! Redirecting to login…");
+      // Telemetry: success
+      authInstrumentation.registerSuccess({
+        auth_method: "email",
+        attempt_id: attemptIdRef.current!,
+        startMs: startMsRef.current,
+        redirects_to_login: true,
+      });
       setTimeout(() => router.push(`/${locale}/auth/login`), 2500);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed.");
+      // Telemetry: failure
+      authInstrumentation.registerFailed({
+        auth_method: "email",
+        attempt_id: attemptIdRef.current!,
+        startMs: startMsRef.current,
+        error: err,
+        failure_stage: "response",
+      });
     } finally {
       setLoading(false);
     }

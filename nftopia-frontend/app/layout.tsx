@@ -2,6 +2,15 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import ApolloWrapper from "@/lib/graphql/apollo-wrapper";
 import { AuthProvider } from "@/lib/context/AuthContext";
+import dynamic from "next/dynamic";
+
+// ─── SAFE COMPILER SEPARATION ──────────────────────────────────────────
+// Pulling in your isolated TelemetryProvider file with SSR disabled.
+// This completely detaches 'useTelemetry' references from your Server tree.
+const TelemetryProvider = dynamic(
+  () => import("./TelemetryProvider"),
+  { ssr: false }
+);
 
 const inter = Inter({
   subsets: ["latin"],
@@ -65,20 +74,20 @@ export default function RootLayout({
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="msapplication-TileColor" content="#181359" />
         <meta name="msapplication-tap-highlight" content="no" />
-        
         {/* Favicon using only PNG */}
         <link rel="icon" href="/nftopia-03.png" type="image/png" />
         <link rel="shortcut icon" href="/nftopia-03.png" type="image/png" />
         <link rel="apple-touch-icon" href="/nftopia-03.png" />
-        
         {/* PWA Meta Tags */}
         <link rel="manifest" href="/manifest.json" />
-        
         {/* Microsoft Tiles */}
         <meta name="msapplication-TileImage" content="/nftopia-03.png" />
         <meta name="msapplication-config" content="/browserconfig.xml" />
       </head>
       <body className={inter.className}>
+        {/* Mounted safely at the top of the body tree */}
+        <TelemetryProvider />
+        
         <AuthProvider>
           <ApolloWrapper>{children}</ApolloWrapper>
         </AuthProvider>
