@@ -237,7 +237,7 @@ export default function MyNFTsPage() {
                     <div className="pt-4 border-t border-purple-950/50 flex justify-between items-center">
                       <span className="text-xs text-gray-400">Owner</span>
                       <span className="text-xs font-medium text-white max-w-[120px] truncate">
-                        {user.walletAddress || "Stellar Account"}
+                        {user?.walletAddress || "Stellar Account"}
                       </span>
                     </div>
                   </div>
