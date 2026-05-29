@@ -66,7 +66,14 @@ export default function Page() {
         {fileUrl && (
           <div className="mt-3">
             <p className="text-sm text-green-400">Upload complete!</p>
-            <img src={fileUrl} alt="Uploaded" className="w-32 h-auto rounded border border-nftopia-border" />
+            <img
+              src={fileUrl}
+              alt="Uploaded"
+              className="w-32 h-auto rounded border border-nftopia-border"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = '/images/fallbacks/nft-fallback.svg';
+              }}
+            />
           </div>
         )}
       </form>

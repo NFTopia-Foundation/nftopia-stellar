@@ -4,9 +4,11 @@ import React from "react";
 import Link from "next/link";
 import { useTranslation } from "@/hooks/useTranslation";
 import { Button } from "@/components/ui/button";
+import { useLocalizedRoute } from "@/lib/routing";
 
 const LoginBox = () => {
   const { t } = useTranslation();
+  const localizedRoute = useLocalizedRoute();
 
   return (
     <div
@@ -56,7 +58,7 @@ const LoginBox = () => {
           <div className="text-center text-sm mt-4">
             <p>
               {t("auth.dontHaveAccount")}{" "}
-              <Link href="/auth/register" className="font-bold hover:underline">
+              <Link href={localizedRoute("/auth/register")} className="font-bold hover:underline">
                 {t("auth.signUp")}
               </Link>
             </p>

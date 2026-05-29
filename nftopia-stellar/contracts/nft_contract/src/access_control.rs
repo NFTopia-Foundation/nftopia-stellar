@@ -59,10 +59,7 @@ pub fn require_burner(env: &Env, caller: &Address) -> Result<(), ContractError> 
 }
 
 pub fn require_metadata_updater(env: &Env, caller: &Address) -> Result<(), ContractError> {
-    if has_role(env, caller, role::OWNER)
-        || has_role(env, caller, role::ADMIN)
-        || has_role(env, caller, role::METADATA_UPDATER)
-    {
+    if has_role(env, caller, role::METADATA_UPDATER) {
         Ok(())
     } else {
         Err(ContractError::NotAuthorized)

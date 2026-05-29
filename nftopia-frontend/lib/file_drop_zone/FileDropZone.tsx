@@ -60,10 +60,17 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
             {files.map((file) => (
               <li key={file.id}>
                 {file.previewUrl ? (
-                  <img src={file.previewUrl} alt={file.file.name} height={50} />
-                ) : (
-                  <span>{file.file.name}</span>
-                )}
+                      <img
+                        src={file.previewUrl}
+                        alt={file.file.name}
+                        height={50}
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = '/images/fallbacks/nft-fallback.svg';
+                        }}
+                      />
+                    ) : (
+                      <span>{file.file.name}</span>
+                    )}
                 <span>{(file.metadata.sizeMB).toFixed(2)} MB</span>
               </li>
             ))}

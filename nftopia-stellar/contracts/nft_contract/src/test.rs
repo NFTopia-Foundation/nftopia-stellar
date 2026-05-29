@@ -337,3 +337,105 @@ fn test_batch_too_large_rejected() {
     let result = client.try_batch_mint(&admin, &recipients, &uris, &all_attrs);
     assert!(result.is_err());
 }
+
+// ─── set_token_uri auth (Issue #245) ─────────────────────────────────────────
+
+#[test]
+fn test_set_token_uri_by_owner_succeeds() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let owner = Address::generate(&env);
+    let token_id = client.mint(
+        &admin,
+        &owner,
+        &String::from_str(&env, "ipfs://original"),
+        &Vec::new(&env),
+        &None,
+    );
+
+    client.set_token_uri(&owner, &token_id, &String::from_str(&env, "ipfs://updated"));
+    assert_eq!(
+        client.token_uri(&token_id),
+        String::from_str(&env, "ipfs://updated")
+    );
+}
+
+#[test]
+fn test_set_token_uri_by_non_owner_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let owner = Address::generate(&env);
+    let non_owner = Address::generate(&env);
+    let token_id = client.mint(
+        &admin,
+        &owner,
+        &String::from_str(&env, "ipfs://original"),
+        &Vec::new(&env),
+        &None,
+    );
+
+    let result = client.try_set_token_uri(
+        &non_owner,
+        &token_id,
+        &String::from_str(&env, "ipfs://hacked"),
+    );
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_set_token_uri_admin_role_alone_fails() {
+    // Contract-level ADMIN must NOT grant per-token metadata write access
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let owner = Address::generate(&env);
+    let token_id = client.mint(
+        &admin,
+        &owner,
+        &String::from_str(&env, "ipfs://original"),
+        &Vec::new(&env),
+        &None,
+    );
+
+    // admin has OWNER+ADMIN roles but is not the token owner
+    let result = client.try_set_token_uri(
+        &admin,
+        &token_id,
+        &String::from_str(&env, "ipfs://admin-override"),
+    );
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_set_token_uri_metadata_updater_role_fails_without_ownership() {
+    // METADATA_UPDATER role alone (without token ownership) must be rejected
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let owner = Address::generate(&env);
+    let updater = Address::generate(&env);
+    let token_id = client.mint(
+        &admin,
+        &owner,
+        &String::from_str(&env, "ipfs://original"),
+        &Vec::new(&env),
+        &None,
+    );
+
+    // Grant METADATA_UPDATER to updater (contract-global role)
+    client.grant_role(&admin, &updater, &crate::types::role::METADATA_UPDATER);
+
+    // updater is not the token owner — must be rejected
+    let result = client.try_set_token_uri(
+        &updater,
+        &token_id,
+        &String::from_str(&env, "ipfs://updater-override"),
+    );
+    assert!(result.is_err());
+}

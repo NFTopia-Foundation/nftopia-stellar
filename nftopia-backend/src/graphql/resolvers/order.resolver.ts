@@ -116,19 +116,32 @@ export class OrderResolver {
     description: 'Fetch sales analytics (admin only)',
   })
   @UseGuards(GqlAuthGuard)
-  salesAnalytics(
+  async salesAnalytics(
     @Args('timeframe', { type: () => TimeframeInput })
     timeframe: TimeframeInput,
   ): Promise<SalesAnalytics> {
     // TODO: Implement admin check using a real user lookup if needed
-    const stats = this.orderService.getSalesAnalytics();
-    return Promise.resolve({
+    const periodStart = new Date(timeframe.periodStart);
+    const periodEnd = new Date(timeframe.periodEnd);
+
+    // Validate timeframe
+    if (periodEnd < periodStart) {
+      throw new BadRequestException(
+        'Invalid timeframe: periodEnd must be after periodStart',
+      );
+    }
+
+    const stats = await this.orderService.getSalesAnalytics(
+      periodStart,
+      periodEnd,
+    );
+    return {
       totalVolume: stats.volume,
       totalSales: stats.count,
       averagePrice: stats.averagePrice,
-      periodStart: new Date(timeframe.periodStart),
-      periodEnd: new Date(timeframe.periodEnd),
-    });
+      periodStart,
+      periodEnd,
+    };
   }
 
   @ResolveField(() => GraphqlUserType, {

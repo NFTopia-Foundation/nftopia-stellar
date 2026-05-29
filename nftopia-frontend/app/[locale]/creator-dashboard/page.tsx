@@ -5,10 +5,12 @@ import { useTranslation } from "@/hooks/useTranslation";
 import { TrendingUp, Users, DollarSign, Package } from "lucide-react";
 import Link from "next/link";
 import { useTheme } from "@/lib/stores/preferences-store";
+import { useLocalizedRoute } from "@/lib/routing";
 
 export default function CreatorDashboardPage() {
   const { t } = useTranslation();
   const { theme } = useTheme();
+  const localizedRoute = useLocalizedRoute();
 
   const dashboardCards = [
     {
@@ -155,7 +157,7 @@ export default function CreatorDashboardPage() {
             {t("creatorDashboard.singleOrBatch")}
           </p>
           <Link
-            href="/creator-dashboard/mint-nft"
+            href={localizedRoute("/creator-dashboard/mint-nft")}
             className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors"
           >
             {t("creatorDashboard.goToMint")}
@@ -174,20 +176,12 @@ export default function CreatorDashboardPage() {
           <p className="text-muted-foreground mb-4">
             {t("creatorDashboard.manageMarketplaceDescription") || "List NFTs and review sales activity from your creator dashboard."}
           </p>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <Link
-              href="/creator-dashboard/list-nfts-for-sale"
-              className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors"
-            >
-              {t("creatorDashboard.listForSale") || "List NFTs for Sale"}
-            </Link>
-            <Link
-              href="/creator-dashboard/sales"
-              className="inline-flex items-center px-4 py-2 rounded-lg border border-border bg-background text-foreground hover:bg-slate-100 transition-colors"
-            >
-              {t("creatorDashboard.sales") || "Sales"}
-            </Link>
-          </div>
+          <Link
+            href={localizedRoute("/creator-dashboard/create-your-collection")}
+            className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors"
+          >
+            {t("creatorDashboard.createCollection")}
+          </Link>
         </div>
       </div>
     </div>

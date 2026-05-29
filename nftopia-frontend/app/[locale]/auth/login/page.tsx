@@ -20,7 +20,7 @@ import {
   EyeOff,
   ChevronRight,
 } from "lucide-react";
-import Image from "next/image";
+import { OptimizedImage } from "@/components/image";
 import Link from "next/link";
 import React, { useState } from "react";
 
@@ -115,12 +115,14 @@ export default function LoginPage() {
           <div className="border border-purple-500/20 rounded-xl p-8 bg-glass backdrop-blur-md shadow-lg">
 
             <div className="flex justify-center mb-8">
-              <Image
+              <OptimizedImage
                 src="/nftopia-04.svg"
                 alt="NFTopia Logo"
                 width={200}
                 height={60}
                 className="h-auto"
+                fallbackSrc="/images/fallbacks/collection-fallback.svg"
+                priority
               />
             </div>
 

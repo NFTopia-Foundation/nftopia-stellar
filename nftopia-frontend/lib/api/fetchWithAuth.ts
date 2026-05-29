@@ -1,5 +1,8 @@
 import { useAuthStore } from "@/lib/stores/auth-store";
 
+// Track ongoing refresh request to prevent duplicate calls
+let refreshPromise: Promise<string | null> | null = null;
+
 /**
  * Fetch with automatic JWT attach and refresh on 401/expired.
  * Usage: await fetchWithAuth(url, options)
@@ -24,9 +27,20 @@ export async function fetchWithAuth(
   // If unauthorized and we have a refresh token, try to refresh
   if (response.status === 401 && refreshToken && retry) {
     try {
-      // Use the auth store's refreshToken method from Zustand
-      const { refreshToken, logout } = useAuthStore.getState();
-      await refreshToken();
+      // Use concurrency-safe refresh
+      if (!refreshPromise) {
+        refreshPromise = (async () => {
+          try {
+            const { refreshToken: refresh } = useAuthStore.getState();
+            return await refresh();
+          } finally {
+            refreshPromise = null;
+          }
+        })();
+      }
+
+      await refreshPromise;
+
       // Retry the original request with new token
       const newAccessToken = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
       if (newAccessToken) {

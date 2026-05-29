@@ -137,13 +137,33 @@ export class OrderService {
     };
   }
 
-  // Placeholder for sales analytics
-  getSalesAnalytics() {
-    // TODO: Implement real analytics logic
+  async getSalesAnalytics(periodStart: Date, periodEnd: Date): Promise<{
+    volume: string;
+    count: number;
+    averagePrice: string;
+  }> {
+    const qb = this.orderRepository
+      .createQueryBuilder('order')
+      .select('SUM(order.price)', 'volume')
+      .addSelect('COUNT(order.id)', 'count')
+      .addSelect('AVG(order.price)', 'averagePrice')
+      .where('order.type = :type', { type: OrderType.SALE })
+      .andWhere('order.status = :status', { status: OrderStatus.COMPLETED })
+      .andWhere('order.createdAt BETWEEN :periodStart AND :periodEnd', {
+        periodStart,
+        periodEnd,
+      });
+
+    const stats = ((await qb.getRawOne()) as {
+      volume: string | null;
+      count: string | null;
+      averagePrice: string | null;
+    }) || { volume: '0', count: '0', averagePrice: '0' };
+
     return {
-      volume: '0',
-      count: 0,
-      averagePrice: '0',
+      volume: stats.volume ?? '0',
+      count: Number(stats.count ?? 0),
+      averagePrice: stats.averagePrice ?? '0',
     };
   }
 }

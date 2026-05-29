@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import Image from "next/image";
+import { OptimizedImage } from './image';
 import {
   Facebook,
   Instagram,
@@ -32,12 +32,14 @@ const Footer = () => {
           {/* Logo Section */}
           <div className="flex flex-col items-center md:items-start space-y-4">
             <Link href="/" className="flex items-center">
-              <Image
+              <OptimizedImage
                 src="/nftopia-04.svg"
                 alt="NFTopia Logo"
                 width={120}
                 height={32}
                 className="h-8 w-auto"
+                fallbackSrc="/images/fallbacks/collection-fallback.svg"
+                priority
               />
             </Link>
             <p className="text-sm text-gray-300 text-center md:text-left max-w-xs">

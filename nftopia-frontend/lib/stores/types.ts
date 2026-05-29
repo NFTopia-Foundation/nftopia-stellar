@@ -1,11 +1,19 @@
 // Auth Store Types
 export interface User {
-  sub: string;
+  id?: string;
+  sub?: string;
+  address?: string;
   walletAddress: string;
+  walletProvider?: string;
   isArtist?: boolean;
   username?: string;
   email?: string;
   profileImage?: string;
+  avatarUrl?: string;
+  bannerUrl?: string;
+  twitterHandle?: string;
+  instagramHandle?: string;
+  website?: string;
   bio?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -51,6 +59,7 @@ export type AuthStore = {
   ) => Promise<void>;
   logout: () => Promise<void>;
   refreshToken: () => Promise<string>;
+  getCurrentUser: () => User | null;
 };
 
 // Collection Store Types

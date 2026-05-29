@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Image from "next/image";
+import { OptimizedImage } from './image';
 import { Button } from "@/components/ui/button";
 import { Clock, ChevronRight, ChevronLeft } from "lucide-react";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -175,12 +175,13 @@ export function LiveAuctions() {
                 className={`h-[240px] relative overflow-hidden ${item.bgColor}`}
               >
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <Image
+                  <OptimizedImage
                     src="/nftopia-03.svg"
                     alt={item.name}
                     width={120}
                     height={120}
                     className="opacity-80"
+                    fallbackSrc="/images/fallbacks/nft-fallback.svg"
                   />
                 </div>
               </div>

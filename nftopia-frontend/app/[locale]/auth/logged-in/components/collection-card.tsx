@@ -15,6 +15,7 @@ type CollectionCardProps = {
   isLoading?: boolean
 }
 import { CollectionCardSkeleton } from "./skelletons/collection-card-skeleton"
+import { OptimizedImage } from '@/components/image';
 
 export const CollectionCard = ({ collection, isLoading = false }: CollectionCardProps) => {
   const [showMenu, setShowMenu] = useState(false)
@@ -24,10 +25,14 @@ export const CollectionCard = ({ collection, isLoading = false }: CollectionCard
   return (
     <div className="rounded-lg border border-nftopia-border bg-nftopia-card overflow-hidden hover:shadow-lg transition-shadow group">
       <div className="relative">
-        <img
+        <OptimizedImage
           src={`https://picsum.photos/300/200?random=${collection.id}`}
           alt={collection.name}
+          width={300}
+          height={200}
           className="w-full h-48 object-cover"
+          fallbackSrc="/images/fallbacks/collection-fallback.svg"
+          sizes="(max-width: 640px) 100vw, 300px"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
           <div className="absolute bottom-4 left-4 right-4">

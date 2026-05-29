@@ -135,8 +135,21 @@ interface DropdownMenuProps {
 }
 
 export function DropdownMenu({ children, className, align = "right" }: DropdownMenuProps) {
-  const { open, menuId, triggerId } = useDropdown();
+  const { open, menuId, triggerId, setOpen } = useDropdown();
   const menuRef = useRef<HTMLDivElement>(null);
+  const lastFocusedRef = useRef<HTMLElement | null>(null);
+
+  // Focus first menu item when opened
+  useEffect(() => {
+    if (open && menuRef.current) {
+      lastFocusedRef.current = document.activeElement as HTMLElement;
+      const firstItem = menuRef.current.querySelector<HTMLElement>('[role="menuitem"]:not([disabled])');
+      firstItem?.focus();
+    } else if (!open) {
+      // Restore focus to trigger when closed
+      lastFocusedRef.current?.focus();
+    }
+  }, [open]);
 
   // Arrow-key navigation between menu items
   const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -158,6 +171,9 @@ export function DropdownMenu({ children, className, align = "right" }: DropdownM
     } else if (e.key === "End") {
       e.preventDefault();
       items[items.length - 1]?.focus();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      setOpen(false);
     }
   };
 

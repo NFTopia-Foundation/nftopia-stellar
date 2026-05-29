@@ -6,6 +6,7 @@ import { API_CONFIG } from '../config';
 import { getCookie } from '../CSRFTOKEN';
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { NextRouter } from 'next/router';
+import { buildLocalizedRoute } from '../routing';
 
 
 const initialState = {
@@ -411,7 +412,15 @@ export const useAuthStore = create<AuthStore>()(
           }
 
           if (typeof window !== 'undefined') {
-            window.location.href = '/auth/login';
+            // Get current locale from cookie or default to 'en'
+            const getCookieValue = (name: string) => {
+              const value = `; ${document.cookie}`;
+              const parts = value.split(`; ${name}=`);
+              if (parts.length === 2) return parts.pop()?.split(';').shift();
+              return null;
+            };
+            const locale = getCookieValue('NEXT_LOCALE') || 'en';
+            window.location.href = buildLocalizedRoute(locale, '/auth/login');
           }
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Logout failed';
@@ -427,6 +436,15 @@ export const useAuthStore = create<AuthStore>()(
             localStorage.removeItem('auth-user');
             localStorage.removeItem('access_token');
             localStorage.removeItem('refresh_token');
+            // Get current locale from cookie or default to 'en'
+            const getCookieValue = (name: string) => {
+              const value = `; ${document.cookie}`;
+              const parts = value.split(`; ${name}=`);
+              if (parts.length === 2) return parts.pop()?.split(';').shift();
+              return null;
+            };
+            const locale = getCookieValue('NEXT_LOCALE') || 'en';
+            window.location.href = buildLocalizedRoute(locale, '/auth/login');
           }
           console.error('Logout error:', error);
           throw error;

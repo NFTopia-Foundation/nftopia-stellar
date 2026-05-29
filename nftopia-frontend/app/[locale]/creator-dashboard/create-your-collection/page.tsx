@@ -17,6 +17,7 @@ import { getCookie } from "@/lib/CSRFTOKEN";
 import { FileDropZone } from "@/lib";
 import type { FileWithMeta } from "@/lib/interfaces";
 import { useTranslation } from "@/hooks/useTranslation";
+import { useLocalizedRoute } from "@/lib/routing";
 
 interface CreateCollectionForm {
   name: string;
@@ -35,6 +36,7 @@ export default function CreateYourCollection() {
   const { t } = useTranslation();
   const router = useRouter();
   const { showSuccess, showError } = useToast();
+  const localizedRoute = useLocalizedRoute();
 
   const [form, setForm] = useState<CreateCollectionForm>({
     name: "",
@@ -130,7 +132,7 @@ export default function CreateYourCollection() {
       setSelectedFiles([]);
 
       setTimeout(() => {
-        router.push("/creator-dashboard/collections");
+        router.push(localizedRoute("/creator-dashboard/collections"));
       }, 2000);
     } catch (error) {
       console.error("Error creating collection:", error);
