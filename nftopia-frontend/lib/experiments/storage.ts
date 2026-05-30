@@ -5,6 +5,7 @@ const STORAGE_KEY = 'experiment_assignments_v1';
 const EXPIRY_HOURS = 24;
 
 export function saveAssignments(assignments: Map<string, VariantAssignment>) {
+  if (typeof window === 'undefined') return;
   const obj: Record<string, VariantAssignment & { saved_at: number }> = {};
   const now = Date.now();
   assignments.forEach((assignment, key) => {
@@ -14,6 +15,7 @@ export function saveAssignments(assignments: Map<string, VariantAssignment>) {
 }
 
 export function loadAssignments(): Map<string, VariantAssignment> | null {
+  if (typeof window === 'undefined') return null;
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return null;
   try {
@@ -32,5 +34,6 @@ export function loadAssignments(): Map<string, VariantAssignment> | null {
 }
 
 export function clearAssignments() {
+  if (typeof window === 'undefined') return;
   localStorage.removeItem(STORAGE_KEY);
 }
