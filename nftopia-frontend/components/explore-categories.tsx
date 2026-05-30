@@ -2,6 +2,7 @@
 
 import { OptimizedImage } from './image';
 import Link from "next/link";
+import { emitCtaClicked, CTA_IDS, CTA_PLACEMENTS, normalizeRoute } from "@/lib/telemetry/navigation-instrumentation";
 import { useTranslation } from "@/hooks/useTranslation";
 
 interface Category {
@@ -108,6 +109,16 @@ function ExploreCategories() {
               href={`/category/${category.id}`}
               key={category.id}
               className="group"
+              onClick={e => {
+                emitCtaClicked({
+                  cta_id: CTA_IDS.CATEGORY_CARD_CLICK,
+                  placement: CTA_PLACEMENTS.LANDING_EXPLORE_CATEGORIES_CARD,
+                  destination_route: normalizeRoute(`/category/${category.id}`),
+                  interaction_type: "card",
+                  ui_variant: "unknown",
+                  category_id: category.id,
+                }, e.nativeEvent);
+              }}
             >
               <div className="bg-gray-900/40 backdrop-blur-sm rounded-2xl overflow-hidden border border-[#db74cf]/30 hover:border-[#db74cf]/50 transition-all duration-300 hover:shadow-lg hover:shadow-[#db74cf]/10 hover:-translate-y-1">
                 <div className="p-3">

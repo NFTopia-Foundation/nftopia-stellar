@@ -10,6 +10,7 @@ import { useTranslation } from "@/hooks/useTranslation";
 import { getExplorerUrl } from "@/lib/stellar/network";
 import { useToast } from "@/lib/stores";
 import { Button } from "@/components/ui/button";
+import { emitCtaClicked, CTA_IDS, CTA_PLACEMENTS } from "@/lib/telemetry/navigation-instrumentation";
 import { Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, DropdownSeparator } from "@/components/ui/dropdown";
 
 interface WalletConnectorProps {
@@ -50,7 +51,16 @@ export function WalletConnector({ forceVisible = false, fullWidth = false }: Wal
           <Button
             variant="wallet"
             size="pill"
-            onClick={() => setModalOpen(true)}
+            onClick={e => {
+              emitCtaClicked({
+                cta_id: CTA_IDS.CONNECT_WALLET_HEADER,
+                placement: forceVisible ? CTA_PLACEMENTS.NAVBAR_MOBILE_DRAWER : CTA_PLACEMENTS.NAVBAR_DESKTOP_RIGHT,
+                destination_route: "none",
+                interaction_type: "button",
+                ui_variant: "wallet",
+              }, e.nativeEvent);
+              setModalOpen(true);
+            }}
             loading={connecting}
             loadingText={t("connectWallet.connecting") || "Connecting..."}
             className="rounded-full"

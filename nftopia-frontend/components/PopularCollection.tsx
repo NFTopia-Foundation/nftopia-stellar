@@ -2,6 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
+import { emitCtaClicked, CTA_IDS, CTA_PLACEMENTS, normalizeRoute } from "@/lib/telemetry/navigation-instrumentation";
 import CollectionCard from "./CollectionCard";
 import { Collection } from "@/types"; // Assuming '@/*' path alias is configured for 'apps/frontend/*'
 import { ChevronRight } from "lucide-react";
@@ -56,6 +57,17 @@ const PopularCollection: React.FC<PopularCollectionProps> = ({ title }) => {
   const { t } = useTranslation();
   const defaultTitle = title || t("popularCollection.title");
 
+  // Handler for Explore More CTA
+  function handleExploreMoreClick(e: React.MouseEvent) {
+    emitCtaClicked({
+      cta_id: CTA_IDS.EXPLORE_MORE_POPULAR_COLLECTION,
+      placement: CTA_PLACEMENTS.LANDING_POPULAR_COLLECTION_HEADER,
+      destination_route: normalizeRoute("/explore"),
+      interaction_type: "link",
+      ui_variant: "text",
+    }, e.nativeEvent);
+  }
+
   return (
     // Using a semantic section element
     <section
@@ -72,7 +84,10 @@ const PopularCollection: React.FC<PopularCollectionProps> = ({ title }) => {
             {defaultTitle}
           </h2>
           <Link href="/explore" legacyBehavior>
-            <a className="flex items-center text-sm font-medium text-purple-400 hover:text-purple-300 transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-[#0f0f1a] rounded-md px-1 py-0.5">
+            <a
+              className="flex items-center text-sm font-medium text-purple-400 hover:text-purple-300 transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-[#0f0f1a] rounded-md px-1 py-0.5"
+              onClick={handleExploreMoreClick}
+            >
               {t("popularCollection.exploreMore")}
               <ChevronRight size={16} className="ml-1" />
             </a>

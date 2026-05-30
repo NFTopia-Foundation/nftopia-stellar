@@ -2,6 +2,7 @@
 
 import { OptimizedImage } from './image';
 import { Button } from "@/components/ui/button";
+import { emitCtaClicked, CTA_IDS, CTA_PLACEMENTS } from "@/lib/telemetry/navigation-instrumentation";
 import { Clock, Heart } from "lucide-react";
 import { useTranslation } from "@/hooks/useTranslation";
 
@@ -105,6 +106,13 @@ export function TodaysPicks() {
               variant="outline"
               size="sm"
               className="rounded-full bg-[#1E1A45] border-purple-900/30 hover:bg-purple-900/40 hover:border-purple-500 hover:text-white text-sm transition-colors"
+              onClick={e => emitCtaClicked({
+                cta_id: "filter_category",
+                placement: CTA_PLACEMENTS.MARKETPLACE_FILTER_BAR,
+                destination_route: "none",
+                interaction_type: "button",
+                ui_variant: "outline",
+              }, e.nativeEvent)}
             >
               {t("todaysPicks.category")}
             </Button>
@@ -112,6 +120,13 @@ export function TodaysPicks() {
               variant="outline"
               size="sm"
               className="rounded-full bg-[#1E1A45] border-purple-900/30 hover:bg-purple-900/40 hover:border-purple-500 hover:text-white text-sm transition-colors"
+              onClick={e => emitCtaClicked({
+                cta_id: "filter_price_range",
+                placement: CTA_PLACEMENTS.MARKETPLACE_FILTER_BAR,
+                destination_route: "none",
+                interaction_type: "button",
+                ui_variant: "outline",
+              }, e.nativeEvent)}
             >
               {t("todaysPicks.priceRange")}
             </Button>
@@ -119,6 +134,13 @@ export function TodaysPicks() {
               variant="outline"
               size="sm"
               className="rounded-full bg-[#1E1A45] border-purple-900/30 hover:bg-purple-900/40 hover:border-purple-500 hover:text-white text-sm transition-colors"
+              onClick={e => emitCtaClicked({
+                cta_id: "filter_sale_type",
+                placement: CTA_PLACEMENTS.MARKETPLACE_FILTER_BAR,
+                destination_route: "none",
+                interaction_type: "button",
+                ui_variant: "outline",
+              }, e.nativeEvent)}
             >
               {t("todaysPicks.saleType")}
             </Button>
@@ -126,6 +148,13 @@ export function TodaysPicks() {
               variant="outline"
               size="sm"
               className="rounded-full bg-[#1E1A45] border-purple-900/30 hover:bg-purple-900/40 hover:border-purple-500 hover:text-white text-sm transition-colors"
+              onClick={e => emitCtaClicked({
+                cta_id: "filter_blockchain",
+                placement: CTA_PLACEMENTS.MARKETPLACE_FILTER_BAR,
+                destination_route: "none",
+                interaction_type: "button",
+                ui_variant: "outline",
+              }, e.nativeEvent)}
             >
               {t("todaysPicks.blockchain")}
             </Button>
@@ -134,6 +163,13 @@ export function TodaysPicks() {
             variant="outline"
             size="sm"
             className="rounded-full bg-[#1E1A45] border-purple-900/30 hover:bg-purple-900/40 hover:border-purple-500 hover:text-white text-sm transition-colors"
+            onClick={e => emitCtaClicked({
+              cta_id: "filter_sort_by",
+              placement: CTA_PLACEMENTS.MARKETPLACE_FILTER_BAR,
+              destination_route: "none",
+              interaction_type: "button",
+              ui_variant: "outline",
+            }, e.nativeEvent)}
           >
             {t("todaysPicks.sortBy")}
           </Button>
