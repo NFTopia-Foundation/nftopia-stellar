@@ -25,7 +25,7 @@ export type CreatorErrorCode =
   | "creator_redirect_failed"
   | "creator_unknown_error";
 
-export function mapCreatorErrorToCode(error: any, stage: CreatorFailureStage): CreatorErrorCode {
+export function mapCreatorErrorToCode(error: any, stage: CreatorFailureStage | string): CreatorErrorCode {
   if (stage === "validation") {
     if (error?.missingRequired) return "creator_validation_missing_required";
     if (error?.invalidLength) return "creator_validation_invalid_length";
