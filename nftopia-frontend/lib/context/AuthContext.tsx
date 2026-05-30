@@ -39,7 +39,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Load wallets on user change
   useEffect(() => {
     if (auth.user) {
-      auth.listWallets().then(setWallets).catch(() => setWallets([]));
+      auth.listWallets().then((w) => setWallets(w as UserWallet[])).catch(() => setWallets([]));
     } else {
       setWallets([]);
     }
@@ -78,7 +78,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const unlinkWallet = async (address: string) => {
     await auth.unlinkWallet(address);
-    setWallets(await auth.listWallets() || []);
+    setWallets((await auth.listWallets() as UserWallet[]) || []);
   };
 
   const value: AuthContextType = {

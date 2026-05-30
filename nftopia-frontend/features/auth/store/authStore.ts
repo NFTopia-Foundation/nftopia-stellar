@@ -58,6 +58,29 @@ export const useAuthStore = create<AuthStore>()(
           ) => {
             throw new Error("Not implemented");
           },
+          register: async (_email: string, _password: string, _username?: string) => {
+            throw new Error("Not implemented");
+          },
+          emailLogin: async (_email: string, _password: string) => {
+            throw new Error("Not implemented");
+          },
+          getWalletChallenge: async (_walletAddress: string, _walletProvider?: string) => {
+            throw new Error("Not implemented");
+          },
+          verifyWalletSignature: async (_walletAddress: string, _nonce: string, _signature: string, _walletProvider?: string) => {
+            throw new Error("Not implemented");
+          },
+          linkWallet: async (_walletAddress: string, _nonce: string, _signature: string, _walletProvider?: string) => {
+            throw new Error("Not implemented");
+          },
+          unlinkWallet: async (_walletAddress: string) => {
+            throw new Error("Not implemented");
+          },
+          listWallets: async () => {
+            throw new Error("Not implemented");
+          },
+          isAccessTokenExpired: () => true,
+          getCurrentUser: () => null,
           logout: async () => {
             throw new Error("Not implemented");
           },

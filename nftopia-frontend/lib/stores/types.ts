@@ -37,20 +37,40 @@ export type AuthStore = {
   error: string | null;
   accessToken: string | null;
   refreshTokenValue: string | null;
+
+  // Setters
   setUser: (user: User | null) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   clearError: () => void;
+
+  // Email auth
+  register: (email: string, password: string, username?: string) => Promise<void>;
+  emailLogin: (email: string, password: string) => Promise<void>;
+
+  // Wallet auth
+  getWalletChallenge: (walletAddress: string, walletProvider?: string) => Promise<unknown>;
+  verifyWalletSignature: (walletAddress: string, nonce: string, signature: string, walletProvider?: string) => Promise<void>;
+  linkWallet: (walletAddress: string, nonce: string, signature: string, walletProvider?: string) => Promise<unknown>;
+  unlinkWallet: (walletAddress: string) => Promise<unknown>;
+  listWallets: () => Promise<unknown>;
+
+  // Legacy Starknet methods (kept for backward compat)
   requestNonce: (walletAddress: string) => Promise<string>;
   verifySignature: (
     walletAddress: string,
-    signature: [string, string], // Changed from string to [string, string]
+    signature: [string, string],
     nonce: string,
     walletType: 'argentx' | 'braavos',
     locale: string
   ) => Promise<void>;
-  logout: () => Promise<void>;
+
+  // Token / session
   refreshToken: () => Promise<string>;
+  isAccessTokenExpired: () => boolean;
+  getCurrentUser: () => User | null;
+
+  logout: () => Promise<void>;
 };
 
 // Collection Store Types
