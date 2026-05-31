@@ -97,6 +97,25 @@ import { TransactionModule } from './modules/transaction/transaction.module';
               database: config.get<string>('DB_NAME') || process.env.DB_NAME,
               autoLoadEntities: true,
               synchronize: true,
+              logging: config.get('NODE_ENV') === 'development',
+              extra: {
+                max: parseInt(
+                  config.get('DB_POOL_SIZE') || process.env.DB_POOL_SIZE || '20',
+                  10,
+                ),
+                idleTimeoutMillis: parseInt(
+                  config.get('DB_IDLE_TIMEOUT_MS') ||
+                    process.env.DB_IDLE_TIMEOUT_MS ||
+                    '30000',
+                  10,
+                ),
+                connectionTimeoutMillis: parseInt(
+                  config.get('DB_CONNECTION_TIMEOUT_MS') ||
+                    process.env.DB_CONNECTION_TIMEOUT_MS ||
+                    '10000',
+                  10,
+                ),
+              },
             }),
           }),
           UsersModule,

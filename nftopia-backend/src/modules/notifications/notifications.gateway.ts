@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import {
   ConnectedSocket,
@@ -12,6 +13,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 
+import { getNotificationsConfig } from './notifications.config';
 import {
   AuthenticatedSocketUser,
   auctionRoom,
@@ -46,6 +48,12 @@ type AuthenticatedSocket = Socket & {
  * `auction:{auctionId}` rooms via `join_auction` / `leave_auction`
  * messages to receive `bid_update` broadcasts.
  *
+ * ### Message Size Limits
+ * All incoming WebSocket messages are subject to a maximum size limit
+ * (default: 64KB). Messages exceeding this limit are rejected and the
+ * connection is terminated. The limit can be configured via the
+ * `WEBSOCKET_MAX_MESSAGE_SIZE_BYTES` environment variable.
+ *
  * ### Why a new gateway when BidGateway exists?
  * `BidGateway` is anonymous and auction-scoped — designed for public
  * price tickers. This gateway is *user*-scoped and authenticated, which
@@ -59,6 +67,7 @@ type AuthenticatedSocket = Socket & {
     methods: ['GET', 'POST'],
     credentials: true,
   },
+  maxHttpBufferSize: 1e6, // Set to 1MB initially, will be overridden in afterInit
 })
 export class NotificationsGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
@@ -68,7 +77,10 @@ export class NotificationsGateway
 
   private readonly logger = new Logger(NotificationsGateway.name);
 
-  constructor(private readonly jwtService: JwtService) {}
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+ ) {}
 
   /** Expose the underlying io.Server for the service to emit against. */
   getServer(): Server {
@@ -76,7 +88,28 @@ export class NotificationsGateway
   }
 
   afterInit(): void {
-    this.logger.log('NotificationsGateway initialised on /notifications');
+    const config = getNotificationsConfig(this.configService);
+    this.server.engine.opts.maxHttpBufferSize = config.websocket.maxMessageSizeBytes;
+    this.logger.log(
+      `NotificationsGateway initialised on /notifications with max message size: ${config.websocket.maxMessageSizeBytes} bytes`,
+    );
+
+    // Add error handling for oversized messages
+    this.server.on('connection_error', (error) => {
+      if (error.description === 'payload too large' || error.code === 413) {
+        this.logger.warn(
+          `WebSocket connection rejected: message size exceeds limit of ${config.websocket.maxMessageSizeBytes} bytes`,
+        );
+      }
+    });
+
+    this.server.engine.on('connection_error', (error) => {
+      if (error.code === 'ERR_HTTP_HEADERS_SENT' || error.message?.includes('payload')) {
+        this.logger.warn(
+          `WebSocket engine error: ${error.message}. This may indicate an oversized message.`,
+        );
+      }
+    });
   }
 
   handleConnection(client: Socket): void {

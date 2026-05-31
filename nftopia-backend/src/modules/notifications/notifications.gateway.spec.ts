@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import type { Server, Socket } from 'socket.io';
@@ -39,7 +40,14 @@ const makeSocket = (
 };
 
 const makeServer = (): jest.Mocked<Server> =>
-  ({ to: jest.fn() }) as unknown as jest.Mocked<Server>;
+  ({
+    to: jest.fn(),
+    on: jest.fn(),
+    engine: {
+      opts: {},
+      on: jest.fn(),
+    },
+  } as unknown as jest.Mocked<Server>);
 
 const VALID_PAYLOAD = { sub: 'user-42', username: 'alice', email: 'a@b.com' };
 const VALID_TOKEN = 'valid.jwt.token';
@@ -54,11 +62,20 @@ describe('NotificationsGateway', () => {
   beforeEach(async () => {
     jwtVerify = jest.fn().mockReturnValue(VALID_PAYLOAD);
     const jwtService = makeJwtService(jwtVerify);
+    const configService = {
+      get: jest.fn((key: string) => {
+        if (key === 'WEBSOCKET_MAX_MESSAGE_SIZE_BYTES') {
+          return '65536'; // 64KB default
+        }
+        return undefined;
+      }),
+    } as unknown as jest.Mocked<ConfigService>;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         NotificationsGateway,
         { provide: JwtService, useValue: jwtService },
+        { provide: ConfigService, useValue: configService },
       ],
     }).compile();
 
@@ -77,12 +94,42 @@ describe('NotificationsGateway', () => {
   // ── lifecycle ──────────────────────────────────────────────────────────────
 
   describe('afterInit', () => {
-    it('logs gateway initialisation', () => {
+    it('logs gateway initialisation with message size limit', () => {
       const spy = jest.spyOn(Logger.prototype, 'log');
       gateway.afterInit();
       expect(spy).toHaveBeenCalledWith(
-        'NotificationsGateway initialised on /notifications',
+        expect.stringContaining('NotificationsGateway initialised on /notifications with max message size: 65536 bytes'),
       );
+    });
+
+    it('sets maxHttpBufferSize from config', () => {
+      gateway.afterInit();
+      expect(mockServer.engine.opts.maxHttpBufferSize).toBe(65536);
+    });
+
+    it('uses custom message size limit from config', async () => {
+      const customConfigService = {
+        get: jest.fn((key: string) => {
+          if (key === 'WEBSOCKET_MAX_MESSAGE_SIZE_BYTES') {
+            return '131072'; // 128KB custom
+          }
+          return undefined;
+        }),
+      } as unknown as jest.Mocked<ConfigService>;
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          NotificationsGateway,
+          { provide: JwtService, useValue: makeJwtService(jwtVerify) },
+          { provide: ConfigService, useValue: customConfigService },
+        ],
+      }).compile();
+
+      const customGateway = module.get<NotificationsGateway>(NotificationsGateway);
+      Object.assign(customGateway, { server: mockServer });
+
+      customGateway.afterInit();
+      expect(mockServer.engine.opts.maxHttpBufferSize).toBe(131072);
     });
   });
 

@@ -120,6 +120,11 @@ DB_HOST=localhost
 DB_PORT=5433
 DATABASE_URL=postgresql://postgres:postgres@localhost:5433/nftopia
 
+# Database connection pool settings (production defaults)
+DB_POOL_SIZE=20
+DB_IDLE_TIMEOUT_MS=30000
+DB_CONNECTION_TIMEOUT_MS=10000
+
 REDIS_HOST=localhost
 REDIS_PORT=6379
 

@@ -1,4 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { readFile } from 'fs/promises';
 import { resolve } from 'path';
@@ -10,36 +16,43 @@ import { toArweaveGatewayUrl, toArweaveUri } from './utils/uri.utils';
 
 @Injectable()
 export class ArweaveService {
+  private readonly logger = new Logger(ArweaveService.name);
   private arweaveClient: Arweave | null = null;
   private walletJwk: JWKInterface | null = null;
 
   constructor(private readonly configService: ConfigService) {}
 
   async upload(file: UploadedFile): Promise<ArweaveUploadResult> {
-    const client = this.getArweaveClient();
-    const wallet = await this.getWalletJwk();
-    const arweaveConfig = getStorageConfig(this.configService).arweave;
+    try {
+      const client = this.getArweaveClient();
+      const wallet = await this.getWalletJwk();
+      const arweaveConfig = getStorageConfig(this.configService).arweave;
 
-    const transaction = await client.createTransaction(
-      { data: file.buffer },
-      wallet,
-    );
-    transaction.addTag('Content-Type', file.mimetype);
-    transaction.addTag('App-Name', 'NFTopia');
-    transaction.addTag('File-Name', file.originalname);
+      const transaction = await client.createTransaction(
+        { data: file.buffer },
+        wallet,
+      );
+      transaction.addTag('Content-Type', file.mimetype);
+      transaction.addTag('App-Name', 'NFTopia');
+      transaction.addTag('File-Name', file.originalname);
 
-    await client.transactions.sign(transaction, wallet);
+      await client.transactions.sign(transaction, wallet);
 
-    const uploader = await client.transactions.getUploader(transaction);
-    while (!uploader.isComplete) {
-      await uploader.uploadChunk();
+      const uploader = await client.transactions.getUploader(transaction);
+      while (!uploader.isComplete) {
+        await uploader.uploadChunk();
+      }
+
+      return {
+        id: transaction.id,
+        uri: toArweaveUri(transaction.id),
+        gatewayUrl: toArweaveGatewayUrl(transaction.id, arweaveConfig.gatewayUrl),
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Arweave upload failed: ${errorMessage}`, error instanceof Error ? error.stack : undefined);
+      throw new ServiceUnavailableException('Failed to upload to Arweave. Please try again later.');
     }
-
-    return {
-      id: transaction.id,
-      uri: toArweaveUri(transaction.id),
-      gatewayUrl: toArweaveGatewayUrl(transaction.id, arweaveConfig.gatewayUrl),
-    };
   }
 
   private getArweaveClient(): Arweave {
@@ -70,15 +83,17 @@ export class ArweaveService {
     }
 
     if (!walletJson) {
-      throw new Error(
-        'Arweave wallet not configured. Set ARWEAVE_WALLET_JWK or ARWEAVE_WALLET_PATH.',
+      this.logger.error('Arweave wallet not configured');
+      throw new InternalServerErrorException(
+        'Arweave wallet not configured. Please contact support.',
       );
     }
 
     try {
       this.walletJwk = JSON.parse(walletJson) as JWKInterface;
-    } catch {
-      throw new Error('Invalid Arweave wallet JSON payload');
+    } catch (error) {
+      this.logger.error('Invalid Arweave wallet JSON payload');
+      throw new BadRequestException('Invalid Arweave wallet configuration');
     }
 
     return this.walletJwk;

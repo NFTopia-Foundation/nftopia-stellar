@@ -1,4 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { getStorageConfig } from './storage.config';
 import type {
@@ -14,6 +19,8 @@ interface PinataUploadResponse {
 
 @Injectable()
 export class IpfsService {
+  private readonly logger = new Logger(IpfsService.name);
+
   constructor(private readonly configService: ConfigService) {}
 
   async upload(file: UploadedFile): Promise<IpfsUploadResult> {
@@ -28,8 +35,11 @@ export class IpfsService {
         return this.uploadWithStorageApi(file, 'nftstorage');
       default: {
         const unsupportedProvider: unknown = ipfsConfig.provider;
-        throw new Error(
+        this.logger.error(
           `Unsupported IPFS provider: ${String(unsupportedProvider)}`,
+        );
+        throw new InternalServerErrorException(
+          'IPFS provider is not configured correctly. Please contact support.',
         );
       }
     }
@@ -42,7 +52,10 @@ export class IpfsService {
     const fileBytes = Uint8Array.from(file.buffer);
 
     if (!ipfsConfig.pinataJwt) {
-      throw new Error('IPFS_PINATA_JWT is not configured');
+      this.logger.error('Pinata JWT is not configured');
+      throw new InternalServerErrorException(
+        'IPFS service is not configured correctly. Please contact support.',
+      );
     }
 
     const formData = new FormData();
@@ -69,8 +82,11 @@ export class IpfsService {
 
     if (!response.ok) {
       const errorBody = await response.text();
-      throw new Error(
+      this.logger.error(
         `Pinata upload failed (${response.status}): ${errorBody}`,
+      );
+      throw new ServiceUnavailableException(
+        'Failed to upload to IPFS. Please try again later.',
       );
     }
 
@@ -78,7 +94,10 @@ export class IpfsService {
     const cid = payload.IpfsHash;
 
     if (!cid) {
-      throw new Error('Pinata upload response did not contain IpfsHash');
+      this.logger.error('Pinata upload response did not contain IpfsHash');
+      throw new ServiceUnavailableException(
+        'IPFS service returned an invalid response. Please try again later.',
+      );
     }
 
     return {
@@ -101,10 +120,11 @@ export class IpfsService {
         : ipfsConfig.nftStorageToken;
 
     if (!token) {
-      throw new Error(
-        provider === 'web3storage'
-          ? 'IPFS_WEB3STORAGE_TOKEN is not configured'
-          : 'IPFS_NFTSTORAGE_TOKEN is not configured',
+      this.logger.error(
+        `${provider} token is not configured`,
+      );
+      throw new InternalServerErrorException(
+        'IPFS service is not configured correctly. Please contact support.',
       );
     }
 
@@ -124,8 +144,11 @@ export class IpfsService {
 
     if (!response.ok) {
       const errorBody = await response.text();
-      throw new Error(
+      this.logger.error(
         `${provider} upload failed (${response.status}): ${errorBody}`,
+      );
+      throw new ServiceUnavailableException(
+        'Failed to upload to IPFS. Please try again later.',
       );
     }
 
@@ -133,7 +156,12 @@ export class IpfsService {
     const cid = this.extractCid(payload);
 
     if (!cid) {
-      throw new Error(`${provider} upload response did not include a CID`);
+      this.logger.error(
+        `${provider} upload response did not include a CID`,
+      );
+      throw new ServiceUnavailableException(
+        'IPFS service returned an invalid response. Please try again later.',
+      );
     }
 
     return {
