@@ -3,6 +3,7 @@ import { TelemetryAdapter } from "./adapters/base";
 import { noopAdapter } from "./adapters/noop";
 import { posthogAdapter } from "./adapters/posthog";
 import { enrichTelemetryPayload } from "./context/enricher";
+import { sanitizePayload } from "./sanitize";
 
 export interface TelemetryClient {
   init(): Promise<void>;
@@ -47,8 +48,10 @@ class TelemetryCore implements TelemetryClient {
 
   track(eventName: string, payload?: Record<string, unknown>) {
     try {
-      // Enrich payload with context before sending to adapter
-      const enriched = enrichTelemetryPayload(payload || {});
+      // Sanitize event payload before enrichment
+      const sanitized = sanitizePayload(payload || {}, { category: this.getCategoryForEvent(eventName), debug: !!getTelemetryConfig().debug });
+      // Enrich sanitized payload with context
+      const enriched = enrichTelemetryPayload(sanitized);
       this.adapter.track(eventName, enriched);
     } catch (e) {
       if (getTelemetryConfig().debug) {
@@ -56,6 +59,14 @@ class TelemetryCore implements TelemetryClient {
         console.debug("[Telemetry][Client] track error:", e);
       }
     }
+  }
+
+  // Helper to map eventName to category for allowlist
+  private getCategoryForEvent(eventName: string): string {
+    // Simple mapping: eventName prefix before '_' is category
+    const prefix = eventName.split('_')[0];
+    // Fallback to empty string if not found
+    return prefix || "";
   }
 
   identify(userId: string, traits?: Record<string, unknown>) {
