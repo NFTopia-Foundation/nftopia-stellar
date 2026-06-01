@@ -7,7 +7,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { ContractEventIndexerJob, IndexerModule } from './jobs';
+import { IndexerModule } from './jobs';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { CollectionModule } from './modules/collection/collection.module';
@@ -119,7 +119,6 @@ import { TransactionModule } from './modules/transaction/transaction.module';
   ],
   controllers: [AppController],
   providers: [
-    ContractEventIndexerJob,
     AppService,
     SorobanRpcService,
     StellarAccountService,

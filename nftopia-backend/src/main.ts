@@ -32,8 +32,13 @@ import { SorobanRpcService } from './services/soroban-rpc.service';
 import { StellarAccountService } from './services/stellar-account.service';
 
 function createCorsConfig() {
+  const customOrigin = process.env.CORS_ORIGIN;
+  const origins = ['http://localhost:3001', 'http://localhost:5000'];
+  if (customOrigin && !origins.includes(customOrigin)) {
+    origins.push(customOrigin);
+  }
   return {
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3001',
+    origin: origins,
     credentials: true,
   };
 }

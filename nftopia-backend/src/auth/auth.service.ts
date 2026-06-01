@@ -379,6 +379,10 @@ export class AuthService {
     });
   }
 
+  async getUserById(id: string): Promise<User | null> {
+    return this.userRepository.findOne({ where: { id } });
+  }
+
   async generateChallenge(publicKey: string) {
     return this.generateWalletChallenge(
       { walletAddress: publicKey },
@@ -588,6 +592,8 @@ export class AuthService {
         username: user.username,
         walletAddress: resolvedWalletAddress,
         walletProvider: user.walletProvider,
+        avatarUrl: user.avatarUrl ?? null,
+        bannerUrl: user.bannerUrl ?? null,
       },
     };
   }
