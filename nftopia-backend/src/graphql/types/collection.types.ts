@@ -14,8 +14,8 @@ export class GraphqlCollection {
   @Field(() => ID)
   id: string;
 
-  @Field()
-  contractAddress: string;
+  @Field(() => String, { nullable: true })
+  contractAddress?: string | null;
 
   @Field()
   name: string;

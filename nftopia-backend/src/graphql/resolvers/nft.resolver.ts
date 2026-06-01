@@ -369,7 +369,7 @@ export class NftResolver {
   private toGraphqlCollection(collection: Collection): GraphqlCollection {
     return {
       id: collection.id,
-      contractAddress: collection.contractAddress,
+      contractAddress: collection.contractAddress ?? null,
       name: collection.name,
       symbol: collection.symbol,
       description: collection.description ?? null,
