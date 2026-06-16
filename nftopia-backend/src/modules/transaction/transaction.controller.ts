@@ -12,6 +12,7 @@ import {
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { TransactionService } from './transaction.service';
+import { TxRetryQueueService } from './tx-retry-queue.service';
 import { TransactionQueryDto } from './dto/transaction-query.dto';
 import { ExecuteTransactionDto } from './dto/execute-transaction.dto';
 import { CancelTransactionDto } from './dto/cancel-transaction.dto';
@@ -26,7 +27,10 @@ type AuthRequest = ExpressRequest & { user?: { userId?: string } };
 @Controller('transactions')
 @UseGuards(JwtAuthGuard)
 export class TransactionController {
-  constructor(private readonly transactionService: TransactionService) {}
+  constructor(
+    private readonly transactionService: TransactionService,
+    private readonly retryQueueService: TxRetryQueueService,
+  ) {}
 
   @Post()
   async createAndExecute(
@@ -136,5 +140,20 @@ export class TransactionController {
   ) {
     const userId = req.user?.userId as string;
     return this.transactionService.addSignature(id, userId, dto.signature);
+  }
+
+  @Get(':id/retry-jobs')
+  async getRetryJobs(@Param('id', ParseIntPipe) id: number) {
+    return this.retryQueueService.getJobsForTransaction(id);
+  }
+
+  @Post('retry-jobs/:jobId/requeue')
+  async requeueDeadJob(@Param('jobId') jobId: string) {
+    return this.retryQueueService.requeueDeadJob(jobId);
+  }
+
+  @Get('retry-jobs/dead')
+  async getDeadJobs() {
+    return this.retryQueueService.getDeadJobs();
   }
 }

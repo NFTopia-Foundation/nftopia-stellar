@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Transaction } from './entities/transaction.entity';
+import { TxRetryJob } from './entities/tx-retry-job.entity';
+import { TxRetryQueueService } from './tx-retry-queue.service';
 import { TransactionService } from './transaction.service';
 import { TransactionController } from './transaction.controller';
 import { TransactionContractClient } from '../stellar/transaction-contract.client';
@@ -15,14 +17,14 @@ import { NftModule } from '../nft/nft.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Transaction, Listing, Auction, StellarNft, Nft]),
+    TypeOrmModule.forFeature([Transaction, TxRetryJob, Listing, Auction, StellarNft, Nft]),
     StellarModule,
     StorageModule,
     UsersModule,
     NftModule,
   ],
-  providers: [TransactionService, TransactionContractClient],
+  providers: [TransactionService, TransactionContractClient, TxRetryQueueService],
   controllers: [TransactionController],
-  exports: [TransactionService],
+  exports: [TransactionService, TxRetryQueueService],
 })
 export class TransactionModule {}
