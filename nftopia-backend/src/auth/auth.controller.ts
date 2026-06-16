@@ -3,6 +3,8 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Post,
   Req,
@@ -23,6 +25,7 @@ import {
   WalletUnlinkDto,
   WalletVerifyDto,
 } from './dto/wallet-auth.dto';
+import { ForgotPasswordDto, ResetPasswordDto } from './dto/password-reset.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
 type RequestWithUser = Request & {
@@ -95,6 +98,27 @@ export class AuthController {
         },
       },
     };
+  }
+
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Request password reset email' })
+  async forgotPassword(
+    @Body() dto: ForgotPasswordDto,
+    @Req() req: Request,
+  ): Promise<{ message: string }> {
+    await this.authService.forgotPassword(dto, req.ip);
+    return { message: 'If that email is registered, a reset link has been sent.' };
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reset password using token from email' })
+  async resetPassword(
+    @Body() dto: ResetPasswordDto,
+  ): Promise<{ message: string }> {
+    await this.authService.resetPassword(dto);
+    return { message: 'Password has been reset successfully.' };
   }
 
   @Post('wallet/challenge')

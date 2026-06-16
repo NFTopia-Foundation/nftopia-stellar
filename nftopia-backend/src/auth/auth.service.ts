@@ -7,6 +7,7 @@ import {
   NotFoundException,
   UnauthorizedException,
   Inject,
+  Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -14,7 +15,7 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import * as crypto from 'crypto';
 import { promisify } from 'util';
-import { IsNull, MoreThan, Repository } from 'typeorm';
+import { IsNull, LessThan, MoreThan, Repository } from 'typeorm';
 import { EmailLoginDto, EmailRegisterDto } from './dto/email-auth.dto';
 import {
   WalletChallengeDto,
@@ -25,10 +26,17 @@ import {
   WalletUnlinkDto,
   WalletVerifyDto,
 } from './dto/wallet-auth.dto';
+import { ForgotPasswordDto, ResetPasswordDto } from './dto/password-reset.dto';
 import { WalletSession } from './entities/wallet-session.entity';
 import { UserWallet } from './entities/user-wallet.entity';
+import { PasswordResetToken } from './entities/password-reset-token.entity';
 import { User } from '../users/user.entity';
 import { StellarSignatureStrategy } from './strategies/stellar.strategy';
+import { MailService } from './mail.service';
+
+const PASSWORD_RESET_TOKEN_TTL_MINUTES = 30;
+const PASSWORD_RESET_RATE_LIMIT_MAX = 3;
+const PASSWORD_RESET_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 
 type JwtUserPayload = {
   sub: string;
@@ -41,6 +49,11 @@ const scryptAsync = promisify(crypto.scrypt);
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+  private readonly passwordResetRateLimitByIp = new Map<
+    string,
+    { count: number; windowStart: number }
+  >();
   private readonly challengeTtlSeconds = parseInt(
     process.env.WALLET_CHALLENGE_TTL_SECONDS || '300',
     10,
@@ -65,12 +78,15 @@ export class AuthService {
   constructor(
     private readonly jwtService: JwtService,
     private readonly stellarStrategy: StellarSignatureStrategy,
+    private readonly mailService: MailService,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     @InjectRepository(UserWallet)
     private readonly userWalletRepository: Repository<UserWallet>,
     @InjectRepository(WalletSession)
     private readonly walletSessionRepository: Repository<WalletSession>,
+    @InjectRepository(PasswordResetToken)
+    private readonly passwordResetTokenRepository: Repository<PasswordResetToken>,
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
   ) {}
 
@@ -383,6 +399,105 @@ export class AuthService {
     return this.userRepository.findOne({ where: { id } });
   }
 
+  async forgotPassword(dto: ForgotPasswordDto, requestIp?: string): Promise<void> {
+    this.assertPasswordResetRateLimit(requestIp);
+
+    const normalizedEmail = this.normalizeEmail(dto.email);
+    const user = await this.userRepository.findOne({
+      where: { email: normalizedEmail },
+    });
+
+    // Always purge expired tokens regardless of whether the user exists
+    await this.passwordResetTokenRepository.delete({
+      expiresAt: LessThan(new Date()),
+    } as never);
+
+    if (!user) {
+      // Return silently — do not reveal whether the email is registered
+      return;
+    }
+
+    // Invalidate any existing unused tokens for this user
+    await this.passwordResetTokenRepository
+      .createQueryBuilder()
+      .update()
+      .set({ usedAt: new Date() })
+      .where('user_id = :userId AND used_at IS NULL', { userId: user.id })
+      .execute();
+
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(rawToken)
+      .digest('hex');
+    const expiresAt = new Date(
+      Date.now() + PASSWORD_RESET_TOKEN_TTL_MINUTES * 60 * 1000,
+    );
+
+    await this.passwordResetTokenRepository.save(
+      this.passwordResetTokenRepository.create({
+        userId: user.id,
+        tokenHash,
+        expiresAt,
+        usedAt: null,
+        ipAddress: requestIp ?? null,
+      }),
+    );
+
+    const appBaseUrl =
+      process.env.APP_BASE_URL || 'https://app.nftopia.xyz';
+    const resetLink = `${appBaseUrl}/reset-password?token=${rawToken}`;
+
+    await this.mailService.sendPasswordResetEmail(
+      normalizedEmail,
+      resetLink,
+      PASSWORD_RESET_TOKEN_TTL_MINUTES,
+    );
+  }
+
+  async resetPassword(dto: ResetPasswordDto): Promise<void> {
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(dto.token)
+      .digest('hex');
+
+    const tokenRecord = await this.passwordResetTokenRepository.findOne({
+      where: { tokenHash },
+    });
+
+    if (!tokenRecord) {
+      throw new BadRequestException('Invalid or expired reset token');
+    }
+
+    if (tokenRecord.usedAt) {
+      throw new BadRequestException('Reset token has already been used');
+    }
+
+    if (tokenRecord.expiresAt <= new Date()) {
+      throw new BadRequestException('Reset token has expired');
+    }
+
+    const user = await this.userRepository.findOne({
+      where: { id: tokenRecord.userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const newPasswordHash = await this.hashPassword(dto.newPassword);
+
+    await this.userRepository.update(
+      { id: user.id },
+      { passwordHash: newPasswordHash },
+    );
+
+    tokenRecord.usedAt = new Date();
+    await this.passwordResetTokenRepository.save(tokenRecord);
+
+    this.logger.log(`Password reset completed for user ${user.id}`);
+  }
+
   async generateChallenge(publicKey: string) {
     return this.generateWalletChallenge(
       { walletAddress: publicKey },
@@ -396,6 +511,30 @@ export class AuthService {
 
   login(user: JwtUserPayload) {
     return this.buildTokenPair(user);
+  }
+
+  private assertPasswordResetRateLimit(requestIp?: string) {
+    const key = requestIp || 'unknown';
+    const now = Date.now();
+    const current = this.passwordResetRateLimitByIp.get(key);
+
+    if (
+      !current ||
+      now - current.windowStart > PASSWORD_RESET_RATE_LIMIT_WINDOW_MS
+    ) {
+      this.passwordResetRateLimitByIp.set(key, { count: 1, windowStart: now });
+      return;
+    }
+
+    if (current.count >= PASSWORD_RESET_RATE_LIMIT_MAX) {
+      throw new HttpException(
+        'Too many password reset requests. Please try again later.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    current.count += 1;
+    this.passwordResetRateLimitByIp.set(key, current);
   }
 
   private assertChallengeRateLimit(requestIp?: string) {
