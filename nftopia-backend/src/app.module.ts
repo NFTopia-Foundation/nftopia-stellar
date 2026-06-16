@@ -31,6 +31,7 @@ import { HealthModule } from './health/health.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { OfferModule } from './modules/offer/offer.module';
 import { TransactionModule } from './modules/transaction/transaction.module';
+import { DatabaseModule } from './database/database.module';
 
 @Module({
   imports: [
@@ -96,7 +97,12 @@ import { TransactionModule } from './modules/transaction/transaction.module';
               password: config.get<string>('DB_PASS') || process.env.DB_PASS,
               database: config.get<string>('DB_NAME') || process.env.DB_NAME,
               autoLoadEntities: true,
-              synchronize: true,
+              // synchronize disabled in production — use MigrationLockService instead
+              synchronize: config.get('NODE_ENV') !== 'production',
+              migrations: config.get('NODE_ENV') === 'production'
+                ? ['dist/migrations/*.js']
+                : [],
+              migrationsRun: false, // controlled by MigrationLockService with advisory lock
               logging: config.get('NODE_ENV') === 'development',
               extra: {
                 max: parseInt(
@@ -123,6 +129,7 @@ import { TransactionModule } from './modules/transaction/transaction.module';
           UsersModule,
           AdminModule,
         ]),
+    DatabaseModule,
     CollectionModule,
     NftModule,
     AuctionModule,
