@@ -3,6 +3,8 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Post,
   Req,
@@ -13,6 +15,7 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { AuthService } from './auth.service';
+import { TwoFactorService } from './two-factor.service';
 import { EmailLoginDto, EmailRegisterDto } from './dto/email-auth.dto';
 import {
   WalletChallengeDto,
@@ -23,6 +26,11 @@ import {
   WalletUnlinkDto,
   WalletVerifyDto,
 } from './dto/wallet-auth.dto';
+import {
+  TwoFactorChallengeDto,
+  TwoFactorRecoverDto,
+  TwoFactorVerifyDto,
+} from './dto/two-factor.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
 type RequestWithUser = Request & {
@@ -34,7 +42,10 @@ type RequestWithUser = Request & {
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly twoFactorService: TwoFactorService,
+  ) {}
 
   @Get('csrf-token')
   @ApiOperation({ summary: 'Get CSRF token' })
@@ -92,9 +103,95 @@ export class AuthController {
           walletProvider: user.walletProvider ?? null,
           avatarUrl: user.avatarUrl ?? null,
           bannerUrl: user.bannerUrl ?? null,
+          isTwoFactorEnabled: user.isTwoFactorEnabled,
         },
       },
     };
+  }
+
+  // ── 2FA endpoints ────────────────────────────────────────────────────────
+
+  @Post('2fa/challenge')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Complete 2FA challenge after login (verifies TOTP, returns full JWT)' })
+  async twoFactorChallenge(@Body() dto: TwoFactorChallengeDto) {
+    const tokens = await this.twoFactorService.completeTwoFactorChallenge(
+      dto.pendingToken,
+      dto.code,
+    );
+    return { data: { success: true, data: tokens } };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Post('2fa/enable')
+  @ApiOperation({ summary: 'Initiate 2FA setup — returns TOTP secret and QR code' })
+  async twoFactorInitSetup(@Req() req: RequestWithUser) {
+    if (!req.user?.userId) throw new UnauthorizedException('Invalid JWT payload');
+    const result = await this.twoFactorService.initSetup(req.user.userId);
+    return { data: { success: true, data: result } };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Post('2fa/verify')
+  @ApiOperation({ summary: 'Verify TOTP code to confirm 2FA setup and receive backup codes' })
+  async twoFactorEnable(
+    @Req() req: RequestWithUser,
+    @Body() body: TwoFactorVerifyDto & { secret: string },
+  ) {
+    if (!req.user?.userId) throw new UnauthorizedException('Invalid JWT payload');
+    const result = await this.twoFactorService.enable(
+      req.user.userId,
+      body.secret,
+      body.code,
+    );
+    return { data: { success: true, data: result } };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Post('2fa/disable')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Disable 2FA using a valid TOTP code' })
+  async twoFactorDisable(
+    @Req() req: RequestWithUser,
+    @Body() dto: TwoFactorVerifyDto,
+  ) {
+    if (!req.user?.userId) throw new UnauthorizedException('Invalid JWT payload');
+    await this.twoFactorService.disable(req.user.userId, dto.code);
+    return { data: { success: true } };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Post('2fa/recover')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Disable 2FA using a backup code (account recovery)' })
+  async twoFactorRecover(
+    @Req() req: RequestWithUser,
+    @Body() dto: TwoFactorRecoverDto,
+  ) {
+    if (!req.user?.userId) throw new UnauthorizedException('Invalid JWT payload');
+    await this.twoFactorService.recover(req.user.userId, dto.backupCode);
+    return { data: { success: true } };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Post('2fa/backup-codes')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Regenerate 2FA backup codes (requires valid TOTP code)' })
+  async twoFactorRegenerateBackupCodes(
+    @Req() req: RequestWithUser,
+    @Body() dto: TwoFactorVerifyDto,
+  ) {
+    if (!req.user?.userId) throw new UnauthorizedException('Invalid JWT payload');
+    const result = await this.twoFactorService.regenerateBackupCodes(
+      req.user.userId,
+      dto.code,
+    );
+    return { data: { success: true, data: result } };
   }
 
   @Post('wallet/challenge')

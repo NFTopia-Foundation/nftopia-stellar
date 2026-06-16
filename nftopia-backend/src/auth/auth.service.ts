@@ -74,6 +74,13 @@ export class AuthService {
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
   ) {}
 
+  /** Set lazily after module init to avoid circular injection */
+  private twoFactorService?: { buildPendingToken(userId: string): string };
+
+  setTwoFactorService(svc: { buildPendingToken(userId: string): string }): void {
+    this.twoFactorService = svc;
+  }
+
   async registerWithEmail(dto: EmailRegisterDto) {
     const normalizedEmail = this.normalizeEmail(dto.email);
 
@@ -119,6 +126,13 @@ export class AuthService {
 
     user.lastLoginAt = new Date();
     await this.userRepository.save(user);
+
+    if (user.isTwoFactorEnabled && this.twoFactorService) {
+      return {
+        twoFactorRequired: true,
+        pendingToken: this.twoFactorService.buildPendingToken(user.id),
+      };
+    }
 
     return this.buildAuthResponse(user);
   }
@@ -227,6 +241,13 @@ export class AuthService {
 
     // Delete nonce from Redis after successful verification (one-time use)
     await this.cacheManager.del(sessionKey);
+
+    if (user.isTwoFactorEnabled && this.twoFactorService) {
+      return {
+        twoFactorRequired: true,
+        pendingToken: this.twoFactorService.buildPendingToken(user.id),
+      };
+    }
 
     return this.buildAuthResponse(user);
   }

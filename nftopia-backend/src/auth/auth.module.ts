@@ -1,6 +1,7 @@
-import { Module } from '@nestjs/common';
+import { Module, OnModuleInit } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
+import { TwoFactorService } from './two-factor.service';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -27,7 +28,16 @@ const jwtAccessExpiresInSeconds = parseInt(
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, StellarSignatureStrategy, JwtStrategy],
-  exports: [AuthService, JwtStrategy],
+  providers: [AuthService, TwoFactorService, StellarSignatureStrategy, JwtStrategy],
+  exports: [AuthService, TwoFactorService, JwtStrategy],
 })
-export class AuthModule {}
+export class AuthModule implements OnModuleInit {
+  constructor(
+    private readonly authService: AuthService,
+    private readonly twoFactorService: TwoFactorService,
+  ) {}
+
+  onModuleInit(): void {
+    this.authService.setTwoFactorService(this.twoFactorService);
+  }
+}
