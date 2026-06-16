@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import { Logger, OnApplicationShutdown } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import {
@@ -24,6 +24,7 @@ import {
 type AuthenticatedSocket = Socket & {
   data: {
     user?: AuthenticatedSocketUser;
+    lastPongAt?: number;
     [key: string]: unknown;
   };
 };
@@ -70,12 +71,13 @@ type AuthenticatedSocket = Socket & {
   maxHttpBufferSize: 1e6, // Set to 1MB initially, will be overridden in afterInit
 })
 export class NotificationsGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, OnApplicationShutdown
 {
   @WebSocketServer()
   private server!: Server;
 
   private readonly logger = new Logger(NotificationsGateway.name);
+  private staleCleanupTimer: NodeJS.Timeout | null = null;
 
   constructor(
     private readonly jwtService: JwtService,
@@ -91,9 +93,19 @@ export class NotificationsGateway
     const config = getNotificationsConfig(this.configService);
     this.server.engine.opts.maxHttpBufferSize =
       config.websocket.maxMessageSizeBytes;
+
+    // Configure Socket.IO-level ping/pong for transport-layer keepalive
+    this.server.engine.opts.pingInterval = config.websocket.pingIntervalMs;
+    this.server.engine.opts.pingTimeout  = config.websocket.pingTimeoutMs;
+
     this.logger.log(
-      `NotificationsGateway initialised on /notifications with max message size: ${config.websocket.maxMessageSizeBytes} bytes`,
+      `NotificationsGateway initialised on /notifications | maxMsg: ${config.websocket.maxMessageSizeBytes}B | ping: ${config.websocket.pingIntervalMs}ms / timeout: ${config.websocket.pingTimeoutMs}ms`,
     );
+
+    // Application-level stale connection cleanup
+    this.staleCleanupTimer = setInterval(() => {
+      void this.cleanupStaleConnections(config.websocket.pingIntervalMs + config.websocket.pingTimeoutMs);
+    }, config.websocket.staleCleanupIntervalMs);
 
     // Add error handling for oversized messages
 
@@ -149,6 +161,7 @@ export class NotificationsGateway
       const typedClient = client as AuthenticatedSocket;
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       typedClient.data.user = user;
+      typedClient.data.lastPongAt = Date.now();
 
       void client.join(userRoom(user.userId));
       this.logger.debug(
@@ -166,13 +179,52 @@ export class NotificationsGateway
 
   handleDisconnect(client: Socket): void {
     const typedClient = client as AuthenticatedSocket;
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
     const user = typedClient.data.user;
     if (user) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       this.logger.debug(`User ${user.userId} disconnected (${client.id})`);
     } else {
       this.logger.debug(`Anonymous socket ${client.id} disconnected`);
+    }
+  }
+
+  onApplicationShutdown(): void {
+    if (this.staleCleanupTimer) {
+      clearInterval(this.staleCleanupTimer);
+      this.staleCleanupTimer = null;
+    }
+  }
+
+  /** Client-initiated ping for latency measurement and liveness confirmation. */
+  @SubscribeMessage('ping')
+  handlePing(
+    @MessageBody() _body: unknown,
+    @ConnectedSocket() client: Socket,
+  ): { event: string; serverTime: number } {
+    const typedClient = client as AuthenticatedSocket;
+    typedClient.data.lastPongAt = Date.now();
+    return { event: 'pong', serverTime: Date.now() };
+  }
+
+  private async cleanupStaleConnections(staleThresholdMs: number): Promise<void> {
+    const sockets = await this.server.fetchSockets();
+    const now = Date.now();
+    let cleaned = 0;
+
+    for (const socket of sockets) {
+      const typedSocket = socket as unknown as AuthenticatedSocket;
+      const lastPong = typedSocket.data.lastPongAt as number | undefined;
+      // Only force-disconnect if we have a recorded pong and it's older than threshold
+      if (lastPong !== undefined && now - lastPong > staleThresholdMs) {
+        this.logger.warn(
+          `Disconnecting stale socket ${socket.id} (last pong ${now - lastPong}ms ago)`,
+        );
+        socket.disconnect(true);
+        cleaned++;
+      }
+    }
+
+    if (cleaned > 0) {
+      this.logger.log(`Stale connection cleanup: disconnected ${cleaned} sockets`);
     }
   }
 
