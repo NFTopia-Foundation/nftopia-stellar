@@ -3,19 +3,29 @@ import { NFT_FIELDS_FRAGMENT, TRANSFER_EVENT_FIELDS_FRAGMENT } from "../fragment
 
 export const GATEWAY_HEALTH_QUERY = gql`
   query GatewayHealth {
-    __typename
+    health {
+      status
+      service
+      timestamp
+    }
   }
 `;
 
 export const GET_NFTS_QUERY = gql`
-  query GetNfts($page: Int, $limit: Int, $collectionId: ID, $ownerId: ID) {
-    nfts(
-      page: $page
-      limit: $limit
-      collectionId: $collectionId
-      ownerId: $ownerId
-    ) {
-      ...NftFields
+  query GetNfts($pagination: PaginationInput, $filter: NFTFilterInput) {
+    nfts(pagination: $pagination, filter: $filter) {
+      edges {
+        node {
+          ...NftFields
+        }
+        cursor
+      }
+      pageInfo {
+        hasNextPage
+        startCursor
+        endCursor
+      }
+      totalCount
     }
   }
   ${NFT_FIELDS_FRAGMENT}
@@ -25,6 +35,14 @@ export const GET_NFT_BY_ID_QUERY = gql`
   query GetNftById($id: ID!) {
     nft(id: $id) {
       ...NftFields
+      contractAddress
+      mintedAt
+      lastPrice
+      attributes {
+        traitType
+        value
+        displayType
+      }
       creator {
         id
         username
@@ -39,6 +57,7 @@ export const GET_NFT_BY_ID_QUERY = gql`
         id
         name
         symbol
+        image
       }
     }
   }
@@ -68,7 +87,6 @@ export const GET_NFT_TRANSFER_HISTORY_QUERY = gql`
       }
       pageInfo {
         hasNextPage
-        hasPreviousPage
         startCursor
         endCursor
       }
@@ -101,7 +119,6 @@ export const GET_NFT_TRANSFER_HISTORY_CURSOR_QUERY = gql`
       }
       pageInfo {
         hasNextPage
-        hasPreviousPage
         startCursor
         endCursor
       }
