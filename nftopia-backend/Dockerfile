@@ -32,6 +32,7 @@ RUN npm ci --omit=dev \
   && npm cache clean --force
 
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/migrations ./migrations
 
 RUN chown -R node:node /app
 
@@ -41,6 +42,6 @@ EXPOSE 3000
 EXPOSE 3001
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-  CMD curl --fail http://127.0.0.1:${PORT}/health || exit 1
+  CMD curl --fail http://127.0.0.1:${PORT}/health/ready || exit 1
 
 CMD ["node", "dist/main.js"]

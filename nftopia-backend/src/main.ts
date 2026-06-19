@@ -81,10 +81,7 @@ async function bootstrapRestApi() {
   const expressApp = app.getHttpAdapter().getInstance() as {
     get: (
       path: string,
-      handler: (
-        req: Request,
-        res: Response,
-      ) => Promise<void> | void,
+      handler: (req: Request, res: Response) => Promise<void> | void,
     ) => void;
   };
   expressApp.get(healthControllerPath, async (_req, res) => {

@@ -5,6 +5,7 @@ import { Horizon } from 'stellar-sdk';
 import { SystemSettings } from './system-settings.entity';
 import { StellarNft } from '../nft/entities/stellar-nft.entity';
 import { ContractEventDlq } from './entities/contract-event-dlq.entity';
+import { SchemaReadinessService } from '../database/schema-readiness.service';
 
 const LAST_LEDGER_KEY = 'last_ingested_ledger';
 const HORIZON_URL =
@@ -24,9 +25,24 @@ export class IndexerService implements OnModuleInit {
     private readonly nftRepo: Repository<StellarNft>,
     @InjectRepository(ContractEventDlq)
     private readonly dlqRepo: Repository<ContractEventDlq>,
+    private readonly schemaReadinessService: SchemaReadinessService,
   ) {}
 
-  onModuleInit() {
+  async onModuleInit() {
+    const schemaReady = await this.schemaReadinessService.waitUntilReady({
+      timeoutMs: parseInt(
+        process.env.SCHEMA_READINESS_TIMEOUT_MS || '300000',
+        10,
+      ),
+    });
+
+    if (!schemaReady) {
+      this.logger.error(
+        'Database schema is not ready; skipping ledger ingestion startup',
+      );
+      return;
+    }
+
     void this.startIngestion();
   }
 

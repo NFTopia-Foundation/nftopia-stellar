@@ -178,6 +178,7 @@ Notes:
 
 - `docker-compose.yml` uses `DB_PASSWORD` for the PostgreSQL container, while the NestJS app currently reads `DB_PASS`, so keep those values aligned.
 - Inside Docker Compose, the backend connects to `postgres:5432`, `redis:6379`, and `meilisearch:7700`.
+- In production, `synchronize` is disabled and `/health/ready` stays unhealthy until required migrations have been applied.
 
 ## 🛠️ Available Scripts
 
@@ -193,6 +194,10 @@ Notes:
 | `npm run test:cov` | Generate coverage |
 | `npm run lint` | Run ESLint with fixes |
 | `npm run format` | Format source and test files |
+| `npm run migration:run` | Run pending legacy SQL and TypeORM migrations with a Redis lock |
+| `npm run migration:revert` | Revert the last TypeORM migration |
+| `npm run migration:create -- src/database/migrations/Name` | Create an empty TypeORM migration |
+| `npm run migration:generate -- src/database/migrations/Name` | Generate a TypeORM migration from entity changes |
 
 ## 🔌 API Surface
 
@@ -248,6 +253,12 @@ npm run lint
 ```
 
 The codebase is configured with Jest, ESLint, Prettier, and strict TypeScript support.
+
+## 🗃️ Migration Workflow
+
+Production schema changes are migration-driven. Run `npm run migration:run` in CI/CD before rolling out new instances, and do not depend on app startup to alter the database schema.
+
+See [docs/migrations.md](./docs/migrations.md) for the locking strategy, rollback guidance, and command usage.
 
 ## 🔐 Security Notes
 

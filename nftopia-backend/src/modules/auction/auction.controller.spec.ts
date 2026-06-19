@@ -32,7 +32,7 @@ describe('AuctionController', () => {
 
   it('calls findAll', async () => {
     mockService.findAll.mockResolvedValueOnce([]);
-    const q: AuctionQueryDto = {} as unknown as AuctionQueryDto;
+    const q: AuctionQueryDto = {};
     const res = await controller.list(q);
     expect(mockService.findAll).toHaveBeenCalledWith(q);
     expect(res).toEqual([]);
@@ -40,7 +40,7 @@ describe('AuctionController', () => {
 
   it('calls active', async () => {
     mockService.findAll.mockResolvedValueOnce([]);
-    const q: AuctionQueryDto = {} as unknown as AuctionQueryDto;
+    const q: AuctionQueryDto = {};
     await controller.active(q);
     expect(mockService.findAll).toHaveBeenCalled();
   });
