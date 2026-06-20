@@ -24,6 +24,7 @@ import { AccountEntryMenu } from "./account-entry-menu";
 import { useAuth } from "@/lib/stores/auth-store";
 import { useTranslation } from "@/hooks/useTranslation";
 import { LanguageSwitcher, MobileLanguageSwitcher } from "./LanguageSwitcher";
+import { PendingTransactionBadge } from "@/components/transactions/PendingTransactionBadge";
 
 export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -177,6 +178,9 @@ export function Navbar() {
               <LanguageSwitcher />
             </div>
 
+            {/* Pending transactions indicator */}
+            <PendingTransactionBadge />
+
             {/* Desktop: UserDropdown if logged in, WalletConnector + AccountEntryMenu if not */}
             {!loading && (
               isAuthenticated
@@ -283,6 +287,14 @@ export function Navbar() {
                 >
                   <Activity className="h-5 w-5" />
                   Activity
+                </Link>
+                <Link
+                  href={`/${locale}/transactions`}
+                  className="text-sm font-medium py-2.5 hover:text-purple-400 transition-colors flex items-center gap-2"
+                  onClick={closeMenu}
+                >
+                  <Settings className="h-5 w-5" />
+                  Transactions
                 </Link>
                 <Link
                   href={`/${locale}/marketplace`}
