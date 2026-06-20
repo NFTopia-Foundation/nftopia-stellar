@@ -16,17 +16,30 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { loginSchema, LoginFormData } from "@/lib/validation/auth";
 import { mapServerError } from "@/lib/errors/serverErrorMapper";
 import {
-  LogIn, Wallet, Mail, Lock, Eye, EyeOff, ChevronRight,
+  LogIn, Wallet, Mail, Lock, Eye, EyeOff, ChevronRight, Loader2,
 } from "lucide-react";
 import { OptimizedImage } from "@/components/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useToast } from "@/lib/stores";
+import { API_CONFIG } from "@/lib/config";
+import { getCookie } from "@/lib/CSRFTOKEN";
+import { buildLocalizedRoute } from "@/lib/routing";
 
 type AuthMode = "wallet" | "email";
 
 export default function LoginPage() {
   const { t, locale } = useTranslation();
-  const { loading: emailLoading, error: emailError, clearError: clearEmailError } = useAuth();
+  const router = useRouter();
+  const { showSuccess, showError } = useToast();
+  const {
+    loading: emailLoading,
+    error: emailError,
+    clearError: clearEmailError,
+    user,
+    isAuthenticated,
+  } = useAuth();
   const { emailLogin } = useAuthStore();
 
   const {
@@ -43,11 +56,51 @@ export default function LoginPage() {
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [localError, setLocalError] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
+  const [submittedEmail, setSubmittedEmail] = useState("");
+  const [resending, setResending] = useState(false);
+
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      const redirectTo = sessionStorage.getItem("redirectTo") || "/creator-dashboard";
+      sessionStorage.removeItem("redirectTo");
+      router.push(buildLocalizedRoute(locale, redirectTo));
+    }
+  }, [isAuthenticated, user, locale, router]);
+
+  const handleResendVerification = async () => {
+    const emailVal = getValues("email") || submittedEmail;
+    if (!emailVal) {
+      showError("Please enter your email address first");
+      return;
+    }
+    try {
+      setResending(true);
+      const csrfToken = await getCookie();
+      const res = await fetch(`${API_CONFIG.baseUrl}/auth/resend-verification`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken,
+        },
+        body: JSON.stringify({ email: emailVal }),
+      });
+      if (!res.ok) {
+        throw new Error("Failed to resend");
+      }
+      showSuccess(t("auth.verificationResent") || "Verification email resent successfully! Please check your inbox.");
+    } catch (err) {
+      showError(t("auth.verificationResendFailed") || "Failed to resend verification email. Please try again.");
+    } finally {
+      setResending(false);
+    }
+  };
 
   const {
     register,
     handleSubmit,
     setError,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm<LoginFormData>({ resolver: zodResolver(loginSchema) });
 
@@ -80,8 +133,13 @@ export default function LoginPage() {
 
   const onEmailSubmit = async (data: LoginFormData) => {
     clearAllErrors();
+    setSubmittedEmail(data.email);
     try {
-      await emailLogin(data.email, data.password);
+      await emailLogin(data.email, data.password, rememberMe);
+      showSuccess(t("auth.loginSuccess") || "Login successful! Welcome back.");
+      const redirectTo = sessionStorage.getItem("redirectTo") || "/creator-dashboard";
+      sessionStorage.removeItem("redirectTo");
+      router.push(buildLocalizedRoute(locale, redirectTo));
     } catch (err: unknown) {
       const { fieldErrors, formError } = mapServerError(err);
       if (Object.keys(fieldErrors).length > 0) {
@@ -125,6 +183,18 @@ export default function LoginPage() {
                 <div className="flex-1">
                   <p className="font-medium text-red-200">Authentication Alert</p>
                   <p className="text-xs text-red-300/90 mt-0.5">{displayGeneralError}</p>
+                  {(displayGeneralError.toLowerCase().includes("verified") ||
+                    displayGeneralError.toLowerCase().includes("verify") ||
+                    displayGeneralError.toLowerCase().includes("verification")) && (
+                    <button
+                      type="button"
+                      onClick={handleResendVerification}
+                      disabled={resending}
+                      className="text-xs text-purple-400 hover:text-purple-300 underline mt-2 block font-medium disabled:opacity-50"
+                    >
+                      {resending ? "Resending..." : "Resend verification email"}
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -219,12 +289,13 @@ export default function LoginPage() {
             {mode === "email" && (
               <form onSubmit={handleSubmit(onEmailSubmit)} className="space-y-5" noValidate>
                 <div>
-                  <label className="block text-sm font-medium mb-2 text-gray-300">
+                  <label htmlFor="email-input" className="block text-sm font-medium mb-2 text-gray-300">
                     {t("login.email") || "Email"}
                   </label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
                     <Input
+                      id="email-input"
                       type="email"
                       placeholder="you@example.com"
                       className="w-full bg-gray-800/50 border border-purple-500/20 rounded-lg pl-9 pr-4 py-3 text-sm"
@@ -237,12 +308,13 @@ export default function LoginPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-2 text-gray-300">
+                  <label htmlFor="password-input" className="block text-sm font-medium mb-2 text-gray-300">
                     {t("login.password") || "Password"}
                   </label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
                     <Input
+                      id="password-input"
                       type={showPassword ? "text" : "password"}
                       placeholder="••••••••"
                       className="w-full bg-gray-800/50 border border-purple-500/20 rounded-lg pl-9 pr-10 py-3 text-sm"
@@ -261,13 +333,37 @@ export default function LoginPage() {
                   )}
                 </div>
 
+                <div className="flex items-center justify-between text-sm">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={rememberMe}
+                      onChange={(e) => setRememberMe(e.target.checked)}
+                      className="rounded border-purple-500/30 bg-gray-800/50 text-[#4e3bff] focus:ring-0 focus:ring-offset-0 h-4 w-4"
+                    />
+                    <span className="text-gray-300 text-xs">
+                      {t("auth.rememberMe") || "Remember me"}
+                    </span>
+                  </label>
+                  <Link
+                    href={`/${locale}/auth/forgot-password`}
+                    className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
+                  >
+                    {t("auth.forgotPassword") || "Forgot password?"}
+                  </Link>
+                </div>
+
                 <Button
                   type="submit"
                   className="w-full bg-gradient-to-r from-[#4e3bff] to-[#9747ff] hover:opacity-90 text-white font-medium py-2 px-4 rounded-lg flex items-center justify-center"
                   disabled={loading}
                 >
-                  <LogIn className="mr-2 h-5 w-5" />
-                  {isSubmitting ? t("login.signingIn") || "Signing in…" : t("login.signIn") || "Sign In"}
+                  {loading ? (
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  ) : (
+                    <LogIn className="mr-2 h-5 w-5" />
+                  )}
+                  {loading ? t("login.signingIn") || "Signing in…" : t("login.signIn") || "Sign In"}
                 </Button>
               </form>
             )}

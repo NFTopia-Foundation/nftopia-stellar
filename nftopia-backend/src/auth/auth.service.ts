@@ -597,6 +597,23 @@ export class AuthService {
       },
     };
   }
+  async refreshTokens(refreshToken: string) {
+    try {
+      const payload = this.jwtService.verify(refreshToken);
+      if (payload.type !== 'refresh') {
+        throw new UnauthorizedException('Invalid token type');
+      }
+      const user = await this.userRepository.findOne({
+        where: { id: payload.sub },
+      });
+      if (!user) {
+        throw new UnauthorizedException('User not found');
+      }
+      return this.buildAuthResponse(user);
+    } catch {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+  }
 
   private buildTokenPair(user: JwtUserPayload) {
     const accessToken = this.jwtService.sign({

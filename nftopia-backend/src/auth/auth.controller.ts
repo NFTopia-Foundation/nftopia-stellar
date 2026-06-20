@@ -68,6 +68,18 @@ export class AuthController {
     };
   }
 
+  @Post('refresh')
+  @ApiOperation({ summary: 'Refresh access token' })
+  async refresh(@Body('refreshToken') refreshToken: string) {
+    const res = await this.authService.refreshTokens(refreshToken);
+    return {
+      data: {
+        success: true,
+        data: res,
+      },
+    };
+  }
+
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @Get('me')
