@@ -14,6 +14,7 @@ jest.mock("next/navigation", () => ({
   }),
   usePathname: () => "/en",
   useSearchParams: () => new URLSearchParams(),
+  useParams: () => ({ locale: "en" }),
 }));
 
 describe("Navbar minimal test (ESM)", () => {
