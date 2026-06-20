@@ -1,21 +1,21 @@
-import { create } from 'zustand';
+﻿import { create } from 'zustand';
 import { persist, devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
-import { TransactionType } from '@/components/wallet/TransactionSigner';
+
+export type TransactionType = 'mint' | 'list' | 'bid' | 'buy' | 'cancel';
 
 export type TxStatus = 'pending' | 'processing' | 'confirmed' | 'failed';
 
 export interface TrackedTransaction {
-  id: string;          // same as txHash, used as unique key
+  id: string;
   txHash: string;
   type: TransactionType;
   description?: string;
   status: TxStatus;
   network: string;
-  createdAt: number;   // Date.now()
+  createdAt: number;
   updatedAt: number;
   errorMessage?: string;
-  /** Original XDR stored for retry capability */
   xdr?: string;
 }
 
@@ -42,15 +42,8 @@ export const useTransactionStore = create<TransactionStore>()(
         addTransaction: (tx) =>
           set((state) => {
             const now = Date.now();
-            // Avoid duplicate entries for the same hash
             if (state.transactions.find((t) => t.txHash === tx.txHash)) return;
-            state.transactions.unshift({
-              ...tx,
-              id: tx.txHash,
-              createdAt: now,
-              updatedAt: now,
-            });
-            // Keep at most 50 transactions in history
+            state.transactions.unshift({ ...tx, id: tx.txHash, createdAt: now, updatedAt: now });
             if (state.transactions.length > 50) {
               state.transactions = state.transactions.slice(0, 50);
             }
@@ -70,20 +63,13 @@ export const useTransactionStore = create<TransactionStore>()(
             state.transactions = state.transactions.filter((t) => t.txHash !== txHash);
           }),
 
-        clearAll: () =>
-          set((state) => {
-            state.transactions = [];
-          }),
+        clearAll: () => set((state) => { state.transactions = []; }),
 
-        getPendingCount: () => {
-          return get().transactions.filter(
-            (t) => t.status === 'pending' || t.status === 'processing'
-          ).length;
-        },
+        getPendingCount: () =>
+          get().transactions.filter((t) => t.status === 'pending' || t.status === 'processing').length,
       })),
       {
         name: 'nftopia-transaction-history',
-        // Persist only the transactions array
         partialize: (state) => ({ transactions: state.transactions }),
       }
     ),
