@@ -2,7 +2,6 @@ import {
   Args,
   Context,
   ID,
-  Int,
   Mutation,
   Parent,
   Query,
@@ -56,7 +55,8 @@ export class PublicCreatorResolver {
 
   @Query(() => PublicCreatorType, {
     name: 'publicCreator',
-    description: 'Fetch a public creator profile by id, username, or wallet address',
+    description:
+      'Fetch a public creator profile by id, username, or wallet address',
   })
   async publicCreator(
     @Args('identifier', { type: () => String }) identifier: string,
@@ -147,8 +147,7 @@ export class PublicCreatorResolver {
     sortBy?: CreatorNftSort,
   ): Promise<NFTConnection> {
     const first = pagination?.first ?? 20;
-    const resolvedSort =
-      sortBy === CreatorNftSort.PRICE ? 'PRICE' : 'NEWEST';
+    const resolvedSort = sortBy === CreatorNftSort.PRICE ? 'PRICE' : 'NEWEST';
 
     const result = await this.nftService.findConnection({
       first,
@@ -244,9 +243,7 @@ export class PublicCreatorResolver {
       })),
     ];
 
-    items.sort(
-      (a, b) => b.occurredAt.getTime() - a.occurredAt.getTime(),
-    );
+    items.sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime());
 
     const filtered = after
       ? items.filter(

@@ -1,4 +1,9 @@
-import { GraphQLObjectType, GraphQLString, GraphQLNonNull, GraphQLFloat } from 'graphql';
+import {
+  GraphQLObjectType,
+  GraphQLString,
+  GraphQLNonNull,
+  GraphQLFloat,
+} from 'graphql';
 
 export const AuctionType = new GraphQLObjectType({
   name: 'Auction',

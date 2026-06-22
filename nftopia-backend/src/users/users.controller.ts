@@ -63,7 +63,9 @@ export class UsersController {
     if (!user || user.isBanned) {
       throw new NotFoundException('User not found');
     }
-    const { email, passwordHash, ...publicFields } = user;
+    const publicFields = { ...user };
+    delete publicFields.email;
+    delete publicFields.passwordHash;
     return publicFields;
   }
 
