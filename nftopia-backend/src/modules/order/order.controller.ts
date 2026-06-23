@@ -35,6 +35,23 @@ export class OrderController {
     return this.orderService.updateStatus(id, status);
   }
 
+  @Post(':id/execute')
+  async executeBundle(
+    @Param('id') id: string,
+    @Body('buyerId') buyerId: string,
+    @Body('amount') amount?: string,
+  ) {
+    return this.orderService.executeBundle(id, buyerId, amount);
+  }
+
+  @Post(':id/cancel')
+  async cancelBundle(
+    @Param('id') id: string,
+    @Body('sellerId') sellerId: string,
+  ) {
+    return this.orderService.cancelBundle(id, sellerId);
+  }
+
   @Get(':id/stats')
   async getStats(@Param('id') nftId: string) {
     return this.orderService.getStats(nftId);
