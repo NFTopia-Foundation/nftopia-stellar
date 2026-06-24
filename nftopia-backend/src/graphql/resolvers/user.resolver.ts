@@ -13,7 +13,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { GraphqlContext } from '../context/context.interface';
-import { GraphqlUserType } from '../types/user.types';
+import { DashboardStats, GraphqlUserType } from '../types/user.types';
 import type { User } from '../../users/user.entity';
 import { GqlAuthGuard } from '../../common/guards/gql-auth.guard';
 import { UsersService } from '../../users/users.service';
@@ -82,6 +82,35 @@ export class UserResolver {
     }
 
     return this.toGraphqlUser(user);
+  }
+
+  @Query(() => DashboardStats, {
+    name: 'dashboardStats',
+    description: 'Fetch dashboard stats for the authenticated user',
+  })
+  @UseGuards(GqlAuthGuard)
+  async dashboardStats(@Context() context: GraphqlContext) {
+    const userId = context.user?.userId;
+    if (!userId) {
+      throw new UnauthorizedException('Authentication is required');
+    }
+
+    const [nfts, orders, followers] = await Promise.all([
+      this.nftService.findByOwner(userId, {}),
+      this.orderService.findAll({ buyerId: userId }),
+      this.auctionService.findAll({ sellerId: userId }),
+    ]);
+
+    const totalSales = orders
+      .filter((order) => order.status === 'COMPLETED')
+      .reduce((sum, order) => sum + Number(order.price), 0);
+
+    return {
+      nftsCreated: nfts.total,
+      totalSales,
+      totalViews: 0,
+      followers: 0,
+    };
   }
 
   @Query(() => GraphqlUserType, {
