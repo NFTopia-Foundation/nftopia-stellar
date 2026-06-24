@@ -13,7 +13,7 @@
     "analyze": "ANALYZE=true next build",
     "lhci:collect": "lhci collect --config=./lighthouserc.js",
     "lhci:assert": "lhci assert --config=./lighthouserc.js",
-    "test": "jest",
+    "test": "jest --ci --forceExit",
     "e2e": "playwright test",
     "e2e:install": "playwright install --with-deps",
     "validate-translations": "node scripts/validate-translations.js"

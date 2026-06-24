@@ -9,6 +9,7 @@ import { WebVitals } from "@/components/web-vitals";
 import { StellarWalletProvider } from "@/components/StellarWalletProvider";
 import { StoreProvider } from "@/lib/stores/store-provider";
 import { Toast } from "@/components/ui/toast";
+import { TransactionToastContainer } from "@/components/transactions/TransactionToast";
 import { usePathname } from "next/navigation";
 import { useTranslation } from "@/hooks/useTranslation";
 import { ClientBody } from "@/components/layout/ClientBody";
@@ -104,6 +105,7 @@ export default function LocaleLayout({ children, params }: LocaleLayoutProps) {
               </div>
             )}
             <Toast />
+            <TransactionToastContainer />
           </StellarWalletProvider>
         </StoreProvider>
       </body>
