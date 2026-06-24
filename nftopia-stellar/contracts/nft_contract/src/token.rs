@@ -186,18 +186,79 @@ pub fn batch_mint(
     Ok(ids)
 }
 
+/// Burn a single token.
+///
+/// Authorization:
+/// - Token owner can burn their own token
+/// - Accounts with BURNER role can burn any token
+///
+/// Validation:
+/// - Token must exist (TokenNotFound if not)
+/// - Token must not be already burned (AlreadyBurned if already burned)
+/// - Authorization checked via access_control
+///
+/// Cleanup:
+/// - Removes TokenOwner, TokenData, TokenApproved entries
+/// - Decrements owner balance and total supply
+/// - Emits Burn event on success
+/// - Emits BurnFailed event on failure
 pub fn burn(env: &Env, caller: &Address, token_id: u64) -> Result<(), ContractError> {
+    // 1. Validate token exists
     let owner: Address = env
         .storage()
         .persistent()
         .get(&DataKey::TokenOwner(token_id))
-        .ok_or(ContractError::TokenNotFound)?;
+        .ok_or_else(|| {
+            events::emit_burn_failed(
+                env,
+                token_id,
+                caller.clone(),
+                ContractError::TokenNotFound as u32,
+            );
+            ContractError::TokenNotFound
+        })?;
 
-    // Owner can always burn; burner role required for others
-    if caller != &owner {
-        access_control::require_burner(env, caller)?;
+    // 2. Validate not already burned - check if token data exists
+    let token_data: Option<TokenData> = env
+        .storage()
+        .persistent()
+        .get(&DataKey::TokenData(token_id));
+    if token_data.is_none() {
+        events::emit_burn_failed(
+            env,
+            token_id,
+            caller.clone(),
+            ContractError::AlreadyBurned as u32,
+        );
+        return Err(ContractError::AlreadyBurned);
     }
 
+    // 3. Authorization: owner OR burner role
+    let is_owner = caller == &owner;
+    let is_burner = access_control::has_role(env, caller, crate::types::role::BURNER);
+
+    if !is_owner && !is_burner {
+        events::emit_burn_failed(
+            env,
+            token_id,
+            caller.clone(),
+            ContractError::NotAuthorized as u32,
+        );
+        return Err(ContractError::NotAuthorized);
+    }
+
+    // 4. Clean up operator approvals for this token
+    // Remove TokenApproved entry
+    env.storage()
+        .persistent()
+        .remove(&DataKey::TokenApproved(token_id));
+
+    // Remove any approval-for-all entries that reference this token
+    // Note: We need to iterate through all operators or use a different approach
+    // For now, we remove the token-specific approval. Approval-for-all is per-owner,
+    // not per-token, so it doesn't need to be cleaned up for individual burns.
+
+    // 5. Remove token data and ownership
     env.storage()
         .persistent()
         .remove(&DataKey::TokenOwner(token_id));
@@ -206,27 +267,85 @@ pub fn burn(env: &Env, caller: &Address, token_id: u64) -> Result<(), ContractEr
         .remove(&DataKey::TokenData(token_id));
     env.storage()
         .persistent()
-        .remove(&DataKey::TokenApproved(token_id));
+        .remove(&DataKey::TokenRoyalty(token_id));
 
+    // 6. Update owner balance
     let bal: u64 = env
         .storage()
         .persistent()
         .get(&DataKey::Balance(owner.clone()))
         .unwrap_or(0);
-    env.storage()
-        .persistent()
-        .set(&DataKey::Balance(owner.clone()), &bal.saturating_sub(1));
+    if bal > 0 {
+        env.storage()
+            .persistent()
+            .set(&DataKey::Balance(owner.clone()), &bal.saturating_sub(1));
+    }
 
+    // 7. Update total supply
     let total: u64 = env
         .storage()
         .instance()
         .get(&DataKey::TotalSupply)
         .unwrap_or(0);
-    env.storage()
-        .instance()
-        .set(&DataKey::TotalSupply, &total.saturating_sub(1));
+    if total > 0 {
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalSupply, &total.saturating_sub(1));
+    }
 
+    // 8. Emit success event
     events::emit_burn(env, owner, token_id);
+    Ok(())
+}
+
+/// Batch burn multiple tokens in one transaction.
+///
+/// Authorization:
+/// - Each token must be owned by the caller OR caller must have BURNER role
+/// - If caller has BURNER role, they can burn any tokens in the batch
+/// - If caller does NOT have BURNER role, they must own ALL tokens in the batch
+///
+/// Behavior:
+/// - Burns tokens atomically: if any token fails, the entire transaction reverts
+/// - Maximum batch size is MAX_BATCH_SIZE (currently 50)
+///
+/// Returns:
+/// - Ok(()) if all tokens were successfully burned
+/// - Error if any token validation fails
+pub fn batch_burn(env: &Env, caller: &Address, token_ids: Vec<u64>) -> Result<(), ContractError> {
+    // 1. Validate batch size
+    let n = token_ids.len();
+    if n == 0 || n > MAX_BATCH_SIZE {
+        return Err(ContractError::BatchTooLarge);
+    }
+
+    // 2. Check if caller has burner role (allows burning any tokens)
+    let has_burner_role = access_control::has_role(env, caller, crate::types::role::BURNER);
+
+    // 3. If caller doesn't have burner role, verify they own ALL tokens
+    if !has_burner_role {
+        for i in 0..n {
+            let token_id = token_ids.get(i).unwrap();
+            let owner: Address = env
+                .storage()
+                .persistent()
+                .get(&DataKey::TokenOwner(token_id))
+                .ok_or(ContractError::TokenNotFound)?;
+
+            if caller != &owner {
+                return Err(ContractError::NotAuthorized);
+            }
+        }
+    }
+
+    // 4. Burn each token
+    for i in 0..n {
+        let token_id = token_ids.get(i).unwrap();
+        // Use the single burn function for each token
+        // This ensures consistent validation and cleanup
+        burn(env, caller, token_id)?;
+    }
+
     Ok(())
 }
 

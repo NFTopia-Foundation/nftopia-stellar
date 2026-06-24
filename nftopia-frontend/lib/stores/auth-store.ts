@@ -48,9 +48,14 @@ export const useAuthStore = create<any>()(
 
           const result = await res.json();
           const { access_token, refresh_token, user } = result.data.data;
-          localStorage.setItem("auth-user", JSON.stringify({ data: user }));
-          localStorage.setItem("access_token", access_token);
-          localStorage.setItem("refresh_token", refresh_token);
+          if (typeof window !== "undefined") {
+            sessionStorage.removeItem("auth-user");
+            sessionStorage.removeItem("access_token");
+            sessionStorage.removeItem("refresh_token");
+            localStorage.setItem("auth-user", JSON.stringify({ data: user }));
+            localStorage.setItem("access_token", access_token);
+            localStorage.setItem("refresh_token", refresh_token);
+          }
           set({
             user,
             isAuthenticated: true,
@@ -66,7 +71,7 @@ export const useAuthStore = create<any>()(
         }
       },
 
-      emailLogin: async (email: string, password: string) => {
+      emailLogin: async (email: string, password: string, rememberMe = false) => {
         set({ loading: true, error: null });
         try {
           const csrfToken = await getCookie();
@@ -87,9 +92,19 @@ export const useAuthStore = create<any>()(
 
           const result = await res.json();
           const { access_token, refresh_token, user } = result.data.data;
-          localStorage.setItem("auth-user", JSON.stringify({ data: user }));
-          localStorage.setItem("access_token", access_token);
-          localStorage.setItem("refresh_token", refresh_token);
+          
+          if (typeof window !== "undefined") {
+            const storage = rememberMe ? localStorage : sessionStorage;
+            const otherStorage = rememberMe ? sessionStorage : localStorage;
+            otherStorage.removeItem("auth-user");
+            otherStorage.removeItem("access_token");
+            otherStorage.removeItem("refresh_token");
+
+            storage.setItem("auth-user", JSON.stringify({ data: user }));
+            storage.setItem("access_token", access_token);
+            storage.setItem("refresh_token", refresh_token);
+          }
+          
           set({
             user,
             isAuthenticated: true,
@@ -173,9 +188,14 @@ export const useAuthStore = create<any>()(
           }
           const result = await res.json();
           const { access_token, refresh_token, user } = result.data.data;
-          localStorage.setItem("auth-user", JSON.stringify({ data: user }));
-          localStorage.setItem("access_token", access_token);
-          localStorage.setItem("refresh_token", refresh_token);
+          if (typeof window !== "undefined") {
+            sessionStorage.removeItem("auth-user");
+            sessionStorage.removeItem("access_token");
+            sessionStorage.removeItem("refresh_token");
+            localStorage.setItem("auth-user", JSON.stringify({ data: user }));
+            localStorage.setItem("access_token", access_token);
+            localStorage.setItem("refresh_token", refresh_token);
+          }
           set({
             user,
             isAuthenticated: true,
@@ -194,7 +214,9 @@ export const useAuthStore = create<any>()(
       refreshToken: async () => {
         set({ loading: true, error: null });
         try {
-          const refreshToken = localStorage.getItem("refresh_token");
+          const refreshToken = typeof window !== "undefined"
+            ? (localStorage.getItem("refresh_token") || sessionStorage.getItem("refresh_token"))
+            : null;
           if (!refreshToken) throw new Error("No refresh token available");
           const res = await fetch(`${API_CONFIG.baseUrl}/auth/refresh`, {
             method: "POST",
@@ -209,9 +231,17 @@ export const useAuthStore = create<any>()(
           }
           const result = await res.json();
           const { access_token, refresh_token, user } = result.data.data;
-          localStorage.setItem("auth-user", JSON.stringify({ data: user }));
-          localStorage.setItem("access_token", access_token);
-          localStorage.setItem("refresh_token", refresh_token);
+          if (typeof window !== "undefined") {
+            const storage = localStorage.getItem("refresh_token") ? localStorage : sessionStorage;
+            const otherStorage = localStorage.getItem("refresh_token") ? sessionStorage : localStorage;
+            otherStorage.removeItem("auth-user");
+            otherStorage.removeItem("access_token");
+            otherStorage.removeItem("refresh_token");
+
+            storage.setItem("auth-user", JSON.stringify({ data: user }));
+            storage.setItem("access_token", access_token);
+            storage.setItem("refresh_token", refresh_token);
+          }
           set({
             user,
             isAuthenticated: true,
@@ -229,7 +259,8 @@ export const useAuthStore = create<any>()(
       },
 
       isAccessTokenExpired: () => {
-        const token = localStorage.getItem("access_token");
+        if (typeof window === "undefined") return true;
+        const token = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
         if (!token) return true;
         try {
           const payload = JSON.parse(atob(token.split(".")[1]));
@@ -339,7 +370,7 @@ export const useAuthStore = create<any>()(
         try {
           const userStr =
             typeof window !== "undefined"
-              ? localStorage.getItem("auth-user")
+              ? (localStorage.getItem("auth-user") || sessionStorage.getItem("auth-user"))
               : null;
           if (!userStr) return null;
           const parsed = JSON.parse(userStr);
@@ -439,7 +470,10 @@ export const useAuthStore = create<any>()(
 
           const result = await res.json();
           let user = result.data.data;
-          localStorage.setItem("auth-user", JSON.stringify({ data: user }));
+          if (typeof window !== "undefined") {
+            sessionStorage.removeItem("auth-user");
+            localStorage.setItem("auth-user", JSON.stringify({ data: user }));
+          }
           set({ user, isAuthenticated: true, loading: false, error: null });
           window.location.href = `/${locale}/creator-dashboard`;
         } catch (error) {
@@ -460,6 +494,9 @@ export const useAuthStore = create<any>()(
             localStorage.removeItem("auth-user");
             localStorage.removeItem("access_token");
             localStorage.removeItem("refresh_token");
+            sessionStorage.removeItem("auth-user");
+            sessionStorage.removeItem("access_token");
+            sessionStorage.removeItem("refresh_token");
           }
 
           const csrfToken = await getCookie();
@@ -508,6 +545,9 @@ export const useAuthStore = create<any>()(
             localStorage.removeItem("auth-user");
             localStorage.removeItem("access_token");
             localStorage.removeItem("refresh_token");
+            sessionStorage.removeItem("auth-user");
+            sessionStorage.removeItem("access_token");
+            sessionStorage.removeItem("refresh_token");
             const getCookieValue = (name: string) => {
               const value = `; ${document.cookie}`;
               const parts = value.split(`; ${name}=`);
@@ -545,7 +585,14 @@ export const initializeAuth = async (router?: NextRouter) => {
       setUser(userData);
       let currLocation = window.location.href;
       if (currLocation.includes("/auth/login") && userData) {
-        window.location.href = "/creator-dashboard";
+        const getCookieValue = (name: string) => {
+          const value = `; ${document.cookie}`;
+          const parts = value.split(`; ${name}=`);
+          if (parts.length === 2) return parts.pop()?.split(";").shift();
+          return null;
+        };
+        const locale = getCookieValue("NEXT_LOCALE") || "en";
+        window.location.href = buildLocalizedRoute(locale, "/creator-dashboard");
       }
     } else {
       setUser(null);

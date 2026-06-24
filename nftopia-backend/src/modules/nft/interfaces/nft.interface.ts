@@ -15,6 +15,7 @@ export interface NftQueryResult<T> {
 export interface NftConnectionCursor {
   createdAt: string;
   id: string;
+  price?: string;
 }
 
 export interface NftConnectionQuery {
@@ -25,6 +26,7 @@ export interface NftConnectionQuery {
   collectionId?: string;
   search?: string;
   includeBurned?: boolean;
+  sortBy?: 'NEWEST' | 'PRICE';
 }
 
 export interface NftConnectionResult<T> {

@@ -101,6 +101,24 @@
       "royalties": "Lizenzgebühren",
       "mint": "NFT prägen"
     },
+    "creatorProfile": {
+      "verified": "Verifiziert",
+      "followers": "Follower",
+      "nftsCreated": "NFTs",
+      "volume": "Volumen",
+      "tabNfts": "NFTs",
+      "tabCollections": "Kollektionen",
+      "tabActivity": "Aktivität",
+      "sortNewest": "Neueste",
+      "sortPrice": "Preis",
+      "emptyNfts": "Noch keine NFTs",
+      "emptyCollections": "Noch keine Kollektionen",
+      "emptyActivity": "Noch keine Aktivität",
+      "notFound": "Creator nicht gefunden",
+      "activityMint": "Gemintet",
+      "activitySale": "Verkauft",
+      "activityListing": "Gelistet"
+    },
     "common": {
       "loading": "Wird geladen...",
       "error": "Fehler",

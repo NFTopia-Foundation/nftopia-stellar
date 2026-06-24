@@ -16,6 +16,14 @@ pub struct Burn {
 
 #[contractevent]
 #[derive(Clone, Debug)]
+pub struct BurnFailed {
+    pub token_id: u64,
+    pub caller: Address,
+    pub reason: u32, // ContractError code
+}
+
+#[contractevent]
+#[derive(Clone, Debug)]
 pub struct Transfer {
     pub from: Address,
     pub to: Address,
@@ -57,6 +65,15 @@ pub fn emit_mint(env: &Env, to: Address, token_id: u64) {
 
 pub fn emit_burn(env: &Env, from: Address, token_id: u64) {
     Burn { from, token_id }.publish(env);
+}
+
+pub fn emit_burn_failed(env: &Env, token_id: u64, caller: Address, reason: u32) {
+    BurnFailed {
+        token_id,
+        caller,
+        reason,
+    }
+    .publish(env);
 }
 
 pub fn emit_transfer(env: &Env, from: Address, to: Address, token_id: u64) {

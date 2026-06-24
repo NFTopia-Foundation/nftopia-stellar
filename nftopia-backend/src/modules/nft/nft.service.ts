@@ -24,6 +24,7 @@ import {
 import { SorobanService } from '../../nft/soroban.service';
 import { User } from '../../users/user.entity';
 import { PrometheusService } from '../../common/metrics/prometheus';
+import { NftTransferEvent } from '../../jobs/entities/nft-transfer-event.entity';
 
 @Injectable()
 export class NftService {
@@ -39,6 +40,8 @@ export class NftService {
     private readonly sorobanService: SorobanService,
     private readonly eventEmitter: EventEmitter2,
     private readonly prometheusService: PrometheusService,
+    @InjectRepository(NftTransferEvent)
+    private readonly transferEventRepo: Repository<NftTransferEvent>,
   ) {}
 
   async findAll(query: NftQueryDto): Promise<NftQueryResult<Nft>> {
@@ -329,6 +332,146 @@ export class NftService {
     });
   }
 
+  /**
+   * Get transfer history for an NFT with page-based pagination
+   * Sorted by timestamp descending (newest first)
+   */
+  async getTransferHistory(
+    nftId: string,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<{
+    data: NftTransferEvent[];
+    total: number;
+    hasNextPage: boolean;
+  }> {
+    const skip = (page - 1) * limit;
+
+    // First, get the NFT to get contract and token info
+    const nft = await this.findById(nftId);
+
+    // Query transfer events for this NFT
+    const [data, total] = await this.transferEventRepo
+      .createQueryBuilder('event')
+      .where('event.nftContractId = :contractId', {
+        contractId: nft.contractAddress,
+      })
+      .andWhere('event.tokenId = :tokenId', { tokenId: nft.tokenId })
+      .orderBy('event.timestamp', 'DESC')
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
+
+    return {
+      data,
+      total,
+      hasNextPage: skip + data.length < total,
+    };
+  }
+
+  /**
+   * Get transfer history for an NFT with cursor-based pagination
+   * Sorted by timestamp descending (newest first)
+   */
+  async getTransferHistoryCursor(
+    nftId: string,
+    first: number = 10,
+    after?: { timestamp: number; id: string },
+  ): Promise<{
+    data: NftTransferEvent[];
+    total: number;
+    hasNextPage: boolean;
+  }> {
+    // First, get the NFT to get contract and token info
+    const nft = await this.findById(nftId);
+
+    const qb = this.transferEventRepo
+      .createQueryBuilder('event')
+      .where('event.nftContractId = :contractId', {
+        contractId: nft.contractAddress,
+      })
+      .andWhere('event.tokenId = :tokenId', { tokenId: nft.tokenId });
+
+    if (after) {
+      qb.andWhere(
+        '(event.timestamp < :cursorTimestamp OR (event.timestamp = :cursorTimestamp AND event.id < :cursorId))',
+        {
+          cursorTimestamp: after.timestamp,
+          cursorId: after.id,
+        },
+      );
+    }
+
+    // Get one extra to determine if there's a next page
+    const data = await qb
+      .orderBy('event.timestamp', 'DESC')
+      .addOrderBy('event.id', 'DESC')
+      .take(first + 1)
+      .getMany();
+
+    const hasNextPage = data.length > first;
+    const resultData = data.slice(0, first);
+
+    // Get total count
+    const total = await this.transferEventRepo
+      .createQueryBuilder('event')
+      .where('event.nftContractId = :contractId', {
+        contractId: nft.contractAddress,
+      })
+      .andWhere('event.tokenId = :tokenId', { tokenId: nft.tokenId })
+      .getCount();
+
+    return {
+      data: resultData,
+      total,
+      hasNextPage,
+    };
+  }
+
+  /**
+   * Get a specific transfer event by ID
+   */
+  async getTransferEventById(id: string): Promise<NftTransferEvent | null> {
+    return this.transferEventRepo.findOne({
+      where: { id },
+    });
+  }
+
+  /**
+   * Get the first (mint) transfer event for an NFT
+   */
+  async getFirstTransferEvent(nftId: string): Promise<NftTransferEvent | null> {
+    const nft = await this.findById(nftId);
+
+    return this.transferEventRepo
+      .createQueryBuilder('event')
+      .where('event.nftContractId = :contractId', {
+        contractId: nft.contractAddress,
+      })
+      .andWhere('event.tokenId = :tokenId', { tokenId: nft.tokenId })
+      .andWhere('event.eventType = :eventType', { eventType: 'mint' })
+      .orderBy('event.timestamp', 'ASC')
+      .limit(1)
+      .getOne();
+  }
+
+  /**
+   * Get the most recent transfer event for an NFT
+   */
+  async getLastTransferEvent(nftId: string): Promise<NftTransferEvent | null> {
+    const nft = await this.findById(nftId);
+
+    return this.transferEventRepo
+      .createQueryBuilder('event')
+      .where('event.nftContractId = :contractId', {
+        contractId: nft.contractAddress,
+      })
+      .andWhere('event.tokenId = :tokenId', { tokenId: nft.tokenId })
+      .orderBy('event.timestamp', 'DESC')
+      .limit(1)
+      .getOne();
+  }
+
   private async validateUserIds(ownerId: string, creatorId: string) {
     const [ownerExists, creatorExists] = await Promise.all([
       this.userRepository.exists({ where: { id: ownerId } }),
@@ -421,13 +564,30 @@ export class NftService {
     const qb = this.createBaseQuery(query);
 
     if (query.after) {
-      qb.andWhere(
-        '(nft.createdAt < :cursorCreatedAt OR (nft.createdAt = :cursorCreatedAt AND nft.id < :cursorId))',
-        {
-          cursorCreatedAt: new Date(query.after.createdAt),
-          cursorId: query.after.id,
-        },
-      );
+      if (query.sortBy === 'PRICE') {
+        qb.andWhere(
+          '(nft.lastPrice < :cursorPrice OR (nft.lastPrice = :cursorPrice AND nft.id < :cursorId) OR (nft.lastPrice IS NULL AND nft.id < :cursorId))',
+          {
+            cursorPrice: query.after.price ?? '0',
+            cursorId: query.after.id,
+          },
+        );
+      } else {
+        qb.andWhere(
+          '(nft.createdAt < :cursorCreatedAt OR (nft.createdAt = :cursorCreatedAt AND nft.id < :cursorId))',
+          {
+            cursorCreatedAt: new Date(query.after.createdAt),
+            cursorId: query.after.id,
+          },
+        );
+      }
+    }
+
+    if (query.sortBy === 'PRICE') {
+      return qb
+        .orderBy('nft.lastPrice', 'DESC', 'NULLS LAST')
+        .addOrderBy('nft.id', 'DESC')
+        .take(first + 1);
     }
 
     return qb

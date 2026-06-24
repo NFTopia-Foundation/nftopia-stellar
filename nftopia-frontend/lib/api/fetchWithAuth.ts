@@ -17,10 +17,12 @@ export async function fetchWithAuth(
   retry = true,
 ): Promise<Response> {
   const accessToken =
-    typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+    typeof window !== "undefined"
+      ? (localStorage.getItem("access_token") || sessionStorage.getItem("access_token"))
+      : null;
   const refreshToken =
     typeof window !== "undefined"
-      ? localStorage.getItem("refresh_token")
+      ? (localStorage.getItem("refresh_token") || sessionStorage.getItem("refresh_token"))
       : null;
 
   const headers = new Headers(init?.headers || {});
@@ -69,7 +71,7 @@ export async function fetchWithAuth(
 
         const newAccessToken =
           typeof window !== "undefined"
-            ? localStorage.getItem("access_token")
+            ? (localStorage.getItem("access_token") || sessionStorage.getItem("access_token"))
             : null;
         if (newAccessToken) {
           headers.set("Authorization", `Bearer ${newAccessToken}`);

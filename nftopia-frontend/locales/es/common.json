@@ -101,6 +101,24 @@
       "royalties": "Regalías",
       "mint": "Acuñar NFT"
     },
+    "creatorProfile": {
+      "verified": "Verificado",
+      "followers": "seguidores",
+      "nftsCreated": "NFTs",
+      "volume": "volumen",
+      "tabNfts": "NFTs",
+      "tabCollections": "Colecciones",
+      "tabActivity": "Actividad",
+      "sortNewest": "Más recientes",
+      "sortPrice": "Precio",
+      "emptyNfts": "Sin NFTs",
+      "emptyCollections": "Sin colecciones",
+      "emptyActivity": "Sin actividad",
+      "notFound": "Creador no encontrado",
+      "activityMint": "Acuñado",
+      "activitySale": "Vendido",
+      "activityListing": "Listado"
+    },
     "common": {
       "loading": "Cargando...",
       "error": "Error",

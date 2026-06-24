@@ -18,6 +18,7 @@ describe('OrderResolver', () => {
           useValue: {
             findOne: jest.fn(),
             findAll: jest.fn(),
+            findAllWithCount: jest.fn(),
             getSalesAnalytics: jest.fn(),
           },
         },
@@ -58,21 +59,26 @@ describe('OrderResolver', () => {
 
   describe('myOrders', () => {
     it('should fetch current user orders', async () => {
-      const mockOrders = [
-        {
-          id: '1',
-          nftId: 'nft1',
-          buyerId: 'u1',
-          sellerId: 's1',
-          price: '10',
-          currency: 'XLM',
-          type: 'SALE',
-          status: 'COMPLETED',
-          transactionHash: 'tx',
-          createdAt: new Date(),
-        },
-      ];
-      (service.findAll as jest.Mock).mockResolvedValue(mockOrders);
+      const mockOrder = {
+        id: '1',
+        nftId: 'nft1',
+        buyerId: 'u1',
+        sellerId: 's1',
+        price: '10',
+        currency: 'XLM',
+        type: 'SALE',
+        status: 'COMPLETED',
+        transactionHash: 'tx',
+        createdAt: new Date(),
+      };
+      const mockResult = {
+        items: [mockOrder],
+        totalCount: 1,
+        page: 1,
+        limit: 20,
+        hasNextPage: false,
+      };
+      (service.findAllWithCount as jest.Mock).mockResolvedValue(mockResult);
       const result = await resolver.myOrders({}, 'SALE', {
         req: {} as unknown as Request,
         res: {} as unknown as Response,
@@ -80,28 +86,37 @@ describe('OrderResolver', () => {
         user: { userId: 'u1' },
       });
       expect(result.edges[0].node.id).toBe('1');
+      expect(result.totalCount).toBe(1);
+      expect(result.pageInfo.hasNextPage).toBe(false);
     });
   });
 
   describe('userOrders', () => {
     it('should fetch orders for a specific user', async () => {
-      const mockOrders = [
-        {
-          id: '1',
-          nftId: 'nft1',
-          buyerId: 'u2',
-          sellerId: 's1',
-          price: '10',
-          currency: 'XLM',
-          type: 'PURCHASE',
-          status: 'COMPLETED',
-          transactionHash: 'tx',
-          createdAt: new Date(),
-        },
-      ];
-      (service.findAll as jest.Mock).mockResolvedValue(mockOrders);
+      const mockOrder = {
+        id: '1',
+        nftId: 'nft1',
+        buyerId: 'u2',
+        sellerId: 's1',
+        price: '10',
+        currency: 'XLM',
+        type: 'PURCHASE',
+        status: 'COMPLETED',
+        transactionHash: 'tx',
+        createdAt: new Date(),
+      };
+      const mockResult = {
+        items: [mockOrder],
+        totalCount: 1,
+        page: 1,
+        limit: 20,
+        hasNextPage: false,
+      };
+      (service.findAllWithCount as jest.Mock).mockResolvedValue(mockResult);
       const result = await resolver.userOrders('u2', {});
       expect(result.edges[0].node.buyerId).toBe('u2');
+      expect(result.totalCount).toBe(1);
+      expect(result.pageInfo.hasNextPage).toBe(false);
     });
   });
 

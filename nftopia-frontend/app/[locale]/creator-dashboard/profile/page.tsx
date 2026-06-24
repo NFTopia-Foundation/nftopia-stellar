@@ -27,6 +27,8 @@ import {
   fetchProfileByAddress,
   updateMyProfile,
 } from "@/lib/services/profile";
+import { ImageUploadField } from "@/components/ui/image-upload-field";
+import { uploadToFirebase } from "@/lib/firebase/uploadtofirebase";
 
 type ProfileForm = Required<UpdateProfilePayload>;
 type FormErrors = Partial<Record<keyof ProfileForm, string>>;
@@ -70,6 +72,8 @@ export default function ProfilePage() {
     type: "success" | "error";
     text: string;
   } | null>(null);
+  const [pendingAvatarFile, setPendingAvatarFile] = useState<File | null>(null);
+  const [pendingBannerFile, setPendingBannerFile] = useState<File | null>(null);
 
   const profileAddress =
     authUser?.walletAddress || authUser?.address || address || "";
@@ -163,9 +167,21 @@ export default function ProfilePage() {
 
     setSaving(true);
     try {
-      const updated = await updateMyProfile(saveWalletAddress, form);
+      const payload: UpdateProfilePayload = { ...form };
+
+      if (pendingAvatarFile) {
+        payload.avatarUrl = await uploadToFirebase(pendingAvatarFile);
+      }
+
+      if (pendingBannerFile) {
+        payload.bannerUrl = await uploadToFirebase(pendingBannerFile);
+      }
+
+      const updated = await updateMyProfile(saveWalletAddress, payload);
       setProfile(updated);
       setForm(toProfileForm(updated));
+      setPendingAvatarFile(null);
+      setPendingBannerFile(null);
       setAuthUser({
         ...(authUser || {}),
         ...updated,
@@ -268,18 +284,21 @@ export default function ProfilePage() {
                 error={formErrors.bio}
                 onChange={(value) => handleChange("bio", value)}
               />
-              <TextField
-                label="Avatar URL"
-                value={form.avatarUrl}
-                error={formErrors.avatarUrl}
-                onChange={(value) => handleChange("avatarUrl", value)}
-              />
-              <TextField
-                label="Banner URL"
-                value={form.bannerUrl}
-                error={formErrors.bannerUrl}
-                onChange={(value) => handleChange("bannerUrl", value)}
-              />
+              <div className="grid gap-4 md:grid-cols-2">
+                <ImageUploadField
+                  label="Avatar"
+                  value={form.avatarUrl}
+                  fallbackSeed={profile?.id || profileAddress}
+                  onPendingFileChange={setPendingAvatarFile}
+                />
+                <ImageUploadField
+                  label="Banner"
+                  value={form.bannerUrl}
+                  fallbackSeed={`${profile?.id || profileAddress}-banner`}
+                  aspect="banner"
+                  onPendingFileChange={setPendingBannerFile}
+                />
+              </div>
               <TextField
                 label="Twitter Handle"
                 value={form.twitterHandle}

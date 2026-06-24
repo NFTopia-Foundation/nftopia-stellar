@@ -1,6 +1,35 @@
-version: '3.9'
 
 services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NODE_ENV: development
+    container_name: nftopia-backend
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+      - '3001:3001'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      meilisearch:
+        condition: service_started
+    environment:
+      - PORT=${PORT}
+      - NODE_ENV=${NODE_ENV}
+      - SOROBAN_RPC_URL=${SOROBAN_RPC_URL}
+      - MARKETPLACE_SETTLEMENT_CONTRACT_ID=${MARKETPLACE_SETTLEMENT_CONTRACT_ID}
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+    volumes:
+      # - .:/usr/src/app
+      - /usr/src/app/node_modules
+
   postgres:
     image: postgres:14
     container_name: nftopia-postgres
@@ -8,11 +37,16 @@ services:
     ports:
       - '5433:5432'
     environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-nftopia}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-nftopia}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:alpine

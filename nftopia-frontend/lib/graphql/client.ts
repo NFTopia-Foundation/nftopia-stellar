@@ -16,16 +16,16 @@ function getAuthToken(): string | null {
     return null;
   }
 
-  const tokenKeys = ["auth-token", "auth_token", "token", "accessToken"];
+  const tokenKeys = ["auth-token", "auth_token", "token", "accessToken", "access_token"];
 
   for (const key of tokenKeys) {
-    const token = window.localStorage.getItem(key);
+    const token = window.localStorage.getItem(key) || window.sessionStorage.getItem(key);
     if (token) {
       return token;
     }
   }
 
-  const storedUser = window.localStorage.getItem("auth-user");
+  const storedUser = window.localStorage.getItem("auth-user") || window.sessionStorage.getItem("auth-user");
   if (storedUser) {
     try {
       const parsedUser = JSON.parse(storedUser);
@@ -33,13 +33,14 @@ function getAuthToken(): string | null {
         parsedUser?.data?.token ||
         parsedUser?.token ||
         parsedUser?.accessToken ||
+        parsedUser?.access_token ||
         null;
 
       if (token) {
         return token;
       }
     } catch {
-      // Ignore malformed localStorage payloads.
+      // Ignore malformed storage payloads.
     }
   }
 

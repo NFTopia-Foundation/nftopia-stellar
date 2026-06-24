@@ -1,84 +1,514 @@
-scalar DateTime
+"""Exposes a URL that specifies the behavior of this scalar."""
+directive @specifiedBy(
+  """The URL that specifies the behavior of this scalar."""
+  url: String!
+) on SCALAR
 
-type User {
+"""
+Indicates exactly one field must be supplied and this field must not be `null`.
+"""
+directive @oneOf on INPUT_OBJECT
+
+type Auction {
   id: ID!
-  walletAddress: String
-  username: String
-  profileImage: String
-  createdAt: DateTime
-  updatedAt: DateTime
+  nftId: ID!
+  sellerId: ID!
+  startPrice: String!
+  currentPrice: String!
+  reservePrice: String
+  startTime: DateTime!
+  endTime: DateTime!
+  status: AuctionStatus!
+  winnerId: ID
+  bids: [Bid!]
+  nft: NFT
+  seller: User
+  highestBid: Bid
+  winner: User
+}
+
+type AuctionConnection {
+  edges: [AuctionEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type AuctionEdge {
+  node: Auction!
+  cursor: String!
+}
+
+"""Current state of an NFT auction"""
+enum AuctionStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  SETTLED
+}
+
+type Bid {
+  id: ID!
+  auctionId: ID!
+  bidderId: ID!
+  amount: String!
+  createdAt: DateTime!
+  auction: Auction
+  bidder: User
 }
 
 type Collection {
   id: ID!
-  name: String
+  contractAddress: String
+  name: String!
+  symbol: String!
   description: String
-  imageUrl: String
+  image: String!
+  creatorId: ID!
+  totalVolume: String!
+  floorPrice: String!
+  totalSupply: Int!
+  createdAt: DateTime!
+  creator: User
+
+  """NFTs that belong to this collection"""
+  nfts(pagination: PaginationInput, filter: NFTFilterInput): NFTConnection
+}
+
+type CollectionConnection {
+  edges: [CollectionEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type CollectionEdge {
+  node: Collection!
+  cursor: String!
+}
+
+input CollectionFilterInput {
   creatorId: ID
-  createdAt: DateTime
-  updatedAt: DateTime
+  search: String
+  verifiedOnly: Boolean
 }
 
-type NFT {
-  id: ID!
-  tokenId: String
-  name: String
+type CollectionStats {
+  totalVolume: String!
+  floorPrice: String!
+  totalSupply: Int!
+  ownerCount: Int!
+}
+
+input CreateCollectionInput {
+  contractAddress: String!
+  name: String!
+  symbol: String!
   description: String
-  imageUrl: String
-  ownerId: ID
-  collectionId: ID
-  createdAt: DateTime
-  updatedAt: DateTime
-}
-
-type Listing {
-  id: ID!
-  nftId: ID
-  sellerId: ID
-  price: String
-  currency: String
-  status: String
-  createdAt: DateTime
-  updatedAt: DateTime
-}
-
-type Auction {
-  id: ID!
-  nftId: ID
-  sellerId: ID
-  reservePrice: String
-  highestBid: String
-  endTime: DateTime
-  status: String
-  createdAt: DateTime
-  updatedAt: DateTime
+  image: String!
+  bannerImage: String
 }
 
 input CreateListingInput {
   nftId: ID!
-  price: String!
+  price: Float!
   currency: String
+  expiresAt: String
 }
 
-input PlaceBidInput {
-  auctionId: ID!
-  amount: String!
+"""
+A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
+"""
+scalar DateTime
+
+type GraphqlHealthResponse {
+  status: String!
+  service: String!
+  timestamp: String!
 }
 
-type Query {
-  nfts(page: Int, limit: Int, collectionId: ID, ownerId: ID): [NFT!]!
-  nft(id: ID!): NFT
-  collections(page: Int, limit: Int): [Collection!]!
-  collection(id: ID!): Collection
-  listings(page: Int, limit: Int): [Listing!]!
-  listing(id: ID!): Listing
-  auctions(page: Int, limit: Int): [Auction!]!
-  auction(id: ID!): Auction
-  currentUser: User
-  user(id: ID!): User
+"""Arbitrary JSON value"""
+scalar JSON
+
+type Listing {
+  id: ID!
+  nftId: ID!
+  sellerId: ID!
+  price: String!
+  currency: String!
+  status: ListingStatus!
+  createdAt: DateTime!
+  expiresAt: DateTime
+  seller: User
+  nft: NFT
+}
+
+type ListingConnection {
+  edges: [ListingEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type ListingEdge {
+  node: Listing!
+  cursor: String!
+}
+
+input ListingFilterInput {
+  status: ListingStatus
+  nftId: ID
+  sellerId: ID
+}
+
+"""Current state of a marketplace listing"""
+enum ListingStatus {
+  ACTIVE
+  SOLD
+  CANCELLED
+  EXPIRED
+}
+
+input MintNFTInput {
+  tokenId: String!
+  contractAddress: String!
+  name: String!
+  description: String
+  image: String
+  animationUrl: String
+  externalUrl: String
+  ownerId: ID!
+  creatorId: ID!
+  collectionId: ID
+  lastPrice: Float
+  attributes: [NFTAttributeInput!]
 }
 
 type Mutation {
+  """Mint a new NFT"""
+  mintNFT(input: MintNFTInput!): NFT!
+
+  """Update NFT metadata"""
+  updateNFTMetadata(id: ID!, input: UpdateNFTMetadataInput!): NFT!
+
+  """Create a new collection"""
+  createCollection(input: CreateCollectionInput!): Collection!
+
+  """Create a new marketplace listing"""
   createListing(input: CreateListingInput!): Listing!
-  placeBid(input: PlaceBidInput!): Auction!
+
+  """Cancel an existing listing owned by the caller"""
+  cancelListing(id: ID!): Boolean!
+
+  """Execute NFT purchase against an active listing"""
+  buyNFT(listingId: ID!): TransactionResult!
+
+  """Follow a creator"""
+  followCreator(creatorId: ID!): FollowResult!
+
+  """Unfollow a creator"""
+  unfollowCreator(creatorId: ID!): FollowResult!
 }
+
+type NFT {
+  id: ID!
+  tokenId: String!
+  contractAddress: String!
+  name: String!
+  description: String
+  image: String
+  attributes: [NFTAttribute!]!
+  ownerId: ID!
+  creatorId: ID!
+  collectionId: ID
+  mintedAt: DateTime!
+  lastPrice: String
+  owner: User
+  creator: User
+  collection: Collection
+  listing: Listing
+  listings: [Listing!]
+  auction: Auction
+  currentAuction: Auction
+  orders: [Order!]
+  transferHistory(page: Int = 1, limit: Int = 10): TransferEventConnection
+  firstTransfer: TransferEvent
+  lastTransfer: TransferEvent
+}
+
+type NFTAttribute {
+  traitType: String!
+  value: String!
+  displayType: String
+}
+
+input NFTAttributeInput {
+  traitType: String!
+  value: String!
+  displayType: String
+}
+
+type NFTConnection {
+  edges: [NFTEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type NFTEdge {
+  node: NFT!
+  cursor: String!
+}
+
+input NFTFilterInput {
+  ownerId: ID
+  creatorId: ID
+  collectionId: ID
+  search: String
+  includeBurned: Boolean
+}
+
+type Order {
+  id: ID!
+  nftId: ID!
+  buyerId: ID!
+  sellerId: ID!
+  price: String!
+  currency: String!
+  type: OrderType!
+  status: OrderStatus!
+  transactionHash: String
+  createdAt: DateTime!
+  buyer: User
+  seller: User
+  nft: NFT
+}
+
+type OrderConnection {
+  edges: [OrderEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type OrderEdge {
+  node: Order!
+  cursor: String!
+}
+
+"""Status of the order"""
+enum OrderStatus {
+  COMPLETED
+  PENDING
+  FAILED
+}
+
+"""Type of order: SALE or PURCHASE"""
+enum OrderType {
+  SALE
+  PURCHASE
+}
+
+type PageInfo {
+  hasNextPage: Boolean!
+  startCursor: String
+  endCursor: String
+}
+
+input PaginationInput {
+  first: Int = 20
+  after: String
+}
+
+type Query {
+  """GraphQL gateway health check"""
+  health: GraphqlHealthResponse!
+
+  """Fetch a single NFT by ID"""
+  nft(id: ID!): NFT!
+
+  """Fetch NFTs with cursor pagination and optional filters"""
+  nfts(pagination: PaginationInput, filter: NFTFilterInput): NFTConnection!
+
+  """Fetch NFTs owned by a specific user"""
+  nftsByOwner(ownerId: ID!, pagination: PaginationInput): NFTConnection!
+
+  """Fetch NFT transfer history with pagination (page-based)"""
+  nftTransferHistory(nftId: ID!, page: Int = 1, limit: Int = 10): TransferEventConnection!
+
+  """Fetch NFT transfer history with cursor-based pagination"""
+  nftTransferHistoryCursor(nftId: ID!, first: Int = 10, after: String): TransferEventConnection!
+
+  """Fetch a specific transfer event by ID"""
+  nftTransferEvent(id: ID!): TransferEvent
+
+  """Fetch a single collection by ID"""
+  collection(id: ID!): Collection!
+
+  """Fetch collections with cursor pagination and optional filters"""
+  collections(pagination: PaginationInput, filter: CollectionFilterInput): CollectionConnection!
+
+  """Fetch top collections ordered by total volume"""
+  topCollections(limit: Int = 10): [Collection!]!
+
+  """Fetch aggregated statistics for a collection"""
+  collectionStats(collectionId: ID!): CollectionStats!
+
+  """Fetch a single listing by ID"""
+  listing(id: ID!): Listing!
+
+  """Fetch listings with cursor pagination and optional filters"""
+  listings(pagination: PaginationInput, filter: ListingFilterInput): ListingConnection!
+
+  """Fetch single order by ID"""
+  order(id: ID!): Order!
+
+  """Fetch current user's orders (authenticated)"""
+  myOrders(pagination: PaginationInput, type: String): OrderConnection!
+
+  """Fetch orders for specific user"""
+  userOrders(userId: ID!, pagination: PaginationInput): OrderConnection!
+
+  """Fetch order history for NFT"""
+  nftOrders(nftId: ID!): [Order!]!
+
+  """Fetch sales analytics (admin only)"""
+  salesAnalytics(timeframe: TimeframeInput!): SalesAnalytics!
+
+  """Fetch a single user by ID"""
+  user(id: ID!): User!
+
+  """Fetch the currently authenticated user"""
+  me: User!
+
+  """Fetch a user by Stellar address"""
+  userByAddress(address: String!): User
+
+  """Fetch a public creator profile by id, username, or wallet address"""
+  publicCreator(identifier: String!): PublicCreator!
+
+  """Fetch a single auction by ID"""
+  auction(id: ID!): Auction!
+}
+
+type SalesAnalytics {
+  totalVolume: String!
+  totalSales: Int!
+  averagePrice: String!
+  periodStart: DateTime!
+  periodEnd: DateTime!
+}
+
+input TimeframeInput {
+  periodStart: String!
+  periodEnd: String!
+}
+
+type TransactionResult {
+  success: Boolean!
+  listingId: ID!
+  buyerId: ID
+}
+
+type TransferEvent {
+  id: ID!
+  fromAddress: String!
+  toAddress: String!
+  transactionHash: String!
+  eventType: String!
+  price: String
+  currency: String
+  timestamp: DateTime!
+  fromAddressTruncated: String
+  toAddressTruncated: String
+  blockExplorerUrl: String
+}
+
+type TransferEventConnection {
+  edges: [TransferEventEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type TransferEventEdge {
+  node: TransferEvent!
+  cursor: String!
+}
+
+input UpdateNFTMetadataInput {
+  name: String
+  description: String
+  image: String
+  animationUrl: String
+  externalUrl: String
+  collectionId: ID
+  lastPrice: Float
+  attributes: [NFTAttributeInput!]
+}
+
+type User {
+  id: ID!
+  username: String
+  email: String
+  walletAddress: String
+  stellarAddress: String
+  avatar: String
+  nfts(pagination: PaginationInput): NFTConnection
+  ownedNFTs(pagination: PaginationInput): NFTConnection
+  listings(pagination: PaginationInput): ListingConnection
+  auctions(pagination: PaginationInput): AuctionConnection
+  purchases(pagination: PaginationInput): OrderConnection
+  sales(pagination: PaginationInput): OrderConnection
+}
+
+type PublicCreator {
+  id: ID!
+  username: String
+  bio: String
+  avatarUrl: String
+  bannerUrl: String
+  website: String
+  twitterHandle: String
+  instagramHandle: String
+  isVerified: Boolean!
+  followerCount: Int!
+  followingCount: Int!
+  totalNftsCreated: Int!
+  totalSalesVolume: String!
+  createdAt: DateTime!
+  isFollowing: Boolean
+  nfts(pagination: PaginationInput, sortBy: CreatorNftSort): NFTConnection
+  collections(pagination: PaginationInput): CollectionConnection
+  activity(pagination: PaginationInput): CreatorActivityConnection
+}
+
+enum CreatorNftSort {
+  NEWEST
+  PRICE
+}
+
+enum CreatorActivityType {
+  MINT
+  SALE
+  LISTING
+}
+
+type CreatorActivityItem {
+  type: CreatorActivityType!
+  occurredAt: DateTime!
+  nftId: ID
+  price: String
+  currency: String
+}
+
+type CreatorActivityEdge {
+  node: CreatorActivityItem!
+  cursor: String!
+}
+
+type CreatorActivityConnection {
+  edges: [CreatorActivityEdge!]!
+  totalCount: Int!
+}
+
+type FollowResult {
+  success: Boolean!
+  followerCount: Int!
+  isFollowing: Boolean!
+}
+

@@ -58,6 +58,7 @@ pub enum SettlementError {
     FeeCalculationFailed = 700,
     InvalidFeeConfig = 701,
     FeeExemptionNotAllowed = 702,
+    FeeAlreadyInitialized = 703,
 
     // Admin errors
     NotAdmin = 800,

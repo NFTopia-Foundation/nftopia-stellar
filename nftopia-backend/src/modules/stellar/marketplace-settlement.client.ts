@@ -9,6 +9,7 @@ import {
   CreateAuctionParams,
   CreateTradeParams,
   CreateSaleParams,
+  CreateBundleParams,
 } from '../../shared/contracts/marketplace-settlement.types';
 import { ConfigService } from '@nestjs/config';
 import { SorobanService, SorobanContractArg } from './soroban.service';
@@ -119,6 +120,70 @@ export class MarketplaceSettlementClient {
       const result = await this.sorobanService.invokeContract(
         this.contractId,
         'execute_sale',
+        args,
+      );
+      return result.returnValue;
+    });
+  }
+
+  async createBundle(params: CreateBundleParams): Promise<number> {
+    return this.withRetry(async () => {
+      if (
+        !params ||
+        typeof params !== 'object' ||
+        typeof params.seller !== 'string' ||
+        !Array.isArray(params.items) ||
+        typeof params.totalPrice !== 'string' ||
+        typeof params.currency !== 'string' ||
+        typeof params.durationSeconds !== 'number'
+      ) {
+        throw new BadRequestException('Invalid CreateBundleParams');
+      }
+      const args: SorobanContractArg[] = [
+        { type: 'address', value: params.seller },
+        { type: 'raw', value: params.items },
+        { type: 'i128', value: params.totalPrice },
+        { type: 'string', value: params.currency },
+        { type: 'u64', value: params.durationSeconds },
+      ];
+      const result = await this.sorobanService.invokeContract(
+        this.contractId,
+        'create_bundle',
+        args,
+      );
+      return result.returnValue as number;
+    });
+  }
+
+  async executeBundle(
+    bundleId: number,
+    buyer: string,
+    amount?: string,
+  ): Promise<any> {
+    return this.withRetry(async () => {
+      const args: SorobanContractArg[] = [
+        { type: 'u64', value: bundleId },
+        { type: 'address', value: buyer },
+      ];
+      if (amount !== undefined) args.push({ type: 'i128', value: amount });
+      const result = await this.sorobanService.invokeContract(
+        this.contractId,
+        'execute_bundle',
+        args,
+      );
+      return result.returnValue;
+    });
+  }
+
+  async cancelBundle(bundleId: number, seller: string): Promise<any> {
+    return this.withRetry(async () => {
+      const args: SorobanContractArg[] = [
+        { type: 'u64', value: bundleId },
+        { type: 'address', value: seller },
+      ];
+      const result = await this.sorobanService.invokeContract(
+        this.contractId,
+        'cancel_bundle',
         args,
       );
       return result.returnValue;

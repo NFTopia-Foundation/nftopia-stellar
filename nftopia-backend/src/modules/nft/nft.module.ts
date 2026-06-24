@@ -7,11 +7,12 @@ import { Nft } from './entities/nft.entity';
 import { NftMetadata } from './entities/nft-metadata.entity';
 import { User } from '../../users/user.entity';
 import { SorobanService } from '../../nft/soroban.service';
+import { NftTransferEvent } from '../../jobs/entities/nft-transfer-event.entity';
 
 @Module({
   imports: [
     EventEmitterModule,
-    TypeOrmModule.forFeature([Nft, NftMetadata, User]),
+    TypeOrmModule.forFeature([Nft, NftMetadata, User, NftTransferEvent]),
   ],
   controllers: [NftController],
   providers: [NftService, SorobanService],

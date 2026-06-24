@@ -10,10 +10,7 @@ import {
 import {
   CreateListingMutation,
   CreateListingMutationVariables,
-  PlaceBidMutation,
-  PlaceBidMutationVariables,
   useCreateListingMutation as useCreateListingMutationGenerated,
-  usePlaceBidMutation as usePlaceBidMutationGenerated,
 } from "@/hooks/graphql/generated";
 
 export function useGraphQLMutation<
@@ -33,10 +30,4 @@ export function useCreateListingMutation(
   >
 ) {
   return useCreateListingMutationGenerated(options);
-}
-
-export function usePlaceBidMutation(
-  options?: MutationHookOptions<PlaceBidMutation, PlaceBidMutationVariables>
-) {
-  return usePlaceBidMutationGenerated(options);
 }

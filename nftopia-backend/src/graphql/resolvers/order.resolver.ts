@@ -22,6 +22,7 @@ import { TimeframeInput } from '../inputs/order.inputs';
 import { PaginationInput } from '../inputs/nft.inputs';
 import type { GraphqlContext } from '../context/context.interface';
 import type { OrderQueryDto } from '../../modules/order/dto/order-query.dto';
+import type { OrderPaginatedResponseDto } from '../../modules/order/dto/order-paginated-response.dto';
 import type { OrderInterface } from '../../modules/order/interfaces/order.interface';
 import type { User } from '../../users/user.entity';
 import type { Nft } from '../../modules/nft/entities/nft.entity';
@@ -57,30 +58,52 @@ export class OrderResolver {
   ): Promise<OrderConnection> {
     const userId = context.user?.userId;
     if (!userId) throw new BadRequestException('User not authenticated');
-    // Map PaginationInput to OrderQueryDto fields
-    const query: OrderQueryDto = {};
-    if (pagination?.first) query.limit = pagination.first;
-    if (pagination?.after) query.page = Number(pagination.after) || 1;
+
     if (type === 'SALE') {
-      query.sellerId = userId;
+      const query: OrderQueryDto = {
+        sellerId: userId,
+        page: pagination?.after ? Number(pagination.after) : 1,
+        limit: pagination?.first || 20,
+      };
+      const result = await this.orderService.findAllWithCount(query);
+      return this.toConnection(result);
     } else if (type === 'PURCHASE') {
-      query.buyerId = userId;
+      const query: OrderQueryDto = {
+        buyerId: userId,
+        page: pagination?.after ? Number(pagination.after) : 1,
+        limit: pagination?.first || 20,
+      };
+      const result = await this.orderService.findAllWithCount(query);
+      return this.toConnection(result);
     } else {
       // If neither, fetch both as separate queries and merge
-      const sellerQuery: OrderQueryDto = { ...pagination, sellerId: userId };
-      const buyerQuery: OrderQueryDto = { ...pagination, buyerId: userId };
-      const [sellerOrders, buyerOrders] = await Promise.all([
-        this.orderService.findAll(sellerQuery),
-        this.orderService.findAll(buyerQuery),
+      const page = pagination?.after ? Number(pagination.after) : 1;
+      const limit = pagination?.first || 20;
+
+      const sellerQuery: OrderQueryDto = { sellerId: userId, page, limit };
+      const buyerQuery: OrderQueryDto = { buyerId: userId, page, limit };
+
+      const [sellerResult, buyerResult] = await Promise.all([
+        this.orderService.findAllWithCount(sellerQuery),
+        this.orderService.findAllWithCount(buyerQuery),
       ]);
-      // Remove duplicates by id
+
+      // Remove duplicates by id and merge
       const merged: Record<string, OrderInterface> = {};
-      sellerOrders.forEach((o) => (merged[o.id] = o));
-      buyerOrders.forEach((o) => (merged[o.id] = o));
-      return this.toConnection(Object.values(merged));
+      sellerResult.items.forEach((o) => (merged[o.id] = o));
+      buyerResult.items.forEach((o) => (merged[o.id] = o));
+
+      const mergedOrders = Object.values(merged);
+      const totalCount = sellerResult.totalCount + buyerResult.totalCount;
+      const hasNextPage = page * limit < totalCount;
+
+      return this.toConnectionFromOrders(mergedOrders, {
+        totalCount,
+        page,
+        limit,
+        hasNextPage,
+      });
     }
-    const orders = await this.orderService.findAll(query);
-    return this.toConnection(orders);
   }
 
   @Query(() => OrderConnection, {
@@ -93,9 +116,13 @@ export class OrderResolver {
     @Args('pagination', { type: () => PaginationInput, nullable: true })
     pagination: PaginationInput,
   ): Promise<OrderConnection> {
-    const query: OrderQueryDto = { ...pagination, buyerId: userId };
-    const orders = await this.orderService.findAll(query);
-    return this.toConnection(orders);
+    const query: OrderQueryDto = {
+      buyerId: userId,
+      page: pagination?.after ? Number(pagination.after) : 1,
+      limit: pagination?.first || 20,
+    };
+    const result = await this.orderService.findAllWithCount(query);
+    return this.toConnection(result);
   }
 
   @Query(() => [GraphqlOrder], {
@@ -236,19 +263,55 @@ export class OrderResolver {
     lastPrice: nft.lastPrice ?? null,
   });
 
-  private toConnection = (orders: OrderInterface[]): OrderConnection => {
+  /**
+   * Convert OrderPaginatedResponseDto to OrderConnection
+   * Properly computes hasNextPage based on pagination info from service
+   */
+  private toConnection = (
+    result: OrderPaginatedResponseDto,
+  ): OrderConnection => {
+    const edges = result.items.map((order) => ({
+      node: this.toGraphqlOrder(order),
+      cursor: order.id,
+    }));
+
+    return {
+      edges,
+      pageInfo: {
+        hasNextPage: result.hasNextPage,
+        startCursor: edges[0]?.cursor,
+        endCursor: edges.at(-1)?.cursor,
+      },
+      totalCount: result.totalCount,
+    };
+  };
+
+  /**
+   * Helper method to convert raw orders array with pagination info to OrderConnection
+   * Used for merged queries (myOrders with both SALE and PURCHASE)
+   */
+  private toConnectionFromOrders = (
+    orders: OrderInterface[],
+    paginationInfo: {
+      totalCount: number;
+      page: number;
+      limit: number;
+      hasNextPage: boolean;
+    },
+  ): OrderConnection => {
     const edges = orders.map((order) => ({
       node: this.toGraphqlOrder(order),
       cursor: order.id,
     }));
+
     return {
       edges,
       pageInfo: {
-        hasNextPage: false, // TODO: implement real pagination
+        hasNextPage: paginationInfo.hasNextPage,
         startCursor: edges[0]?.cursor,
         endCursor: edges.at(-1)?.cursor,
       },
-      totalCount: orders.length,
+      totalCount: paginationInfo.totalCount,
     };
   };
 }

@@ -26,4 +26,6 @@ pub enum ContractError {
     InvalidUri = 20,
     ArithmeticError = 21,
     MismatchedArrays = 22,
+    AlreadyBurned = 23,
+    BurnNotAllowed = 24,
 }

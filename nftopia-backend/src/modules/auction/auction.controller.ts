@@ -90,6 +90,6 @@ export class AuctionController {
   ) {
     await Promise.resolve();
     const callerId = req.user?.userId;
-    return this.auctionService.settleAuction(id, callerId as string);
+    return this.auctionService.settleAuction(id, callerId);
   }
 }

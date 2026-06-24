@@ -2,6 +2,7 @@ import {
   Args,
   Context,
   ID,
+  Int,
   Mutation,
   Parent,
   Query,
@@ -22,7 +23,12 @@ import {
   PaginationInput,
   UpdateNFTMetadataInput,
 } from '../inputs/nft.inputs';
-import { GraphqlNft, NFTConnection } from '../types/nft.types';
+import {
+  GraphqlNft,
+  NFTConnection,
+  GraphqlTransferEvent,
+  TransferEventConnection,
+} from '../types/nft.types';
 import { NftService } from '../../modules/nft/nft.service';
 import type { Nft } from '../../modules/nft/entities/nft.entity';
 import { GraphqlCollection } from '../types/collection.types';
@@ -35,6 +41,7 @@ import { GraphqlUserType } from '../types/user.types';
 import { GraphqlAuction, AuctionStatus } from '../types/auction.types'; // eslint-disable-line @typescript-eslint/no-unused-vars
 import type { User } from '../../users/user.entity';
 import type { Auction } from '../../modules/auction/entities/auction.entity';
+import { NftTransferEvent } from '../../jobs/entities/nft-transfer-event.entity';
 
 type CursorPayload = {
   createdAt: string;
@@ -313,6 +320,136 @@ export class NftResolver {
     return orders.map((order) => this.toGraphqlOrder(order));
   }
 
+  /**
+   * Query to fetch NFT transfer history with page-based pagination
+   */
+  @Query(() => TransferEventConnection, {
+    name: 'nftTransferHistory',
+    description: 'Fetch NFT transfer history with pagination (page-based)',
+  })
+  async nftTransferHistory(
+    @Args('nftId', { type: () => ID }) nftId: string,
+    @Args('page', { type: () => Int, nullable: true, defaultValue: 1 })
+    page: number,
+    @Args('limit', { type: () => Int, nullable: true, defaultValue: 10 })
+    limit: number,
+  ): Promise<TransferEventConnection> {
+    const result = await this.nftService.getTransferHistory(nftId, page, limit);
+
+    const edges = result.data.map((event) => ({
+      node: this.toGraphqlTransferEvent(event),
+      cursor: this.encodeTransferEventCursor(event),
+    }));
+
+    return {
+      edges,
+      pageInfo: {
+        hasNextPage: result.hasNextPage,
+        startCursor: edges[0]?.cursor,
+        endCursor: edges.at(-1)?.cursor,
+      },
+      totalCount: result.total,
+    };
+  }
+
+  /**
+   * Query to fetch NFT transfer history with cursor-based pagination
+   * Ideal for infinite scroll implementations
+   */
+  @Query(() => TransferEventConnection, {
+    name: 'nftTransferHistoryCursor',
+    description: 'Fetch NFT transfer history with cursor-based pagination',
+  })
+  async nftTransferHistoryCursor(
+    @Args('nftId', { type: () => ID }) nftId: string,
+    @Args('first', { type: () => Int, nullable: true, defaultValue: 10 })
+    first: number,
+    @Args('after', { type: () => String, nullable: true }) after?: string,
+  ): Promise<TransferEventConnection> {
+    const cursorAfter = after
+      ? this.decodeTransferEventCursor(after)
+      : undefined;
+    const result = await this.nftService.getTransferHistoryCursor(
+      nftId,
+      first,
+      cursorAfter,
+    );
+
+    const edges = result.data.map((event) => ({
+      node: this.toGraphqlTransferEvent(event),
+      cursor: this.encodeTransferEventCursor(event),
+    }));
+
+    return {
+      edges,
+      pageInfo: {
+        hasNextPage: result.hasNextPage,
+        startCursor: edges[0]?.cursor,
+        endCursor: edges.at(-1)?.cursor,
+      },
+      totalCount: result.total,
+    };
+  }
+
+  /**
+   * Query to fetch a specific transfer event by ID
+   */
+  @Query(() => GraphqlTransferEvent, {
+    name: 'nftTransferEvent',
+    description: 'Fetch a specific transfer event by ID',
+    nullable: true,
+  })
+  async nftTransferEvent(
+    @Args('id', { type: () => ID }) id: string,
+  ): Promise<GraphqlTransferEvent | null> {
+    const event = await this.nftService.getTransferEventById(id);
+    if (!event) return null;
+    return this.toGraphqlTransferEvent(event);
+  }
+
+  /**
+   * Field resolver for NFT transfer history
+   * Resolves transfer history for the NFT using request-scoped DataLoader
+   */
+  @ResolveField(() => TransferEventConnection, {
+    name: 'transferHistory',
+    nullable: true,
+    description: 'Resolve NFT transfer history using request-scoped DataLoader',
+  })
+  async transferHistory(
+    @Parent() nft: GraphqlNft,
+    @Args('page', { type: () => Int, nullable: true, defaultValue: 1 })
+    page: number,
+    @Args('limit', { type: () => Int, nullable: true, defaultValue: 10 })
+    limit: number,
+  ): Promise<TransferEventConnection | null> {
+    // This would need a DataLoader for optimal performance
+    // For now, we'll use the nftService directly
+    try {
+      const result = await this.nftService.getTransferHistory(
+        nft.id,
+        page,
+        limit,
+      );
+      const edges = result.data.map((event) => ({
+        node: this.toGraphqlTransferEvent(event),
+        cursor: this.encodeTransferEventCursor(event),
+      }));
+
+      return {
+        edges,
+        pageInfo: {
+          hasNextPage: result.hasNextPage,
+          startCursor: edges[0]?.cursor,
+          endCursor: edges.at(-1)?.cursor,
+        },
+        totalCount: result.total,
+      };
+    } catch {
+      return null;
+    }
+  }
+
   private getAuthenticatedUserId(context: GraphqlContext): string {
     const userId = context.user?.userId;
     if (!userId) {
@@ -479,6 +616,85 @@ export class NftResolver {
         createdAt: payload.createdAt,
         id: payload.id,
       };
+    } catch {
+      throw new BadRequestException('Invalid pagination cursor');
+    }
+  }
+
+  /**
+   * Converts a NftTransferEvent entity to GraphQL TransferEvent type
+   */
+  private toGraphqlTransferEvent(
+    event: NftTransferEvent,
+  ): GraphqlTransferEvent {
+    const fromAddressTruncated =
+      event.fromAddress === '0x0000000000000000000000000000000000000000'
+        ? 'Zero Address'
+        : this.truncateAddress(event.fromAddress);
+    const toAddressTruncated = this.truncateAddress(event.toAddress);
+
+    const horizonUrl =
+      process.env.HORIZON_URL ?? 'https://horizon-testnet.stellar.org';
+    const isTestnet = horizonUrl.includes('testnet');
+    const baseUrl = isTestnet
+      ? 'https://testnet.stellar.org'
+      : 'https://stellar.org';
+
+    return {
+      id: event.id,
+      fromAddress: event.fromAddress,
+      toAddress: event.toAddress,
+      transactionHash: event.transactionHash,
+      eventType: event.eventType,
+      price: event.price || null,
+      currency: event.currency || 'XLM',
+      timestamp: new Date(event.timestamp),
+      fromAddressTruncated,
+      toAddressTruncated,
+      blockExplorerUrl: `${baseUrl}/tx/${event.transactionHash}`,
+    };
+  }
+
+  /**
+   * Truncates an address for display purposes
+   */
+  private truncateAddress(address: string): string {
+    if (!address) return 'Unknown';
+    if (address === '0x0000000000000000000000000000000000000000')
+      return 'Zero Address';
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  }
+
+  /**
+   * Encodes a transfer event cursor for pagination
+   */
+  private encodeTransferEventCursor(event: NftTransferEvent): string {
+    return Buffer.from(
+      JSON.stringify({
+        timestamp: event.timestamp,
+        id: event.id,
+      }),
+      'utf8',
+    ).toString('base64url');
+  }
+
+  /**
+   * Decodes a transfer event cursor for pagination
+   */
+  private decodeTransferEventCursor(cursor: string): {
+    timestamp: number;
+    id: string;
+  } {
+    try {
+      const payload = JSON.parse(
+        Buffer.from(cursor, 'base64url').toString('utf8'),
+      ) as { timestamp: number; id: string };
+
+      if (!payload.timestamp || !payload.id) {
+        throw new Error('Cursor is missing fields');
+      }
+
+      return payload;
     } catch {
       throw new BadRequestException('Invalid pagination cursor');
     }

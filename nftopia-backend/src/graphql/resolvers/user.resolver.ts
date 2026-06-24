@@ -38,6 +38,7 @@ import type { Nft } from '../../modules/nft/entities/nft.entity';
 import type { Listing } from '../../modules/listing/entities/listing.entity';
 import type { Auction } from '../../modules/auction/entities/auction.entity';
 import type { OrderInterface } from '../../modules/order/interfaces/order.interface';
+import type { OrderPaginatedResponseDto } from '../../modules/order/dto/order-paginated-response.dto';
 
 @Resolver(() => GraphqlUserType)
 export class UserResolver {
@@ -228,7 +229,7 @@ export class UserResolver {
   ): Promise<OrderConnection> {
     const limit = pagination?.first ?? 20;
     const page = pagination?.after ? Number(pagination.after) || 1 : 1;
-    const orders = await this.orderService.findAll({
+    const result = await this.orderService.findAllWithCount({
       buyerId: user.id,
       page,
       limit,
@@ -236,7 +237,7 @@ export class UserResolver {
       sortOrder: 'DESC',
     });
 
-    return this.toOrderConnection(orders, page, limit);
+    return this.toOrderConnection(result);
   }
 
   @ResolveField(() => OrderConnection, {
@@ -251,7 +252,7 @@ export class UserResolver {
   ): Promise<OrderConnection> {
     const limit = pagination?.first ?? 20;
     const page = pagination?.after ? Number(pagination.after) || 1 : 1;
-    const orders = await this.orderService.findAll({
+    const result = await this.orderService.findAllWithCount({
       sellerId: user.id,
       page,
       limit,
@@ -259,7 +260,7 @@ export class UserResolver {
       sortOrder: 'DESC',
     });
 
-    return this.toOrderConnection(orders, page, limit);
+    return this.toOrderConnection(result);
   }
 
   private toGraphqlUser(user: User): GraphqlUserType {
@@ -337,11 +338,9 @@ export class UserResolver {
   }
 
   private toOrderConnection(
-    orders: OrderInterface[],
-    page: number,
-    limit: number,
+    result: OrderPaginatedResponseDto,
   ): OrderConnection {
-    const edges = orders.map((order) => ({
+    const edges = result.items.map((order) => ({
       node: this.toGraphqlOrder(order),
       cursor: order.id,
     }));
@@ -349,11 +348,11 @@ export class UserResolver {
     return {
       edges,
       pageInfo: {
-        hasNextPage: orders.length === limit,
+        hasNextPage: result.hasNextPage,
         startCursor: edges[0]?.cursor,
-        endCursor: String(page + 1),
+        endCursor: edges.at(-1)?.cursor,
       },
-      totalCount: orders.length,
+      totalCount: result.totalCount,
     };
   }
 

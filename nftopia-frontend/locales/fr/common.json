@@ -101,6 +101,24 @@
     "royalties": "Revenus",
     "mint": "Minter le NFT"
   },
+  "creatorProfile": {
+    "verified": "Vérifié",
+    "followers": "abonnés",
+    "nftsCreated": "NFTs",
+    "volume": "volume",
+    "tabNfts": "NFTs",
+    "tabCollections": "Collections",
+    "tabActivity": "Activité",
+    "sortNewest": "Plus récents",
+    "sortPrice": "Prix",
+    "emptyNfts": "Aucun NFT",
+    "emptyCollections": "Aucune collection",
+    "emptyActivity": "Aucune activité",
+    "notFound": "Créateur introuvable",
+    "activityMint": "Minté",
+    "activitySale": "Vendu",
+    "activityListing": "Listé"
+  },
   "common": {
     "loading": "Chargement...",
     "error": "Erreur",

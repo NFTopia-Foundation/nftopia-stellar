@@ -7,6 +7,7 @@ import { Nft } from './entities/nft.entity';
 import { NftMetadata } from './entities/nft-metadata.entity';
 import { SorobanService } from '../../nft/soroban.service';
 import { User } from '../../users/user.entity';
+import { NftTransferEvent } from '../../jobs/entities/nft-transfer-event.entity';
 
 const mockNftRepo = {
   createQueryBuilder: jest.fn(() => ({
@@ -18,12 +19,15 @@ const mockNftRepo = {
     getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
   })),
   findOne: jest.fn(),
+  find: jest.fn(),
   create: jest.fn((dto: Partial<Nft>) => dto),
   save: jest
     .fn()
     .mockImplementation((dto: Partial<Nft>) =>
       Promise.resolve({ id: 'nft-1', ...dto }),
     ),
+  delete: jest.fn(),
+  exists: jest.fn(),
 };
 
 const mockMetadataRepo = {
@@ -37,6 +41,29 @@ const mockMetadataRepo = {
 
 const mockUserRepo = {
   exists: jest.fn(),
+  findOne: jest.fn(),
+};
+
+const mockTransferEventRepo = {
+  createQueryBuilder: jest.fn(() => ({
+    where: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockReturnThis(),
+    addOrderBy: jest.fn().mockReturnThis(),
+    skip: jest.fn().mockReturnThis(),
+    take: jest.fn().mockReturnThis(),
+    getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
+    getMany: jest.fn().mockResolvedValue([]),
+    getCount: jest.fn().mockResolvedValue(0),
+  })),
+  findOne: jest.fn(),
+  create: jest.fn((dto: Partial<NftTransferEvent>) => dto),
+  save: jest
+    .fn()
+    .mockImplementation((dto: Partial<NftTransferEvent>) =>
+      Promise.resolve({ id: 'event-1', ...dto }),
+    ),
+  delete: jest.fn(),
 };
 
 const mockSorobanService = {
@@ -60,6 +87,10 @@ describe('NftService', () => {
           useValue: mockMetadataRepo,
         },
         { provide: getRepositoryToken(User), useValue: mockUserRepo },
+        {
+          provide: getRepositoryToken(NftTransferEvent),
+          useValue: mockTransferEventRepo,
+        },
         { provide: SorobanService, useValue: mockSorobanService },
         { provide: EventEmitter2, useValue: mockEventEmitter },
       ],

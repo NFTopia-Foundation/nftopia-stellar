@@ -12,7 +12,7 @@ use crate::storage::{
 };
 use crate::types::{
     AdminConfig, Asset, AuctionTransaction, AuctionType, BundleTransaction, ExecutionResult,
-    FeeConfig, SaleTransaction, TradeTransaction, VolumeTier,
+    FeeConfig, SaleTransaction, TradeTransaction,
 };
 use crate::utils::{asset_utils, time_utils};
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, Bytes, Env, Symbol, Vec};
@@ -25,9 +25,16 @@ pub struct MarketplaceSettlement;
 #[allow(clippy::too_many_arguments)]
 #[contractimpl]
 impl MarketplaceSettlement {
-    /// Initialize the contract with admin configuration
-    pub fn initialize(env: Env, admin: Address) -> Result<(), SettlementError> {
-        // Set default configurations
+    /// Initialize the contract with admin configuration and explicit fee parameters.
+    ///
+    /// `fee_config` must be provided with deployment-appropriate values; there
+    /// are no hardcoded defaults. This function can be called exactly once —
+    /// any subsequent call returns `FeeAlreadyInitialized`.
+    pub fn initialize(
+        env: Env,
+        admin: Address,
+        fee_config: FeeConfig,
+    ) -> Result<(), SettlementError> {
         let admin_config = AdminConfig {
             admin: admin.clone(),
             emergency_withdrawal_enabled: true,
@@ -43,28 +50,8 @@ impl MarketplaceSettlement {
             .instance()
             .set(&symbol_short!("admin_cfg"), &admin_config);
 
-        // Set default fee config
-        let fee_config = FeeConfig {
-            platform_fee_bps: 250,        // 2.5%
-            minimum_fee: 1000,            // Minimum 1000 units
-            maximum_fee: 1000000,         // Maximum 1M units
-            fee_recipient: admin.clone(), // Fee recipient defaults to admin
-            dynamic_fee_enabled: true,
-            volume_discounts: {
-                let mut discounts = Vec::new(&env);
-                discounts.push_back(VolumeTier {
-                    min_volume: 1000000,  // 1M volume
-                    fee_discount_bps: 50, // 0.5% discount
-                });
-                discounts.push_back(VolumeTier {
-                    min_volume: 10000000,  // 10M volume
-                    fee_discount_bps: 100, // 1% discount
-                });
-                discounts
-            },
-            vip_exemptions: Vec::new(&env),
-        };
-        FeeManager::update_fee_config(&env, &fee_config, &admin)?;
+        // Validate and store the caller-supplied fee configuration exactly once.
+        FeeManager::initialize_fee_config(&env, &fee_config, &admin)?;
 
         // Set default auction config
         let auction_config = crate::auction_engine::AuctionConfig::default();

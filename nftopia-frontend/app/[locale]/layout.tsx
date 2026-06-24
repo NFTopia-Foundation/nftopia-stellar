@@ -1,6 +1,6 @@
 "use client";
 
-import { Inter } from "next/font/google";
+import localFont from "next/font/local";
 import { Navbar } from "@/components/navbar";
 import "../globals.css";
 import Footer from "@/components/Footer";
@@ -13,9 +13,11 @@ import { usePathname } from "next/navigation";
 import { useTranslation } from "@/hooks/useTranslation";
 import { ClientBody } from "@/components/layout/ClientBody";
 
-const inter = Inter({
-  subsets: ["latin"],
+const inter = localFont({
+  src: "../../public/fonts/inter-var.woff2",
   display: "swap",
+  weight: "100 900",
+  variable: "--font-inter",
 });
 
 interface LocaleLayoutProps {

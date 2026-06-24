@@ -9,6 +9,7 @@ import { ContractEvent } from './entities/contract-event.entity';
 import { ContractEventDlq } from './entities/contract-event-dlq.entity';
 import { StellarNft } from '../nft/entities/stellar-nft.entity';
 import { StellarModule } from '../modules/stellar/stellar.module';
+import { NftTransferEvent } from './entities/nft-transfer-event.entity';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { StellarModule } from '../modules/stellar/stellar.module';
       StellarNft,
       ContractEvent,
       ContractEventDlq,
+      NftTransferEvent,
     ]),
     StellarModule,
   ],

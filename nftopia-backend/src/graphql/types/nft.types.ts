@@ -76,6 +76,73 @@ export class GraphqlNftAttribute {
   displayType?: string;
 }
 
+/**
+ * Transfer Event type for NFT ownership history/provenance
+ * Tracks all NFT transfers including mint, sale, and wallet-to-wallet transfers
+ */
+@ObjectType('TransferEvent')
+export class GraphqlTransferEvent {
+  @Field(() => ID)
+  id: string;
+
+  @Field(() => String)
+  fromAddress: string;
+
+  @Field(() => String)
+  toAddress: string;
+
+  @Field(() => String)
+  transactionHash: string;
+
+  @Field(() => String)
+  eventType: string; // 'mint' | 'sale' | 'transfer'
+
+  @Field(() => String, { nullable: true })
+  price?: string | null;
+
+  @Field(() => String, { nullable: true })
+  currency?: string | null;
+
+  @Field(() => GraphQLISODateTime)
+  timestamp: Date;
+
+  @Field(() => String, { nullable: true })
+  fromAddressTruncated?: string;
+
+  @Field(() => String, { nullable: true })
+  toAddressTruncated?: string;
+
+  @Field(() => String, { nullable: true })
+  blockExplorerUrl?: string;
+}
+
+/**
+ * Edge type for TransferEvent connection pagination
+ */
+@ObjectType()
+export class TransferEventEdge {
+  @Field(() => GraphqlTransferEvent)
+  node: GraphqlTransferEvent;
+
+  @Field()
+  cursor: string;
+}
+
+/**
+ * Connection type for paginated TransferEvent queries
+ */
+@ObjectType()
+export class TransferEventConnection {
+  @Field(() => [TransferEventEdge])
+  edges: TransferEventEdge[];
+
+  @Field(() => PageInfo)
+  pageInfo: PageInfo;
+
+  @Field(() => Int)
+  totalCount: number;
+}
+
 @ObjectType('NFT')
 export class GraphqlNft {
   @Field(() => ID)
@@ -137,6 +204,25 @@ export class GraphqlNft {
 
   @Field(() => [GraphqlOrder], { nullable: true })
   orders?: GraphqlOrder[];
+
+  /**
+   * Transfer history for NFT ownership provenance
+   * Returns paginated list of all transfers including mint, sale, and transfers
+   */
+  @Field(() => TransferEventConnection, { nullable: true })
+  transferHistory?: TransferEventConnection | null;
+
+  /**
+   * First transfer event (mint) - identifies the creator
+   */
+  @Field(() => GraphqlTransferEvent, { nullable: true })
+  firstTransfer?: GraphqlTransferEvent | null;
+
+  /**
+   * Most recent transfer event - shows current owner
+   */
+  @Field(() => GraphqlTransferEvent, { nullable: true })
+  lastTransfer?: GraphqlTransferEvent | null;
 }
 
 @ObjectType()

@@ -262,6 +262,14 @@ pub struct EmergencyWithdrawalEvent {
 // Configuration Events
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FeeConfigInitializedEvent {
+    pub config: FeeConfig,
+    pub initialized_by: Address,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FeeConfigUpdatedEvent {
     pub new_config: FeeConfig,
     pub updated_by: Address,
@@ -423,6 +431,12 @@ pub fn emit_rate_limit_exceeded(env: &Env, event: RateLimitExceededEvent) {
 pub fn emit_emergency_withdrawal(env: &Env, event: EmergencyWithdrawalEvent) {
     env.events()
         .publish(("MarketplaceSettlement", symbol_short!("emerg_wd")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_fee_config_initialized(env: &Env, event: FeeConfigInitializedEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("fee_init")), event);
 }
 
 #[allow(deprecated)]

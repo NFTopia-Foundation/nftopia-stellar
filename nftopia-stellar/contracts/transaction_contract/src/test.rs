@@ -601,7 +601,7 @@ fn test_gas_optimization_reordering_placeholder() {
     let result_cfg = client.optimize_transaction_flow(&tx_id, &cfg);
     // Should return default config currently
     assert_eq!(result_cfg.batch_size, 10);
-    assert_eq!(result_cfg.enable_reordering, false);
+    assert!(!result_cfg.enable_reordering);
 }
 
 #[test]

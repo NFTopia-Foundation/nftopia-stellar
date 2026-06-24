@@ -101,6 +101,11 @@ impl NftContract {
         token::burn(&env, &caller, token_id)
     }
 
+    pub fn batch_burn(env: Env, caller: Address, token_ids: Vec<u64>) -> Result<(), ContractError> {
+        caller.require_auth();
+        token::batch_burn(&env, &caller, token_ids)
+    }
+
     pub fn transfer(
         env: Env,
         caller: Address,

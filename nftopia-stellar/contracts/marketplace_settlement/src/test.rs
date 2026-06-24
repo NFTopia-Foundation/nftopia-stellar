@@ -4,7 +4,7 @@ use crate::{
     error::SettlementError,
     royalty_distributor::RoyaltyDistributor,
     settlement_core::{MarketplaceSettlement, MarketplaceSettlementClient},
-    types::{Asset, AuctionType},
+    types::{Asset, AuctionType, FeeConfig},
 };
 use soroban_sdk::{
     testutils::{Address as _, Ledger as _},
@@ -56,13 +56,26 @@ fn mk_asset(env: &Env) -> Asset {
     }
 }
 
+fn default_fee_config(env: &Env, fee_recipient: Address) -> FeeConfig {
+    FeeConfig {
+        platform_fee_bps: 250,
+        minimum_fee: 1000,
+        maximum_fee: 1_000_000,
+        fee_recipient,
+        dynamic_fee_enabled: true,
+        volume_discounts: soroban_sdk::Vec::new(env),
+        vip_exemptions: soroban_sdk::Vec::new(env),
+    }
+}
+
 fn new_env() -> (Env, Address, MarketplaceSettlementClient<'static>, Address) {
     let env = Env::default();
     env.mock_all_auths();
     let cid = env.register(MarketplaceSettlement, ());
     let client = MarketplaceSettlementClient::new(&env, &cid);
     let admin = Address::generate(&env);
-    client.initialize(&admin);
+    let fee_config = default_fee_config(&env, admin.clone());
+    client.initialize(&admin, &fee_config);
     let client: MarketplaceSettlementClient<'static> = unsafe { core::mem::transmute(client) };
     (env, cid, client, admin)
 }
@@ -82,6 +95,15 @@ fn reg(env: &Env, cid: &Address, nft: &Address, creator: &Address, admin: &Addre
 #[test]
 fn test_initialize_success() {
     new_env();
+}
+
+#[test]
+fn test_reinitialize_fee_config_fails() {
+    let (env, _cid, client, admin) = new_env();
+    let fee_config = default_fee_config(&env, admin.clone());
+    // A second initialize on the same contract must fail with FeeAlreadyInitialized.
+    let result = client.try_initialize(&admin, &fee_config);
+    assert!(result.is_err());
 }
 
 #[test]
@@ -299,7 +321,6 @@ fn test_get_nonexistent_auction_fails() {
 
 #[test]
 fn test_update_fee_config_by_admin() {
-    use crate::types::FeeConfig;
     let (env, _cid, _client, _admin) = new_env();
     let admin = Address::generate(&env);
     let cfg = FeeConfig {
@@ -314,7 +335,8 @@ fn test_update_fee_config_by_admin() {
     // re-initialize with known admin so we can update
     let cid2 = env.register(MarketplaceSettlement, ());
     let c2 = MarketplaceSettlementClient::new(&env, &cid2);
-    c2.initialize(&admin);
+    let init_cfg = default_fee_config(&env, admin.clone());
+    c2.initialize(&admin, &init_cfg);
     c2.update_fee_config(&cfg, &admin);
 }
 
@@ -592,7 +614,7 @@ fn test_rate_limiter_defaults_and_cooldown_active() {
     let res = client.try_create_sale(&seller, &nft, &1u64, &1_000_000i128, &asset, &86400u64);
 
     if let Err(Ok(invoke_error)) = res {
-        let actual_error: SettlementError = invoke_error.into();
+        let actual_error: SettlementError = invoke_error;
         assert_eq!(actual_error, SettlementError::CooldownActive);
     } else {
         panic!("Expected Err(Ok(CooldownActive)), got: {:?}", res);
@@ -617,7 +639,7 @@ fn test_rate_limiter_independent_users_and_functions() {
     let res = client.try_create_sale(&seller_1, &nft, &1u64, &1_000_000i128, &asset, &86400u64);
 
     if let Err(Ok(invoke_error)) = res {
-        let actual_error: SettlementError = invoke_error.into();
+        let actual_error: SettlementError = invoke_error;
         assert_eq!(actual_error, SettlementError::CooldownActive);
     } else {
         panic!("Expected Err(Ok(CooldownActive)), got: {:?}", res);
@@ -660,7 +682,7 @@ fn test_rate_limiter_window_reset() {
     let res = client.try_create_sale(&seller, &nft, &1u64, &1_000_000i128, &asset, &86400u64);
 
     if let Err(Ok(invoke_error)) = res {
-        let actual_error: SettlementError = invoke_error.into();
+        let actual_error: SettlementError = invoke_error;
         assert_eq!(actual_error, SettlementError::CooldownActive);
     } else {
         panic!("Expected Err(Ok(CooldownActive)), got: {:?}", res);
@@ -684,7 +706,8 @@ fn test_rate_limiter_admin_update_config() {
     // Setup known admin (using second client initialized with admin)
     let cid2 = env.register(MarketplaceSettlement, ());
     let c2 = MarketplaceSettlementClient::new(&env, &cid2);
-    c2.initialize(&admin);
+    let init_cfg = default_fee_config(&env, admin.clone());
+    c2.initialize(&admin, &init_cfg);
 
     let bidder = Address::generate(&env);
     let seller = Address::generate(&env);
@@ -724,7 +747,7 @@ fn test_rate_limiter_admin_update_config() {
     let res = c2.try_place_bid(&id, &bidder, &130_000i128, &None);
 
     if let Err(Ok(invoke_error)) = res {
-        let actual_error: SettlementError = invoke_error.into();
+        let actual_error: SettlementError = invoke_error;
         assert_eq!(actual_error, SettlementError::CooldownActive);
     } else {
         panic!("Expected Err(Ok(CooldownActive)), got: {:?}", res);

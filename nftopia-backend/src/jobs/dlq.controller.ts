@@ -10,6 +10,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from '../common/enums/user-role.enum';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 
 @ApiTags('Admin DLQ')
 @ApiBearerAuth()
@@ -81,7 +82,7 @@ export class DlqController {
         .createQueryBuilder()
         .insert()
         .into(ContractEvent)
-        .values(entity as any)
+        .values(entity as QueryDeepPartialEntity<ContractEvent>)
         .orIgnore()
         .execute();
 

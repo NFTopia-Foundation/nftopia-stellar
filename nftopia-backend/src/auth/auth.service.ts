@@ -37,6 +37,11 @@ type JwtUserPayload = {
   walletAddress?: string;
 };
 
+type JwtRefreshPayload = {
+  sub: string;
+  type: string;
+};
+
 const scryptAsync = promisify(crypto.scrypt);
 
 @Injectable()
@@ -596,6 +601,23 @@ export class AuthService {
         bannerUrl: user.bannerUrl ?? null,
       },
     };
+  }
+  async refreshTokens(refreshToken: string) {
+    try {
+      const payload = this.jwtService.verify<JwtRefreshPayload>(refreshToken);
+      if (payload.type !== 'refresh') {
+        throw new UnauthorizedException('Invalid token type');
+      }
+      const user = await this.userRepository.findOne({
+        where: { id: payload.sub },
+      });
+      if (!user) {
+        throw new UnauthorizedException('User not found');
+      }
+      return this.buildAuthResponse(user);
+    } catch {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
   }
 
   private buildTokenPair(user: JwtUserPayload) {

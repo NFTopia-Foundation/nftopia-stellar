@@ -6,6 +6,7 @@ import { ContractEventDlq } from './entities/contract-event-dlq.entity';
 import { ContractEvent } from './entities/contract-event.entity';
 import { IndexerService } from './indexer.service';
 import { Horizon } from 'stellar-sdk';
+import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 
 @Injectable()
 export class DlqRetryWorker {
@@ -79,7 +80,7 @@ export class DlqRetryWorker {
             .createQueryBuilder()
             .insert()
             .into(ContractEvent)
-            .values(entity as any)
+            .values(entity as QueryDeepPartialEntity<ContractEvent>)
             .orIgnore()
             .execute();
 
