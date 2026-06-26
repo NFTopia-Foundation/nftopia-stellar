@@ -6,8 +6,10 @@ import { useStellarTransaction } from "./hooks/useStellarTransaction";
 import { useWalletStore } from "@/stores/walletStore";
 import { getExplorerUrl } from "@/lib/stellar/network";
 import { Button } from "@/components/ui/button";
+import { useTransactionStore } from "@/lib/stores/transaction-store";
+import type { TransactionType } from "@/lib/stores/transaction-store";
 
-export type TransactionType = "mint" | "list" | "bid" | "buy" | "cancel";
+export type { TransactionType } from "@/lib/stores/transaction-store";
 
 interface TransactionSignerProps {
   open: boolean;
@@ -37,12 +39,22 @@ export function TransactionSigner({
   const { provider, network, address } = useWalletStore();
   const { signing, submitting, txHash, error, signAndSubmit, clearState } =
     useStellarTransaction(provider, network);
+  const addTransaction = useTransactionStore((s) => s.addTransaction);
 
   const [done, setDone] = useState(false);
 
   const handleSign = async () => {
     try {
       const hash = await signAndSubmit(transactionXdr);
+      // Register transaction globally for tracking
+      addTransaction({
+        txHash: hash,
+        type,
+        description,
+        status: 'pending',
+        network,
+        xdr: transactionXdr,
+      });
       setDone(true);
       onSuccess?.(hash);
     } catch {

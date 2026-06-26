@@ -30,6 +30,10 @@ export {
   useToast,
 } from "./app-store";
 
+// Transaction Store
+export { useTransactionStore } from "./transaction-store";
+export type { TrackedTransaction, TxStatus } from "./transaction-store";
+
 export { useMarketplace } from "../../features/marketplace/store/marketplaceStore";
 export { useNFTs } from "../../features/nft/store/nftStore";
 export { useUser, useUserProfile } from "../../features/user/store/userStore";

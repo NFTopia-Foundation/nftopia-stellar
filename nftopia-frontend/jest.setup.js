@@ -21,6 +21,7 @@ jest.mock("next/navigation", () => ({
   }),
   usePathname: () => "/en",
   useSearchParams: () => new URLSearchParams(),
+  useParams: () => ({ locale: "en" }),
 }));
 
 jest.mock("next/link", () => {
