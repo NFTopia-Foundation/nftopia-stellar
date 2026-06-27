@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import { StellarNetwork, WalletProvider } from "@/types/stellar";
 import { connectFreighter, getFreighterAddress, isFreighterConnected } from "@/lib/stellar/wallet/freighter";
 import { connectAlbedo } from "@/lib/stellar/wallet/albedo";
+import { connectWalletConnect, disconnectWalletConnect, isWalletConnectConnected } from "@/lib/stellar/wallet/walletconnect";
 import { defaultNetwork } from "@/lib/stellar/client";
 import { getHorizonServer } from "@/lib/stellar/client";
 import { useWalletStore } from "@/stores/walletStore";
@@ -49,6 +50,12 @@ export function useStellarWallet() {
               setConnected(persisted.address, persisted.provider, persisted.network);
               return;
             }
+          }
+        } else if (persisted.provider === "walletconnect") {
+          const stillConnected = await isWalletConnectConnected(persisted.network, persisted.address);
+          if (stillConnected) {
+            setConnected(persisted.address, persisted.provider, persisted.network);
+            return;
           }
         }
         // Persisted session no longer valid
@@ -102,6 +109,9 @@ export function useStellarWallet() {
         case "albedo":
           nextAddress = await connectAlbedo();
           break;
+        case "walletconnect":
+          nextAddress = await connectWalletConnect(defaultNetwork);
+          break;
         default:
           throw new Error(`Provider "${provider}" is not yet supported`);
       }
@@ -116,15 +126,29 @@ export function useStellarWallet() {
       setConnected(nextAddress, provider, defaultNetwork);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to connect wallet";
-      setError(message);
+      let displayError = message;
+      
+      // Clear recovery actions for failed connections
+      if (message.toLowerCase().includes("user rejected") || message.toLowerCase().includes("closed")) {
+        displayError = "Connection request was cancelled. Please try again when ready.";
+      } else if (message.includes("No Stellar account")) {
+        displayError = "Your wallet didn't provide a Stellar account. Make sure you are on the correct network (Testnet/Public).";
+      } else if (message.includes("No active WalletConnect session")) {
+        displayError = "Your session expired. Please disconnect and reconnect your wallet.";
+      }
+      
+      setError(displayError);
     }
   }, [setConnected, setConnecting, setError]);
 
   const disconnect = useCallback(() => {
     sessionStorage.removeItem(WALLET_STORAGE_KEY);
+    if (provider === "walletconnect") {
+      disconnectWalletConnect().catch(console.error);
+    }
     setDisconnected();
     setBalances([]);
-  }, [setDisconnected]);
+  }, [provider, setDisconnected]);
 
   const clearError = useCallback(() => {
     setError(null);
