@@ -120,8 +120,71 @@ fn gas_estimate_grows_with_operations() {
 
     assert!(est1.estimated_gas > est0.estimated_gas);
     assert!(est2.estimated_gas > est1.estimated_gas);
-    // Cost is derived from gas
-    assert_eq!(est2.estimated_cost, est2.estimated_gas as i128);
+    // Cost is derived from mainnet fee ladder instruction and storage formula
+    assert!(est2.estimated_cost > 0);
+}
+
+#[test]
+fn gas_estimate_differs_by_operation_type() {
+    let env = Env::default();
+    let op_mint = Operation {
+        operation_id: 1,
+        operation_type: OperationType::NftMint,
+        target_contract: Address::generate(&env),
+        function_name: String::from_str(&env, "mint"),
+        parameters: vec![&env],
+        dependencies: vec![&env],
+        gas_limit: None,
+        retry_count: 0,
+        timeout_seconds: 300,
+    };
+
+    let op_transfer = Operation {
+        operation_id: 2,
+        operation_type: OperationType::PaymentTransfer,
+        target_contract: Address::generate(&env),
+        function_name: String::from_str(&env, "transfer"),
+        parameters: vec![&env],
+        dependencies: vec![&env],
+        gas_limit: None,
+        retry_count: 0,
+        timeout_seconds: 300,
+    };
+
+    let gas_mint = crate::utils::gas_calculator::op_gas(&op_mint);
+    let gas_transfer = crate::utils::gas_calculator::op_gas(&op_transfer);
+
+    // NftMint has higher base instructions than PaymentTransfer
+    assert!(gas_mint > gas_transfer);
+}
+
+#[test]
+fn gas_optimizer_applies_safety_margin_and_caching() {
+    let env = Env::default();
+    let ops = vec![&env, sample_operation(&env, 1, vec![&env])];
+
+    let base = crate::utils::gas_calculator::total_gas(&ops);
+
+    // Default config without safety buffer or caching
+    let config_default = crate::types::default_gas_config(&env);
+    let est_default = crate::gas_optimizer::estimate_with_config(&env, &ops, &config_default);
+    assert_eq!(est_default.estimated_gas, base.estimated_gas);
+
+    // Config with safety buffer (12000 bps = 1.2x)
+    let config_safety = GasOptimizationConfig {
+        fallback_gas_multiplier_bps: 12_000,
+        ..config_default.clone()
+    };
+    let est_safety = crate::gas_optimizer::estimate_with_config(&env, &ops, &config_safety);
+    assert!(est_safety.estimated_gas > base.estimated_gas);
+
+    // Config with caching enabled
+    let config_cache = GasOptimizationConfig {
+        enable_caching: true,
+        ..config_default
+    };
+    let est_cache = crate::gas_optimizer::estimate_with_config(&env, &ops, &config_cache);
+    assert!(est_cache.estimated_gas < base.estimated_gas);
 }
 
 // ── Gas ceiling enforcement ─────────────────────────────────────────────────
