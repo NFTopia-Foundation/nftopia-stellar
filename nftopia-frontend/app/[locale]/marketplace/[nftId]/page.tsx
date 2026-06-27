@@ -51,22 +51,108 @@ function formatDate(date: string | Date | null | undefined): string {
 // Skeleton component for NFT detail
 function NftDetailSkeleton() {
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
+    <div className="max-w-7xl mx-auto px-4 py-8" role="status" aria-label="Loading NFT details">
+      {/* Back button */}
+      <Skeleton className="h-5 w-32 mb-6" aria-hidden="true" />
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="space-y-4">
+        {/* Left Column - Image + Collection info */}
+        <div className="space-y-4" aria-hidden="true">
           <Skeleton className="aspect-square w-full rounded-xl" />
-        </div>
-        <div className="space-y-6">
-          <Skeleton className="h-8 w-3/4" />
-          <Skeleton className="h-4 w-1/2" />
-          <Skeleton className="h-24 w-full" />
-          <div className="grid grid-cols-2 gap-4">
-            <Skeleton className="h-20 w-full" />
-            <Skeleton className="h-20 w-full" />
+          {/* Collection info card */}
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-900/30 border border-gray-800/50">
+            <Skeleton className="w-10 h-10 rounded-full flex-shrink-0" />
+            <div className="space-y-1.5">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-3 w-20" />
+            </div>
           </div>
-          <Skeleton className="h-12 w-full" />
+        </div>
+
+        {/* Right Column - Details */}
+        <div className="space-y-6" aria-hidden="true">
+          {/* NFT Name & Token ID */}
+          <div>
+            <Skeleton className="h-9 w-3/4 mb-2" />
+            <Skeleton className="h-4 w-1/2" />
+          </div>
+
+          {/* Description */}
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-5/6" />
+            <Skeleton className="h-4 w-4/6" />
+          </div>
+
+          {/* Attributes grid */}
+          <div>
+            <Skeleton className="h-4 w-20 mb-2" />
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} className="h-14 w-full rounded-lg" />
+              ))}
+            </div>
+          </div>
+
+          {/* Owner & Creator cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Creator card */}
+            <div className="p-4 rounded-lg bg-gray-900/30 border border-gray-800/50 space-y-2">
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-4 w-4 rounded-sm" />
+                <Skeleton className="h-4 w-14" />
+              </div>
+              <Skeleton className="h-5 w-36" />
+              <Skeleton className="h-3 w-28" />
+            </div>
+            {/* Owner card */}
+            <div className="p-4 rounded-lg bg-gray-900/30 border border-gray-800/50 space-y-2">
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-4 w-4 rounded-sm" />
+                <Skeleton className="h-4 w-24" />
+              </div>
+              <Skeleton className="h-5 w-36" />
+              <Skeleton className="h-3 w-24" />
+            </div>
+          </div>
+
+          {/* Contract address */}
+          <Skeleton className="h-12 w-full rounded-lg" />
         </div>
       </div>
+
+      {/* Transfer History skeleton */}
+      <div className="mt-12" aria-hidden="true">
+        <div className="rounded-xl border border-gray-800/50 bg-gray-900/30 backdrop-blur-sm overflow-hidden">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800/50">
+            <Skeleton className="h-6 w-40" />
+            <Skeleton className="h-4 w-20" />
+          </div>
+          <div className="divide-y divide-gray-800/50">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex flex-col sm:flex-row sm:items-center gap-3 py-3 px-4">
+                <Skeleton className="h-7 w-20 rounded-full flex-shrink-0" />
+                <div className="flex-1 min-w-0 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-4 w-14" />
+                    <Skeleton className="h-4 w-32" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-3 w-12" />
+                    <Skeleton className="h-3 w-28" />
+                  </div>
+                </div>
+                <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-6 w-16" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <span className="sr-only">Loading NFT details...</span>
     </div>
   );
 }
