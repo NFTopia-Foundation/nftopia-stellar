@@ -16,7 +16,6 @@ use crate::access_control as ac;
 use crate::error::ContractError;
 use crate::storage::DataKey;
 use crate::types::{CollectionConfig, RoyaltyInfo, TokenAttribute, TokenData};
-use crate::version;
 use soroban_sdk::{Address, Env, String, Vec, contract, contractimpl, panic_with_error};
 
 #[contract]
