@@ -15,6 +15,11 @@ import type { Request } from 'express';
 import { AuthService } from './auth.service';
 import { EmailLoginDto, EmailRegisterDto } from './dto/email-auth.dto';
 import {
+  RequestPasswordResetDto,
+  ResetPasswordDto,
+  VerifyEmailDto,
+} from './dto/password-reset.dto';
+import {
   WalletChallengeDto,
   WalletChallengeResponseDto,
 } from './dto/wallet-challenge.dto';
@@ -78,6 +83,34 @@ export class AuthController {
         data: res,
       },
     };
+  }
+
+  @Post('verify-email')
+  @ApiOperation({ summary: 'Verify email address using token from email link' })
+  async verifyEmail(@Body() dto: VerifyEmailDto) {
+    const res = await this.authService.verifyEmail(dto);
+    return { data: { success: true, data: res } };
+  }
+
+  @Post('resend-verification')
+  @ApiOperation({ summary: 'Resend email verification link' })
+  async resendVerification(@Body('email') email: string) {
+    const res = await this.authService.resendVerificationEmail(email);
+    return { data: { success: true, data: res } };
+  }
+
+  @Post('request-password-reset')
+  @ApiOperation({ summary: 'Request a password reset email' })
+  async requestPasswordReset(@Body() dto: RequestPasswordResetDto) {
+    const res = await this.authService.requestPasswordReset(dto);
+    return { data: { success: true, data: res } };
+  }
+
+  @Post('reset-password')
+  @ApiOperation({ summary: 'Reset password using token from email link' })
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    const res = await this.authService.resetPassword(dto);
+    return { data: { success: true, data: res } };
   }
 
   @UseGuards(JwtAuthGuard)

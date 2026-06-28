@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import type { Server } from 'socket.io';
 import { NotificationsService } from './notifications.service';
 import { NotificationsGateway } from './notifications.gateway';
+import { EmailService } from '../email/email.service';
 import type { BidUpdatePayload } from './interfaces/notification.interface';
 
 // ── helpers ─────────────────────────────────────────────────────────────────
@@ -39,16 +40,25 @@ describe('NotificationsService', () => {
   let room: ReturnType<typeof makeRoom>;
   let mockServer: jest.Mocked<Server>;
   let mockGateway: jest.Mocked<NotificationsGateway>;
+  let mockEmailService: jest.Mocked<EmailService>;
 
   beforeEach(async () => {
     room = makeRoom();
     mockServer = makeServer(room);
     mockGateway = makeGateway(mockServer);
+    mockEmailService = {
+      sendVerificationEmail: jest.fn().mockResolvedValue(undefined),
+      sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined),
+      sendBidNotificationEmail: jest.fn().mockResolvedValue(undefined),
+      sendAuctionWonEmail: jest.fn().mockResolvedValue(undefined),
+      sendAsync: jest.fn((fn: () => Promise<void>) => { fn().catch(() => {}); }),
+    } as unknown as jest.Mocked<EmailService>;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         NotificationsService,
         { provide: NotificationsGateway, useValue: mockGateway },
+        { provide: EmailService, useValue: mockEmailService },
       ],
     }).compile();
 
@@ -215,6 +225,60 @@ describe('NotificationsService', () => {
     it('emits once per call', () => {
       service.broadcastBidUpdate('auction-1', makeBidUpdate());
       expect(room.emit).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ── email notifications ───────────────────────────────────────────────────
+
+  describe('notifyBidEmail', () => {
+    it('calls emailService.sendAsync with bid notification', async () => {
+      service.notifyBidEmail('creator@example.com', 'auction-1', 200, 'Alice');
+      expect(mockEmailService.sendAsync).toHaveBeenCalledTimes(1);
+      await new Promise<void>((r) => setTimeout(r, 10));
+      expect(mockEmailService.sendBidNotificationEmail).toHaveBeenCalledWith(
+        'creator@example.com',
+        'auction-1',
+        200,
+        'Alice',
+      );
+    });
+
+    it('works without optional username', async () => {
+      service.notifyBidEmail('creator@example.com', 'auction-2', 50);
+      expect(mockEmailService.sendAsync).toHaveBeenCalledTimes(1);
+      await new Promise<void>((r) => setTimeout(r, 10));
+      expect(mockEmailService.sendBidNotificationEmail).toHaveBeenCalledWith(
+        'creator@example.com',
+        'auction-2',
+        50,
+        undefined,
+      );
+    });
+  });
+
+  describe('notifyAuctionWonEmail', () => {
+    it('calls emailService.sendAsync with auction won notification', async () => {
+      service.notifyAuctionWonEmail('winner@example.com', 'auction-3', 'Cool NFT', 'Bob');
+      expect(mockEmailService.sendAsync).toHaveBeenCalledTimes(1);
+      await new Promise<void>((r) => setTimeout(r, 10));
+      expect(mockEmailService.sendAuctionWonEmail).toHaveBeenCalledWith(
+        'winner@example.com',
+        'auction-3',
+        'Cool NFT',
+        'Bob',
+      );
+    });
+
+    it('works without optional username', async () => {
+      service.notifyAuctionWonEmail('winner@example.com', 'auction-4', 'Rare NFT');
+      expect(mockEmailService.sendAsync).toHaveBeenCalledTimes(1);
+      await new Promise<void>((r) => setTimeout(r, 10));
+      expect(mockEmailService.sendAuctionWonEmail).toHaveBeenCalledWith(
+        'winner@example.com',
+        'auction-4',
+        'Rare NFT',
+        undefined,
+      );
     });
   });
 });

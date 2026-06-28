@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { ScheduleModule } from '@nestjs/schedule';
 import { NotificationsGateway } from './notifications.gateway';
 import { NotificationsService } from './notifications.service';
+import { EmailModule } from '../email/email.module';
 
 /**
  * NotificationsModule
@@ -42,6 +43,7 @@ import { NotificationsService } from './notifications.service';
       secret: process.env.JWT_SECRET || 'your-secret-key-change-in-production',
     }),
     ScheduleModule.forRoot(),
+    EmailModule,
   ],
   providers: [NotificationsGateway, NotificationsService],
   exports: [NotificationsService],
