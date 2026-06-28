@@ -63,7 +63,9 @@ describe('AuthService', () => {
     sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined),
     sendBidNotificationEmail: jest.fn().mockResolvedValue(undefined),
     sendAuctionWonEmail: jest.fn().mockResolvedValue(undefined),
-    sendAsync: jest.fn((fn: () => Promise<void>) => { fn().catch(() => {}); }),
+    sendAsync: jest.fn((fn: () => Promise<void>) => {
+      fn().catch(() => {});
+    }),
   };
 
   beforeEach(async () => {
@@ -293,7 +295,10 @@ describe('AuthService', () => {
 
   describe('verifyEmail', () => {
     it('marks user email as verified when token is valid', async () => {
-      cacheManager.get.mockResolvedValue({ userId: 'user-1', email: 'user@nftopia.io' });
+      cacheManager.get.mockResolvedValue({
+        userId: 'user-1',
+        email: 'user@nftopia.io',
+      });
       userRepository.findOne.mockResolvedValue({
         id: 'user-1',
         email: 'user@nftopia.io',
@@ -320,7 +325,10 @@ describe('AuthService', () => {
     });
 
     it('returns success without saving when already verified', async () => {
-      cacheManager.get.mockResolvedValue({ userId: 'user-1', email: 'user@nftopia.io' });
+      cacheManager.get.mockResolvedValue({
+        userId: 'user-1',
+        email: 'user@nftopia.io',
+      });
       userRepository.findOne.mockResolvedValue({
         id: 'user-1',
         email: 'user@nftopia.io',
@@ -328,7 +336,9 @@ describe('AuthService', () => {
       });
       cacheManager.del.mockResolvedValue(undefined);
 
-      const result = await service.verifyEmail({ token: 'already-verified-token' });
+      const result = await service.verifyEmail({
+        token: 'already-verified-token',
+      });
 
       expect(result.success).toBe(true);
       expect(userRepository.save).not.toHaveBeenCalled();
@@ -348,7 +358,9 @@ describe('AuthService', () => {
         username: 'Alice',
       });
 
-      const result = await service.requestPasswordReset({ email: 'user@nftopia.io' });
+      const result = await service.requestPasswordReset({
+        email: 'user@nftopia.io',
+      });
 
       expect(result.success).toBe(true);
       expect(cacheManager.set).toHaveBeenCalledWith(
@@ -364,14 +376,19 @@ describe('AuthService', () => {
       cacheManager.set.mockResolvedValue(undefined);
       userRepository.findOne.mockResolvedValue(null);
 
-      const result = await service.requestPasswordReset({ email: 'unknown@nftopia.io' });
+      const result = await service.requestPasswordReset({
+        email: 'unknown@nftopia.io',
+      });
 
       expect(result.success).toBe(true);
       expect(emailService.sendAsync).not.toHaveBeenCalled();
     });
 
     it('enforces per-email rate limiting', async () => {
-      cacheManager.get.mockResolvedValue({ count: 3, windowStart: Date.now() - 1000 });
+      cacheManager.get.mockResolvedValue({
+        count: 3,
+        windowStart: Date.now() - 1000,
+      });
 
       await expect(
         service.requestPasswordReset({ email: 'user@nftopia.io' }),
@@ -381,8 +398,14 @@ describe('AuthService', () => {
 
   describe('resetPassword', () => {
     it('updates password when token is valid', async () => {
-      cacheManager.get.mockResolvedValue({ userId: 'user-1', email: 'user@nftopia.io' });
-      userRepository.findOne.mockResolvedValue({ id: 'user-1', passwordHash: 'old:hash' });
+      cacheManager.get.mockResolvedValue({
+        userId: 'user-1',
+        email: 'user@nftopia.io',
+      });
+      userRepository.findOne.mockResolvedValue({
+        id: 'user-1',
+        passwordHash: 'old:hash',
+      });
       userRepository.save.mockResolvedValue({});
       cacheManager.del.mockResolvedValue(undefined);
 
@@ -392,17 +415,25 @@ describe('AuthService', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(userRepository.save).toHaveBeenCalledWith(
-        expect.objectContaining({ passwordHash: expect.any(String) }),
+      expect(userRepository.save).toHaveBeenCalledTimes(1);
+      const [savedUser] = userRepository.save.mock.calls[0] as [
+        { passwordHash: string },
+      ];
+      expect(typeof savedUser.passwordHash).toBe('string');
+      expect(savedUser.passwordHash).not.toBe('old:hash');
+      expect(cacheManager.del).toHaveBeenCalledWith(
+        'pwd-reset:valid-reset-token',
       );
-      expect(cacheManager.del).toHaveBeenCalledWith('pwd-reset:valid-reset-token');
     });
 
     it('throws BadRequestException for invalid or expired reset token', async () => {
       cacheManager.get.mockResolvedValue(null);
 
       await expect(
-        service.resetPassword({ token: 'expired-token', newPassword: 'NewSecure1!' }),
+        service.resetPassword({
+          token: 'expired-token',
+          newPassword: 'NewSecure1!',
+        }),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
   });

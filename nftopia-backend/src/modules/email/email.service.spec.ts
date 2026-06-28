@@ -5,16 +5,32 @@ import * as fs from 'fs';
 import * as nodemailer from 'nodemailer';
 import { EmailService } from './email.service';
 
+interface MailArgs {
+  from: string;
+  to: string;
+  subject: string;
+  html: string;
+}
+
+function getMailArgs(index = 0): MailArgs {
+  return (mockSendMail.mock.calls[index] as [MailArgs])[0];
+}
+
 jest.mock('fs');
 jest.mock('nodemailer');
 jest.mock('handlebars', () => ({
-  compile: jest.fn((source: string) => (ctx: Record<string, unknown>) => `${source}:${JSON.stringify(ctx)}`),
+  compile: jest.fn(
+    (source: string) => (ctx: Record<string, unknown>) =>
+      `${source}:${JSON.stringify(ctx)}`,
+  ),
 }));
 
 const mockSendMail = jest.fn().mockResolvedValue({ messageId: 'test-id' });
 const mockCreateTransport = nodemailer.createTransport as jest.Mock;
 
-const makeConfig = (overrides: Record<string, string> = {}): jest.Mocked<ConfigService> => {
+const makeConfig = (
+  overrides: Record<string, string> = {},
+): jest.Mocked<ConfigService> => {
   const defaults: Record<string, string> = {
     EMAIL_PROVIDER: 'smtp',
     EMAIL_FROM_ADDRESS: 'test@nftopia.io',
@@ -61,40 +77,53 @@ describe('EmailService', () => {
 
   describe('sendVerificationEmail', () => {
     it('sends email via SMTP transporter', async () => {
-      await service.sendVerificationEmail('user@example.com', 'abc123', 'Alice');
+      await service.sendVerificationEmail(
+        'user@example.com',
+        'abc123',
+        'Alice',
+      );
       expect(mockSendMail).toHaveBeenCalledTimes(1);
-      const call = mockSendMail.mock.calls[0][0];
+      const call = getMailArgs();
       expect(call.to).toBe('user@example.com');
       expect(call.subject).toBe('Verify your NFTopia account');
     });
 
     it('includes token in verification URL', async () => {
       await service.sendVerificationEmail('user@example.com', 'my-token');
-      const call = mockSendMail.mock.calls[0][0];
+      const call = getMailArgs();
       expect(call.html).toContain('my-token');
     });
   });
 
   describe('sendPasswordResetEmail', () => {
     it('sends email with reset subject', async () => {
-      await service.sendPasswordResetEmail('user@example.com', 'reset-token', 'Bob');
+      await service.sendPasswordResetEmail(
+        'user@example.com',
+        'reset-token',
+        'Bob',
+      );
       expect(mockSendMail).toHaveBeenCalledTimes(1);
-      const call = mockSendMail.mock.calls[0][0];
+      const call = getMailArgs();
       expect(call.subject).toBe('Reset your NFTopia password');
     });
 
     it('includes reset token in email', async () => {
       await service.sendPasswordResetEmail('user@example.com', 'reset-xyz');
-      const call = mockSendMail.mock.calls[0][0];
+      const call = getMailArgs();
       expect(call.html).toContain('reset-xyz');
     });
   });
 
   describe('sendBidNotificationEmail', () => {
     it('sends bid notification with amount in subject area', async () => {
-      await service.sendBidNotificationEmail('creator@example.com', 'auction-1', 150, 'Carol');
+      await service.sendBidNotificationEmail(
+        'creator@example.com',
+        'auction-1',
+        150,
+        'Carol',
+      );
       expect(mockSendMail).toHaveBeenCalledTimes(1);
-      const call = mockSendMail.mock.calls[0][0];
+      const call = getMailArgs();
       expect(call.to).toBe('creator@example.com');
       expect(call.subject).toBe('New bid on your NFT auction');
       expect(call.html).toContain('150');
@@ -103,9 +132,14 @@ describe('EmailService', () => {
 
   describe('sendAuctionWonEmail', () => {
     it('sends auction won email with NFT name in subject', async () => {
-      await service.sendAuctionWonEmail('winner@example.com', 'auction-2', 'Cool NFT #42', 'Dave');
+      await service.sendAuctionWonEmail(
+        'winner@example.com',
+        'auction-2',
+        'Cool NFT #42',
+        'Dave',
+      );
       expect(mockSendMail).toHaveBeenCalledTimes(1);
-      const call = mockSendMail.mock.calls[0][0];
+      const call = getMailArgs();
       expect(call.to).toBe('winner@example.com');
       expect(call.subject).toContain('Cool NFT #42');
       expect(call.html).toContain('Cool NFT #42');
@@ -157,7 +191,13 @@ describe('EmailService', () => {
       const module2 = await Test.createTestingModule({
         providers: [
           EmailService,
-          { provide: ConfigService, useValue: makeConfig({ EMAIL_PROVIDER: 'sendgrid', SENDGRID_API_KEY: 'SG.key' }) },
+          {
+            provide: ConfigService,
+            useValue: makeConfig({
+              EMAIL_PROVIDER: 'sendgrid',
+              SENDGRID_API_KEY: 'SG.key',
+            }),
+          },
         ],
       }).compile();
 
@@ -175,12 +215,17 @@ describe('EmailService', () => {
       jest.clearAllMocks();
       (fs.readFileSync as jest.Mock).mockReturnValue('<html></html>');
 
-      const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
+      const warnSpy = jest
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => {});
 
       const module3 = await Test.createTestingModule({
         providers: [
           EmailService,
-          { provide: ConfigService, useValue: makeConfig({ EMAIL_PROVIDER: 'unknown' }) },
+          {
+            provide: ConfigService,
+            useValue: makeConfig({ EMAIL_PROVIDER: 'unknown' }),
+          },
         ],
       }).compile();
 
