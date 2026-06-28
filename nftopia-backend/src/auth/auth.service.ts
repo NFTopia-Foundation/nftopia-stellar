@@ -25,10 +25,16 @@ import {
   WalletUnlinkDto,
   WalletVerifyDto,
 } from './dto/wallet-auth.dto';
+import {
+  RequestPasswordResetDto,
+  ResetPasswordDto,
+  VerifyEmailDto,
+} from './dto/password-reset.dto';
 import { WalletSession } from './entities/wallet-session.entity';
 import { UserWallet } from './entities/user-wallet.entity';
 import { User } from '../users/user.entity';
 import { StellarSignatureStrategy } from './strategies/stellar.strategy';
+import { EmailService } from '../modules/email/email.service';
 
 type JwtUserPayload = {
   sub: string;
@@ -43,6 +49,11 @@ type JwtRefreshPayload = {
 };
 
 const scryptAsync = promisify(crypto.scrypt);
+
+const EMAIL_VERIFY_TTL_MS = 24 * 60 * 60 * 1000;
+const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
+const EMAIL_RATE_WINDOW_MS = 5 * 60 * 1000;
+const EMAIL_RATE_MAX = 3;
 
 @Injectable()
 export class AuthService {
@@ -70,6 +81,7 @@ export class AuthService {
   constructor(
     private readonly jwtService: JwtService,
     private readonly stellarStrategy: StellarSignatureStrategy,
+    private readonly emailService: EmailService,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     @InjectRepository(UserWallet)
@@ -101,6 +113,21 @@ export class AuthService {
       }),
     );
 
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    await this.cacheManager.set(
+      `email-verify:${verificationToken}`,
+      { userId: user.id, email: normalizedEmail },
+      EMAIL_VERIFY_TTL_MS,
+    );
+
+    this.emailService.sendAsync(() =>
+      this.emailService.sendVerificationEmail(
+        normalizedEmail,
+        verificationToken,
+        dto.username,
+      ),
+    );
+
     return this.buildAuthResponse(user);
   }
 
@@ -128,6 +155,123 @@ export class AuthService {
     return this.buildAuthResponse(user);
   }
 
+  async verifyEmail(dto: VerifyEmailDto) {
+    const data = await this.cacheManager.get<{ userId: string; email: string }>(
+      `email-verify:${dto.token}`,
+    );
+
+    if (!data) {
+      throw new BadRequestException('Invalid or expired verification token');
+    }
+
+    const user = await this.userRepository.findOne({
+      where: { id: data.userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.isEmailVerified) {
+      await this.cacheManager.del(`email-verify:${dto.token}`);
+      return { success: true, message: 'Email already verified' };
+    }
+
+    user.isEmailVerified = true;
+    await this.userRepository.save(user);
+    await this.cacheManager.del(`email-verify:${dto.token}`);
+
+    return { success: true, message: 'Email verified successfully' };
+  }
+
+  async resendVerificationEmail(email: string) {
+    const normalizedEmail = this.normalizeEmail(email);
+    await this.assertEmailRateLimit(normalizedEmail);
+
+    const user = await this.userRepository.findOne({
+      where: { email: normalizedEmail },
+    });
+
+    if (!user) {
+      return { success: true };
+    }
+
+    if (user.isEmailVerified) {
+      return { success: true };
+    }
+
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    await this.cacheManager.set(
+      `email-verify:${verificationToken}`,
+      { userId: user.id, email: normalizedEmail },
+      EMAIL_VERIFY_TTL_MS,
+    );
+
+    this.emailService.sendAsync(() =>
+      this.emailService.sendVerificationEmail(
+        normalizedEmail,
+        verificationToken,
+        user.username,
+      ),
+    );
+
+    return { success: true };
+  }
+
+  async requestPasswordReset(dto: RequestPasswordResetDto) {
+    const normalizedEmail = this.normalizeEmail(dto.email);
+    await this.assertEmailRateLimit(normalizedEmail);
+
+    const user = await this.userRepository.findOne({
+      where: { email: normalizedEmail },
+    });
+
+    if (!user || !user.passwordHash) {
+      return { success: true };
+    }
+
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    await this.cacheManager.set(
+      `pwd-reset:${resetToken}`,
+      { userId: user.id, email: normalizedEmail },
+      PASSWORD_RESET_TTL_MS,
+    );
+
+    this.emailService.sendAsync(() =>
+      this.emailService.sendPasswordResetEmail(
+        normalizedEmail,
+        resetToken,
+        user.username,
+      ),
+    );
+
+    return { success: true };
+  }
+
+  async resetPassword(dto: ResetPasswordDto) {
+    const data = await this.cacheManager.get<{ userId: string; email: string }>(
+      `pwd-reset:${dto.token}`,
+    );
+
+    if (!data) {
+      throw new BadRequestException('Invalid or expired password reset token');
+    }
+
+    const user = await this.userRepository.findOne({
+      where: { id: data.userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    user.passwordHash = await this.hashPassword(dto.newPassword);
+    await this.userRepository.save(user);
+    await this.cacheManager.del(`pwd-reset:${dto.token}`);
+
+    return { success: true, message: 'Password reset successfully' };
+  }
+
   async generateWalletChallenge(
     dto: WalletChallengeDto,
     requestIp?: string,
@@ -149,7 +293,6 @@ export class AuthService {
       issuedAt,
     );
 
-    // Store nonce in Redis with TTL
     const sessionKey = `nonce:${dto.walletAddress}`;
     const sessionData = {
       nonce,
@@ -181,7 +324,6 @@ export class AuthService {
       throw new BadRequestException('Invalid Stellar wallet address');
     }
 
-    // Retrieve nonce from Redis
     const sessionKey = `nonce:${dto.walletAddress}`;
     const sessionData = await this.cacheManager.get<{
       nonce: string;
@@ -197,13 +339,11 @@ export class AuthService {
       throw new UnauthorizedException('Wallet challenge not found');
     }
 
-    // Check if expired
     if (new Date(sessionData.expiresAt) <= new Date()) {
       await this.cacheManager.del(sessionKey);
       throw new UnauthorizedException('Wallet challenge has expired');
     }
 
-    // Check nonce matches
     if (sessionData.nonce !== dto.nonce) {
       throw new UnauthorizedException('Invalid nonce');
     }
@@ -230,7 +370,6 @@ export class AuthService {
       true,
     );
 
-    // Delete nonce from Redis after successful verification (one-time use)
     await this.cacheManager.del(sessionKey);
 
     return this.buildAuthResponse(user);
@@ -401,6 +540,37 @@ export class AuthService {
 
   login(user: JwtUserPayload) {
     return this.buildTokenPair(user);
+  }
+
+  private async assertEmailRateLimit(email: string): Promise<void> {
+    const key = `email-rate:${email}`;
+    const rateData = await this.cacheManager.get<{
+      count: number;
+      windowStart: number;
+    }>(key);
+    const now = Date.now();
+
+    if (!rateData || now - rateData.windowStart > EMAIL_RATE_WINDOW_MS) {
+      await this.cacheManager.set(
+        key,
+        { count: 1, windowStart: now },
+        EMAIL_RATE_WINDOW_MS,
+      );
+      return;
+    }
+
+    if (rateData.count >= EMAIL_RATE_MAX) {
+      throw new HttpException(
+        'Too many email requests. Please try again later.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    await this.cacheManager.set(
+      key,
+      { count: rateData.count + 1, windowStart: rateData.windowStart },
+      EMAIL_RATE_WINDOW_MS,
+    );
   }
 
   private assertChallengeRateLimit(requestIp?: string) {
@@ -602,6 +772,7 @@ export class AuthService {
       },
     };
   }
+
   async refreshTokens(refreshToken: string) {
     try {
       const payload = this.jwtService.verify<JwtRefreshPayload>(refreshToken);

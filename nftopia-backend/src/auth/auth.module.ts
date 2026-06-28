@@ -9,6 +9,7 @@ import { User } from '../users/user.entity';
 import { UserWallet } from './entities/user-wallet.entity';
 import { WalletSession } from './entities/wallet-session.entity';
 import { StellarSignatureStrategy } from './strategies/stellar.strategy';
+import { EmailModule } from '../modules/email/email.module';
 
 const jwtAccessExpiresInSeconds = parseInt(
   process.env.JWT_EXPIRES_IN_SECONDS || '900',
@@ -25,6 +26,7 @@ const jwtAccessExpiresInSeconds = parseInt(
         expiresIn: jwtAccessExpiresInSeconds,
       },
     }),
+    EmailModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, StellarSignatureStrategy, JwtStrategy],

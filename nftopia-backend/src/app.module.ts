@@ -38,6 +38,7 @@ import { CorrelationIdMiddleware } from './common/middleware/correlation-id.midd
 import { SocialModule } from './modules/social/social.module';
 import { PaymentModule } from './modules/payment/payment.module';
 // import { CorsConfig } from './config/cors.config';
+import { EmailModule } from './modules/email/email.module';
 
 @Module({
   imports: [
@@ -123,6 +124,7 @@ import { PaymentModule } from './modules/payment/payment.module';
     CollectionFactoryModule,
     StellarModule,
     NotificationsModule,
+    EmailModule,
     IndexerModule,
     AuditModule,
     MetricsModule,
