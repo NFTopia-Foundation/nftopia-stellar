@@ -20,7 +20,8 @@ use crate::types::{
     FeeConfig, SaleTransaction, TradeTransaction,
 };
 use crate::utils::{asset_utils, time_utils};
-use soroban_sdk::{contract, contractimpl, symbol_short, Address, Bytes, Env, Symbol, Vec};
+use crate::version;
+use soroban_sdk::{contract, contractimpl, symbol_short, Address, Bytes, Env, String, Symbol, Vec};
 
 /// Marketplace Settlement Contract
 #[contract]
@@ -1063,5 +1064,20 @@ impl MarketplaceSettlement {
         }
         AllowlistStore::set_token_allowed(&env, &contract, false);
         Ok(())
+    }
+
+    // -------------------------------------------------------------------------
+    // Versioning
+    // -------------------------------------------------------------------------
+
+    /// Returns the semver string with embedded git commit: "0.1.0+abc1234"
+    pub fn version(env: Env) -> String {
+        version::version(&env)
+    }
+
+    /// Returns full build metadata for incident response:
+    /// "version=0.1.0;git=abc1234;ts=1700000000;rustc=rustc 1.x.y"
+    pub fn get_version(env: Env) -> String {
+        version::get_version(&env)
     }
 }

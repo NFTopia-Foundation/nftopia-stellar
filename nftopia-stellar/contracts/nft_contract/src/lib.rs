@@ -10,11 +10,13 @@ pub mod storage;
 pub mod token;
 pub mod transfer;
 pub mod types;
+pub mod version;
 
 use crate::access_control as ac;
 use crate::error::ContractError;
 use crate::storage::DataKey;
 use crate::types::{CollectionConfig, RoyaltyInfo, TokenAttribute, TokenData};
+use crate::version;
 use soroban_sdk::{Address, Env, String, Vec, contract, contractimpl, panic_with_error};
 
 #[contract]
@@ -289,6 +291,21 @@ impl NftContract {
     pub fn supports_interface(env: Env, interface_id: u32) -> bool {
         let _ = env;
         interface::supports_interface(interface_id)
+    }
+
+    // -------------------------------------------------------------------------
+    // Versioning
+    // -------------------------------------------------------------------------
+
+    /// Returns the semver string with embedded git commit: "0.1.0+abc1234"
+    pub fn version(env: Env) -> String {
+        version::version(&env)
+    }
+
+    /// Returns full build metadata for incident response:
+    /// "version=0.1.0;git=abc1234;ts=1700000000;rustc=rustc 1.x.y"
+    pub fn get_version(env: Env) -> String {
+        version::get_version(&env)
     }
 }
 

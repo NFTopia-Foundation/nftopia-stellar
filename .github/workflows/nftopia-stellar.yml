@@ -14,24 +14,32 @@ jobs:
     defaults:
       run:
         working-directory: nftopia-stellar
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+        with:
+          fetch-depth: 0
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
           targets: wasm32-unknown-unknown
-      
+
+      - name: Set version environment variables
+        run: |
+          echo "GIT_COMMIT_HASH=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+          echo "BUILD_TIMESTAMP=$(date -u +%s)" >> "$GITHUB_ENV"
+          echo "RUSTC_VERSION=$(rustc --version)" >> "$GITHUB_ENV"
+
       - name: Verify Rust project
         run: |
           if [ ! -f "Cargo.toml" ]; then
-            echo "❌ ERROR: No Cargo.toml file found"
+            echo "ERROR: No Cargo.toml file found"
             exit 1
           fi
-          echo "✅ Rust project verified"
-      
+          echo "Rust project verified"
+
       - name: Cache dependencies
         uses: actions/cache@v3
         with:
@@ -42,19 +50,25 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
-      
+
       - name: Check formatting
         run: cargo fmt -- --check
-      
+
       - name: Run clippy
         run: cargo clippy -- -D warnings
-      
+
       - name: Check build
         run: cargo check --verbose
         continue-on-error: false
-      
+
       - name: Run tests
         run: cargo test --verbose
-      
+
       - name: Build WASM contracts
         run: cargo build --target wasm32-unknown-unknown --release
+
+      - name: Print embedded version info
+        run: |
+          echo "Git commit : $GIT_COMMIT_HASH"
+          echo "Build ts   : $BUILD_TIMESTAMP"
+          echo "Rustc      : $RUSTC_VERSION"
