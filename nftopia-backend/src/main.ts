@@ -31,6 +31,7 @@ import { StellarTransformInterceptor } from './interceptors/stellar-transform.in
 import { SorobanRpcService } from './services/soroban-rpc.service';
 import { StellarAccountService } from './services/stellar-account.service';
 import { MetricsInterceptor } from './common/metrics/metrics.interceptor';
+import { CorrelationIdInterceptor } from './interceptors/correlation-id.interceptor';
 
 function createCorsConfig() {
   const customOrigin = process.env.CORS_ORIGIN;
@@ -68,6 +69,7 @@ async function bootstrapRestApi() {
   app.use(urlencoded({ extended: true, limit: '10mb' }));
 
   app.useGlobalInterceptors(
+    new CorrelationIdInterceptor(),
     new StellarErrorInterceptor(sorobanRpcService),
     new StellarLoggingInterceptor(sorobanRpcService),
     new StellarTimeoutInterceptor(sorobanRpcService),
@@ -109,6 +111,8 @@ async function bootstrapRestApi() {
 
 async function bootstrapGraphqlGateway() {
   const graphqlApp = await NestFactory.create(GraphqlGatewayModule);
+  graphqlApp.useLogger(graphqlApp.get<PinoLogger>(PinoLogger));
+  graphqlApp.useGlobalInterceptors(new CorrelationIdInterceptor());
   graphqlApp.enableCors(createCorsConfig());
   graphqlApp.useGlobalPipes(createValidationPipe());
 
