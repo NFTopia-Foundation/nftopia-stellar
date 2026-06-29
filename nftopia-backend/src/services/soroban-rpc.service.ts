@@ -73,6 +73,30 @@ const RETRYABLE_MESSAGE_PATTERNS = [
 const wait = async (delayMs: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, delayMs));
 
+function formatUnknownError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  if (
+    typeof error === 'number' ||
+    typeof error === 'boolean' ||
+    typeof error === 'bigint'
+  ) {
+    return String(error);
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return 'Unknown error';
+  }
+}
+
 export function calculateExponentialBackoffDelayMs(
   attempt: number,
   baseDelayMs: number,
@@ -113,11 +137,11 @@ export function isRetryableSorobanRpcError(error: unknown): boolean {
     return true;
   }
 
-  const message = (
-    error instanceof Error ? error.message : String(error)
-  ).toLowerCase();
+  const message = formatUnknownError(error).toLowerCase();
 
-  if (NON_RETRYABLE_MESSAGE_PATTERNS.some((pattern) => message.includes(pattern))) {
+  if (
+    NON_RETRYABLE_MESSAGE_PATTERNS.some((pattern) => message.includes(pattern))
+  ) {
     return false;
   }
 
@@ -133,7 +157,6 @@ export async function retrySorobanRpcCall<T>(
   options: SorobanRpcRetryOptions,
 ): Promise<T> {
   const maxAttempts = Math.max(1, options.config.sorobanRpcMaxRetries);
-  let lastError: unknown;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
@@ -145,16 +168,11 @@ export async function retrySorobanRpcCall<T>(
 
       return result;
     } catch (error) {
-      lastError = error;
-
       const canRetry =
         attempt < maxAttempts && isRetryableSorobanRpcError(error);
 
       if (!canRetry) {
-        if (
-          attempt >= maxAttempts &&
-          isRetryableSorobanRpcError(error)
-        ) {
+        if (attempt >= maxAttempts && isRetryableSorobanRpcError(error)) {
           sorobanRpcRetryMetrics.exhaustedRetries += 1;
         }
 
@@ -171,7 +189,7 @@ export async function retrySorobanRpcCall<T>(
       sorobanRpcRetryMetrics.totalRetryAttempts += 1;
 
       options.logger?.warn(
-        `Soroban RPC retry: method=${options.methodName ?? 'unknown'} attempt=${attempt}/${maxAttempts} delayMs=${delayMs} error=${error instanceof Error ? error.message : String(error)}`,
+        `Soroban RPC retry: method=${options.methodName ?? 'unknown'} attempt=${attempt}/${maxAttempts} delayMs=${delayMs} error=${formatUnknownError(error)}`,
       );
 
       await wait(delayMs);

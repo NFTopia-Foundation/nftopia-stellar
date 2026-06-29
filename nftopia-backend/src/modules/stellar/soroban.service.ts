@@ -144,8 +144,9 @@ export class SorobanService {
         .setTimeout(timeoutSeconds)
         .build();
 
-      const simulationResult = await this.withRpcRetry('simulateTransaction', () =>
-        server.simulateTransaction(tx),
+      const simulationResult = await this.withRpcRetry(
+        'simulateTransaction',
+        () => server.simulateTransaction(tx),
       );
 
       if ('error' in (simulationResult as { error?: string })) {

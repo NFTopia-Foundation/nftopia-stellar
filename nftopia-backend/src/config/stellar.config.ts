@@ -64,6 +64,9 @@ export function getStellarConfig(
       env.SOROBAN_RPC_RETRY_BACKOFF_MULTIPLIER,
       2,
     ),
-    sorobanRpcRetryMaxDelayMs: asInt(env.SOROBAN_RPC_RETRY_MAX_DELAY_MS, 30_000),
+    sorobanRpcRetryMaxDelayMs: asInt(
+      env.SOROBAN_RPC_RETRY_MAX_DELAY_MS,
+      30_000,
+    ),
   };
 }

@@ -20,7 +20,10 @@ export class CreateBidInput {
    */
   @Field(() => Float)
   @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: 7 }, { message: 'Amount must have at most 7 decimal places' })
+  @IsNumber(
+    { maxDecimalPlaces: 7 },
+    { message: 'Amount must have at most 7 decimal places' },
+  )
   @Min(0.0000001, { message: 'Minimum bid amount is 0.0000001 XLM' })
   @IsPositive({ message: 'Amount must be positive' })
   amount: number;
