@@ -23,6 +23,11 @@ export const DashboardStatsCards = () => {
 
   const data: DashboardStats = stats ?? fallback;
 
+  // Convert totalSales to number for the StatCard
+  const totalSalesNumber = typeof data.totalSales === "string" 
+    ? Number(data.totalSales) 
+    : data.totalSales || 0;
+
   if (error) {
     return (
       <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-200">
@@ -44,28 +49,28 @@ export const DashboardStatsCards = () => {
       <StatCard
         icon={Grid3X3 as React.ComponentType<{ className?: string }>}
         label="NFTs Created"
-        value={formatNumber(data.nftsCreated)}
+        value={data.nftsCreated}
         change={0}
         isLoading={loading}
       />
       <StatCard
         icon={DollarSign as React.ComponentType<{ className?: string }>}
         label="Total Sales"
-        value={Number(data.totalSales) || 0}
+        value={totalSalesNumber}
         change={0}
         isLoading={loading}
       />
       <StatCard
         icon={Eye as React.ComponentType<{ className?: string }>}
         label="Total Views"
-        value={formatNumber(data.totalViews)}
+        value={data.totalViews}
         change={0}
         isLoading={loading}
       />
       <StatCard
         icon={Users as React.ComponentType<{ className?: string }>}
         label="Followers"
-        value={formatNumber(data.followers)}
+        value={data.followers}
         change={0}
         isLoading={loading}
       />
