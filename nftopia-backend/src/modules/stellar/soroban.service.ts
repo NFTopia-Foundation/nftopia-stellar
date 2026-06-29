@@ -5,6 +5,7 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
+  type OnModuleInit,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -25,6 +26,10 @@ import {
   calculateExponentialBackoffDelayMs,
   SorobanRpcService,
 } from '../../services/soroban-rpc.service';
+import {
+  getStellarConfig,
+  type StellarRuntimeConfig,
+} from '../../config/stellar.config';
 
 type SorobanArgType =
   | 'address'
@@ -61,13 +66,126 @@ export type InvokeContractResult = {
 };
 
 @Injectable()
-export class SorobanService {
+export class SorobanService implements OnModuleInit {
   private readonly logger = new Logger(SorobanService.name);
 
   constructor(
     private readonly configService: ConfigService,
     private readonly sorobanRpcService: SorobanRpcService,
   ) {}
+
+  /**
+   * Validate the Soroban RPC configuration at startup and verify the endpoint
+   * is reachable. Invalid configuration (malformed URL, or a missing URL in
+   * production) throws here so the application fails fast with a clear error
+   * instead of failing later with cryptic runtime errors on the first call.
+   */
+  async onModuleInit(): Promise<void> {
+    let config: StellarRuntimeConfig;
+    try {
+      config = this.resolveStellarConfig();
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Invalid Stellar configuration';
+      this.logger.error(`Stellar configuration is invalid: ${message}`);
+      throw error;
+    }
+
+    this.logger.log(
+      `Using Soroban RPC URL: ${config.sorobanRpcUrl} ` +
+        `(network=${config.network}${config.sorobanRpcUrlIsFallback ? ', built-in default' : ''})`,
+    );
+
+    const nodeEnv = this.resolveNodeEnv();
+    const looksLikeTestnet = config.sorobanRpcUrl.includes('testnet');
+
+    if (nodeEnv === 'production' && looksLikeTestnet) {
+      this.logger.warn(
+        'SOROBAN_RPC_URL appears to point at a testnet endpoint while NODE_ENV=production. ' +
+          'Verify this is intentional.',
+      );
+    }
+
+    if (config.network === 'mainnet' && looksLikeTestnet) {
+      this.logger.warn(
+        `STELLAR_NETWORK=mainnet but SOROBAN_RPC_URL (${config.sorobanRpcUrl}) ` +
+          'looks like a testnet endpoint.',
+      );
+    }
+
+    // Skip the network round-trip during tests to keep the suite hermetic.
+    if (nodeEnv === 'test') {
+      return;
+    }
+
+    await this.checkRpcHealth(config);
+  }
+
+  /**
+   * Probe the configured RPC endpoint so an unreachable URL is surfaced at
+   * startup rather than on the first contract call. A failed probe is logged
+   * but does not crash the app, since transient RPC outages should not make the
+   * whole service un-startable.
+   */
+  private async checkRpcHealth(config: StellarRuntimeConfig): Promise<void> {
+    const timeoutMs = config.defaultTimeoutMs;
+    try {
+      const server = new SorobanServer(config.sorobanRpcUrl);
+      const health = await this.withTimeout(
+        server.getHealth(),
+        timeoutMs,
+        'Soroban RPC health check',
+      );
+      this.logger.log(
+        `Soroban RPC health check passed: status=${health?.status ?? 'unknown'}`,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'unknown error';
+      this.logger.error(
+        `Soroban RPC health check failed for ${config.sorobanRpcUrl}: ${message}. ` +
+          'Contract calls may fail until the endpoint is reachable.',
+      );
+    }
+  }
+
+  private withTimeout<T>(
+    promise: Promise<T>,
+    timeoutMs: number,
+    label: string,
+  ): Promise<T> {
+    return Promise.race([
+      promise,
+      new Promise<T>((_, reject) =>
+        setTimeout(
+          () => reject(new Error(`${label} timed out after ${timeoutMs}ms`)),
+          timeoutMs,
+        ),
+      ),
+    ]);
+  }
+
+  private resolveNodeEnv(): string | undefined {
+    return this.configService.get<string>('NODE_ENV') ?? process.env.NODE_ENV;
+  }
+
+  /**
+   * Resolve the validated, normalized Stellar runtime config, preferring values
+   * from ConfigService and falling back to process.env.
+   */
+  private resolveStellarConfig(): StellarRuntimeConfig {
+    return getStellarConfig({
+      ...process.env,
+      NODE_ENV: this.resolveNodeEnv(),
+      STELLAR_NETWORK:
+        this.configService.get<string>('STELLAR_NETWORK') ??
+        process.env.STELLAR_NETWORK,
+      SOROBAN_RPC_URL:
+        this.configService.get<string>('SOROBAN_RPC_URL') ??
+        process.env.SOROBAN_RPC_URL,
+    });
+  }
 
   async invokeContract(
     contractId: string,
@@ -244,11 +362,10 @@ export class SorobanService {
   }
 
   private createRpcServer(): SorobanServer {
-    const rpcUrl =
-      this.configService.get<string>('SOROBAN_RPC_URL') ||
-      'https://soroban-testnet.stellar.org';
-
-    return new SorobanServer(rpcUrl);
+    // Route through the validated config so the URL is checked and normalized
+    // (trailing slashes removed, protocol validated) before each use.
+    const { sorobanRpcUrl } = this.resolveStellarConfig();
+    return new SorobanServer(sorobanRpcUrl);
   }
 
   private getNetworkPassphrase(): string {
