@@ -33,6 +33,7 @@ import { OfferModule } from './modules/offer/offer.module';
 import { TransactionModule } from './modules/transaction/transaction.module';
 import { AuditModule } from './common/audit/audit.module';
 import { MetricsModule } from './common/metrics/metrics.module';
+import { EmailModule } from './modules/email/email.module';
 
 @Module({
   imports: [
@@ -138,6 +139,7 @@ import { MetricsModule } from './common/metrics/metrics.module';
     CollectionFactoryModule,
     StellarModule,
     NotificationsModule,
+    EmailModule,
     IndexerModule,
     AuditModule,
     MetricsModule,
