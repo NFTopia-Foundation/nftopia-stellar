@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CacheModule } from '@nestjs/cache-manager';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -33,6 +33,8 @@ import { OfferModule } from './modules/offer/offer.module';
 import { TransactionModule } from './modules/transaction/transaction.module';
 import { AuditModule } from './common/audit/audit.module';
 import { MetricsModule } from './common/metrics/metrics.module';
+import { getLoggerConfig } from './config/logger.config';
+import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 
 @Module({
   imports: [
@@ -40,27 +42,7 @@ import { MetricsModule } from './common/metrics/metrics.module';
     ScheduleModule.forRoot(),
     LoggerModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        pinoHttp: {
-          level: config.get('NODE_ENV') === 'production' ? 'info' : 'debug',
-          transport:
-            config.get('NODE_ENV') !== 'production'
-              ? {
-                  target: 'pino-pretty',
-                  options: {
-                    singleLine: true,
-                    colorize: true,
-                  },
-                }
-              : undefined,
-          redact: ['req.headers.authorization', 'req.headers.cookie'],
-          customLogLevel: (req, res) => {
-            if (res.statusCode >= 500) return 'error';
-            if (res.statusCode >= 400) return 'warn';
-            return 'info';
-          },
-        },
-      }),
+      useFactory: () => getLoggerConfig(process.env),
     }),
     ConfigModule.forRoot({ isGlobal: true }),
     EventEmitterModule.forRoot(),
@@ -157,4 +139,8 @@ import { MetricsModule } from './common/metrics/metrics.module';
     },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(CorrelationIdMiddleware).forRoutes('*');
+  }
+}

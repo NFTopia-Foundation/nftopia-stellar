@@ -323,8 +323,7 @@ export class NotificationsGateway
     }
 
     const query = client.handshake.query as
-      | Record<string, string | string[] | undefined>
-      | undefined;
+      Record<string, string | string[] | undefined> | undefined;
     if (query) {
       const raw = query.token;
       const q = Array.isArray(raw) ? raw[0] : raw;
