@@ -64,7 +64,9 @@ describe('LoggerConfig', () => {
     });
 
     it('should return error if an error object is passed', () => {
-      expect(customLogLevel({}, { statusCode: 200 }, new Error('Err'))).toBe('error');
+      expect(customLogLevel({}, { statusCode: 200 }, new Error('Err'))).toBe(
+        'error',
+      );
     });
 
     it('should return warn for status >= 400', () => {
@@ -72,19 +74,33 @@ describe('LoggerConfig', () => {
     });
 
     it('should return debug for health checks and metrics', () => {
-      expect(customLogLevel({ url: '/health' }, { statusCode: 200 }, null)).toBe('debug');
-      expect(customLogLevel({ url: '/api/v1/health/readiness' }, { statusCode: 200 }, null)).toBe('debug');
-      expect(customLogLevel({ url: '/metrics' }, { statusCode: 200 }, null)).toBe('debug');
+      expect(
+        customLogLevel({ url: '/health' }, { statusCode: 200 }, null),
+      ).toBe('debug');
+      expect(
+        customLogLevel(
+          { url: '/api/v1/health/readiness' },
+          { statusCode: 200 },
+          null,
+        ),
+      ).toBe('debug');
+      expect(
+        customLogLevel({ url: '/metrics' }, { statusCode: 200 }, null),
+      ).toBe('debug');
     });
 
     it('should return info for other successful requests', () => {
-      expect(customLogLevel({ url: '/api/v1/nfts' }, { statusCode: 200 }, null)).toBe('info');
+      expect(
+        customLogLevel({ url: '/api/v1/nfts' }, { statusCode: 200 }, null),
+      ).toBe('info');
     });
 
     it('should apply log sampling and return silent for successful requests when sampled out', () => {
       const config = getLoggerConfig({ LOG_SAMPLE_RATE: '0.0' });
       const sampledLogLevel = (config.pinoHttp as any).customLogLevel;
-      expect(sampledLogLevel({ url: '/api/v1/nfts' }, { statusCode: 200 }, null)).toBe('silent');
+      expect(
+        sampledLogLevel({ url: '/api/v1/nfts' }, { statusCode: 200 }, null),
+      ).toBe('silent');
     });
   });
 

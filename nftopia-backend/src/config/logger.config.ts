@@ -4,7 +4,9 @@ import * as crypto from 'crypto';
 export function getLoggerConfig(env: NodeJS.ProcessEnv = process.env): Params {
   const isProduction = env.NODE_ENV === 'production';
   const logLevel = env.LOG_LEVEL || (isProduction ? 'info' : 'debug');
-  const sampleRate = env.LOG_SAMPLE_RATE ? parseFloat(env.LOG_SAMPLE_RATE) : 1.0;
+  const sampleRate = env.LOG_SAMPLE_RATE
+    ? parseFloat(env.LOG_SAMPLE_RATE)
+    : 1.0;
 
   return {
     pinoHttp: {

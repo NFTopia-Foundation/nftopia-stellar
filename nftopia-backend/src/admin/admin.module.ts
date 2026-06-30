@@ -7,10 +7,7 @@ import { Collection } from '../modules/collection/entities/collection.entity';
 import { AuditModule } from '../common/audit/audit.module';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([User, Collection]),
-    AuditModule,
-  ],
+  imports: [TypeOrmModule.forFeature([User, Collection]), AuditModule],
   controllers: [AdminController],
   providers: [AdminService],
 })

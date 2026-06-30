@@ -40,33 +40,62 @@ describe('CorrelationIdInterceptor', () => {
     it('should set x-correlation-id response header from request headers', () => {
       mockRequest.headers['x-correlation-id'] = 'test-id';
 
-      interceptor.intercept(mockExecutionContext as ExecutionContext, mockCallHandler as CallHandler).subscribe();
+      interceptor
+        .intercept(
+          mockExecutionContext as ExecutionContext,
+          mockCallHandler as CallHandler,
+        )
+        .subscribe();
 
-      expect(mockResponse.setHeader).toHaveBeenCalledWith('x-correlation-id', 'test-id');
+      expect(mockResponse.setHeader).toHaveBeenCalledWith(
+        'x-correlation-id',
+        'test-id',
+      );
       expect(mockCallHandler.handle).toHaveBeenCalled();
     });
 
     it('should set x-correlation-id response header from request property correlationId', () => {
       mockRequest.correlationId = 'prop-id';
 
-      interceptor.intercept(mockExecutionContext as ExecutionContext, mockCallHandler as CallHandler).subscribe();
+      interceptor
+        .intercept(
+          mockExecutionContext as ExecutionContext,
+          mockCallHandler as CallHandler,
+        )
+        .subscribe();
 
-      expect(mockResponse.setHeader).toHaveBeenCalledWith('x-correlation-id', 'prop-id');
+      expect(mockResponse.setHeader).toHaveBeenCalledWith(
+        'x-correlation-id',
+        'prop-id',
+      );
     });
 
     it('should set x-correlation-id response header from request property id', () => {
       mockRequest.id = 'req-id';
 
-      interceptor.intercept(mockExecutionContext as ExecutionContext, mockCallHandler as CallHandler).subscribe();
+      interceptor
+        .intercept(
+          mockExecutionContext as ExecutionContext,
+          mockCallHandler as CallHandler,
+        )
+        .subscribe();
 
-      expect(mockResponse.setHeader).toHaveBeenCalledWith('x-correlation-id', 'req-id');
+      expect(mockResponse.setHeader).toHaveBeenCalledWith(
+        'x-correlation-id',
+        'req-id',
+      );
     });
 
     it('should not set x-correlation-id if already set on response', () => {
       mockRequest.correlationId = 'prop-id';
       mockResponse.getHeader.mockReturnValue('already-set-id');
 
-      interceptor.intercept(mockExecutionContext as ExecutionContext, mockCallHandler as CallHandler).subscribe();
+      interceptor
+        .intercept(
+          mockExecutionContext as ExecutionContext,
+          mockCallHandler as CallHandler,
+        )
+        .subscribe();
 
       expect(mockResponse.setHeader).not.toHaveBeenCalled();
     });
@@ -75,7 +104,12 @@ describe('CorrelationIdInterceptor', () => {
       mockRequest.correlationId = 'prop-id';
       mockResponse.headersSent = true;
 
-      interceptor.intercept(mockExecutionContext as ExecutionContext, mockCallHandler as CallHandler).subscribe();
+      interceptor
+        .intercept(
+          mockExecutionContext as ExecutionContext,
+          mockCallHandler as CallHandler,
+        )
+        .subscribe();
 
       expect(mockResponse.setHeader).not.toHaveBeenCalled();
     });
@@ -109,25 +143,46 @@ describe('CorrelationIdInterceptor', () => {
     it('should set x-correlation-id response header from GraphQL request headers', () => {
       mockGqlReq.headers['x-correlation-id'] = 'gql-id';
 
-      interceptor.intercept(mockExecutionContext as ExecutionContext, mockCallHandler as CallHandler).subscribe();
+      interceptor
+        .intercept(
+          mockExecutionContext as ExecutionContext,
+          mockCallHandler as CallHandler,
+        )
+        .subscribe();
 
-      expect(mockGqlRes.setHeader).toHaveBeenCalledWith('x-correlation-id', 'gql-id');
+      expect(mockGqlRes.setHeader).toHaveBeenCalledWith(
+        'x-correlation-id',
+        'gql-id',
+      );
       expect(mockCallHandler.handle).toHaveBeenCalled();
     });
 
     it('should set x-correlation-id response header from GraphQL request correlationId property', () => {
       mockGqlReq.correlationId = 'gql-prop-id';
 
-      interceptor.intercept(mockExecutionContext as ExecutionContext, mockCallHandler as CallHandler).subscribe();
+      interceptor
+        .intercept(
+          mockExecutionContext as ExecutionContext,
+          mockCallHandler as CallHandler,
+        )
+        .subscribe();
 
-      expect(mockGqlRes.setHeader).toHaveBeenCalledWith('x-correlation-id', 'gql-prop-id');
+      expect(mockGqlRes.setHeader).toHaveBeenCalledWith(
+        'x-correlation-id',
+        'gql-prop-id',
+      );
     });
 
     it('should not set x-correlation-id if already set on GraphQL response', () => {
       mockGqlReq.correlationId = 'gql-prop-id';
       mockGqlRes.getHeader.mockReturnValue('already-set-gql');
 
-      interceptor.intercept(mockExecutionContext as ExecutionContext, mockCallHandler as CallHandler).subscribe();
+      interceptor
+        .intercept(
+          mockExecutionContext as ExecutionContext,
+          mockCallHandler as CallHandler,
+        )
+        .subscribe();
 
       expect(mockGqlRes.setHeader).not.toHaveBeenCalled();
     });

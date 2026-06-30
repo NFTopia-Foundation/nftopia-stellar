@@ -5,7 +5,10 @@ import {
   NestInterceptor,
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
-import type { Response as ExpressResponse, Request as ExpressRequest } from 'express';
+import type {
+  Response as ExpressResponse,
+  Request as ExpressRequest,
+} from 'express';
 
 @Injectable()
 export class CorrelationIdInterceptor implements NestInterceptor {
@@ -24,7 +27,11 @@ export class CorrelationIdInterceptor implements NestInterceptor {
         (request.id as string);
 
       if (correlationId && response) {
-        if (typeof response.setHeader === 'function' && !response.headersSent && !response.getHeader('x-correlation-id')) {
+        if (
+          typeof response.setHeader === 'function' &&
+          !response.headersSent &&
+          !response.getHeader('x-correlation-id')
+        ) {
           response.setHeader('x-correlation-id', correlationId);
         }
       }
@@ -42,7 +49,11 @@ export class CorrelationIdInterceptor implements NestInterceptor {
           req.id;
 
         if (correlationId) {
-          if (typeof res.setHeader === 'function' && !res.headersSent && !res.getHeader('x-correlation-id')) {
+          if (
+            typeof res.setHeader === 'function' &&
+            !res.headersSent &&
+            !res.getHeader('x-correlation-id')
+          ) {
             res.setHeader('x-correlation-id', correlationId);
           }
         }
