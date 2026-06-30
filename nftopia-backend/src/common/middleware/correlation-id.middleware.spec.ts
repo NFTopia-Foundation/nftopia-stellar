@@ -3,7 +3,7 @@ import type { Request, Response } from 'express';
 
 describe('CorrelationIdMiddleware', () => {
   let middleware: CorrelationIdMiddleware;
-  let mockRequest: Partial<Request>;
+  let mockRequest: any;
   let mockResponse: Partial<Response>;
   let nextFunction: jest.Mock;
 
