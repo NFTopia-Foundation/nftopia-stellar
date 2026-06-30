@@ -4,6 +4,17 @@ members = [
   "contracts/*",
 ]
 
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+
+[workspace.metadata.versioning]
+strategy = "semver+git"
+version_env = "CARGO_PKG_VERSION"
+git_hash_env = "GIT_COMMIT_HASH"
+build_timestamp_env = "BUILD_TIMESTAMP"
+rustc_version_env = "RUSTC_VERSION"
+
 [workspace.dependencies]
 soroban-sdk = "23"
 
