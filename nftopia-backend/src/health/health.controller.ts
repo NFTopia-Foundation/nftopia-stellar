@@ -38,6 +38,7 @@ export class HealthController {
           properties: {
             postgres: { type: 'string', example: 'up' },
             redis: { type: 'string', example: 'up' },
+            schema: { type: 'string', example: 'up' },
           },
         },
         timestamp: { type: 'string', example: '2024-01-22T12:00:00.000Z' },

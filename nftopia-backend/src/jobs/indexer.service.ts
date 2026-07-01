@@ -9,6 +9,7 @@ import {
   NftTransferEvent,
   NftTransferEventType,
 } from './entities/nft-transfer-event.entity';
+import { SchemaReadinessService } from '../database/schema-readiness.service';
 
 const LAST_LEDGER_KEY = 'last_ingested_ledger';
 const HORIZON_URL =
@@ -30,9 +31,24 @@ export class IndexerService implements OnModuleInit {
     private readonly dlqRepo: Repository<ContractEventDlq>,
     @InjectRepository(NftTransferEvent)
     private readonly transferEventRepo: Repository<NftTransferEvent>,
+    private readonly schemaReadinessService: SchemaReadinessService,
   ) {}
 
-  onModuleInit() {
+  async onModuleInit() {
+    const schemaReady = await this.schemaReadinessService.waitUntilReady({
+      timeoutMs: parseInt(
+        process.env.SCHEMA_READINESS_TIMEOUT_MS || '300000',
+        10,
+      ),
+    });
+
+    if (!schemaReady) {
+      this.logger.error(
+        'Database schema is not ready; skipping ledger ingestion startup',
+      );
+      return;
+    }
+
     void this.startIngestion();
   }
 

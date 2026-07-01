@@ -21,6 +21,8 @@ import { GraphqlContextFactory } from './context/context.factory';
 import { GraphqlAuthMiddleware } from './middleware/auth.middleware';
 import { GraphqlLoggingMiddleware } from './middleware/logging.middleware';
 import { graphqlResolvers, graphqlScalarClasses } from './resolvers';
+import { DatabaseSupportModule } from '../database/database-support.module';
+import { createTypeOrmOptions } from '../database/typeorm.config';
 
 const jwtAccessExpiresInSeconds = parseInt(
   process.env.JWT_EXPIRES_IN_SECONDS || '900',
@@ -43,22 +45,13 @@ const jwtAccessExpiresInSeconds = parseInt(
       }),
     }),
     PassportModule,
+    DatabaseSupportModule,
     GraphQLSchemaBuilderModule,
     EventEmitterModule.forRoot(),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
-      inject: [],
-      useFactory: () => ({
-        type: 'postgres' as const,
-        url: process.env.DATABASE_URL,
-        host: process.env.DB_HOST,
-        port: parseInt(process.env.DB_PORT || '5432', 10),
-        username: process.env.DB_USER,
-        password: process.env.DB_PASS,
-        database: process.env.DB_NAME,
-        autoLoadEntities: true,
-        synchronize: true,
-      }),
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => createTypeOrmOptions(config),
     }),
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'your-secret-key-change-in-production',

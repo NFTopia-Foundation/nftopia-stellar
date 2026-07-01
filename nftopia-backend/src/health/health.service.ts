@@ -2,6 +2,7 @@ import { Injectable, Inject, Logger } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import { DataSource } from 'typeorm';
+import { SchemaReadinessService } from '../database/schema-readiness.service';
 
 @Injectable()
 export class HealthService {
@@ -10,6 +11,7 @@ export class HealthService {
   constructor(
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
     private dataSource: DataSource,
+    private readonly schemaReadinessService: SchemaReadinessService,
   ) {}
 
   checkLive(): Promise<{ status: string; timestamp: string }> {
@@ -21,17 +23,19 @@ export class HealthService {
 
   async checkReady(): Promise<{
     status: string;
-    details: { postgres: string; redis: string };
+    details: { postgres: string; redis: string; schema: string };
     timestamp: string;
   }> {
     const postgresStatus = await this.checkPostgres();
     const redisStatus = await this.checkRedis();
+    const schemaStatus = await this.checkSchema();
 
-    const isHealthy = postgresStatus === 'up' && redisStatus === 'up';
+    const isHealthy =
+      postgresStatus === 'up' && redisStatus === 'up' && schemaStatus === 'up';
 
     if (!isHealthy) {
       this.logger.error(
-        `Health check failed: Postgres: ${postgresStatus}, Redis: ${redisStatus}`,
+        `Health check failed: Postgres: ${postgresStatus}, Redis: ${redisStatus}, Schema: ${schemaStatus}`,
       );
     }
 
@@ -40,9 +44,20 @@ export class HealthService {
       details: {
         postgres: postgresStatus,
         redis: redisStatus,
+        schema: schemaStatus,
       },
       timestamp: new Date().toISOString(),
     };
+  }
+
+  private async checkSchema(): Promise<string> {
+    try {
+      const status = await this.schemaReadinessService.getSchemaStatus();
+      return status.ready ? 'up' : 'down';
+    } catch (error) {
+      this.logger.error('Schema readiness check failed', error);
+      return 'down';
+    }
   }
 
   private async checkPostgres(): Promise<string> {

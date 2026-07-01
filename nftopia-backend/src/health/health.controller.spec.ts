@@ -4,6 +4,7 @@ import { HealthService } from './health.service';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { DataSource } from 'typeorm';
 import { ServiceUnavailableException } from '@nestjs/common';
+import { SchemaReadinessService } from '../database/schema-readiness.service';
 
 describe('HealthController', () => {
   let controller: HealthController;
@@ -18,6 +19,11 @@ describe('HealthController', () => {
     query: jest.fn(),
   };
 
+  const mockSchemaReadinessService = {
+    getSchemaStatus: jest.fn().mockResolvedValue({ ready: true }),
+    waitUntilReady: jest.fn().mockResolvedValue(true),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [HealthController],
@@ -30,6 +36,10 @@ describe('HealthController', () => {
         {
           provide: DataSource,
           useValue: mockDataSource,
+        },
+        {
+          provide: SchemaReadinessService,
+          useValue: mockSchemaReadinessService,
         },
       ],
     }).compile();

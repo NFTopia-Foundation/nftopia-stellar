@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { DataSource, In } from 'typeorm';
+import { DataSource, DataSourceOptions, In } from 'typeorm';
 import { User } from './users/user.entity';
 import { UserWallet } from './auth/entities/user-wallet.entity';
 import { WalletSession } from './auth/entities/wallet-session.entity';
@@ -15,6 +15,7 @@ import { promisify } from 'util';
 import { TransactionState } from './modules/transaction/enums/transaction-state.enum';
 import { AuctionStatus } from './modules/auction/interfaces/auction.interface';
 import { BidSorobanStatus } from './modules/auction/entities/bid.entity';
+import { createMigrationDataSourceOptions } from './database/typeorm.config';
 
 const scryptAsync = promisify(crypto.scrypt);
 
@@ -54,8 +55,8 @@ async function bootstrap() {
     process.env.DATABASE_URL ||
     'postgresql://postgres:postgres@localhost:5433/nftopia';
 
-  const dataSource = new DataSource({
-    type: 'postgres',
+  const dataSourceOptions = {
+    ...createMigrationDataSourceOptions(),
     url: dbUrl,
     entities: [
       User,
@@ -69,8 +70,9 @@ async function bootstrap() {
       Auction,
       Bid,
     ],
-    synchronize: true,
-  });
+  } as DataSourceOptions;
+
+  const dataSource = new DataSource(dataSourceOptions);
 
   await dataSource.initialize();
   console.log('Database connection initialized successfully!');

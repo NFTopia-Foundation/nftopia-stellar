@@ -37,6 +37,7 @@ import { MetricsModule } from './common/metrics/metrics.module';
 @Module({
   imports: [
     HealthModule,
+    DatabaseSupportModule,
     ScheduleModule.forRoot(),
     LoggerModule.forRootAsync({
       inject: [ConfigService],
@@ -85,42 +86,7 @@ import { MetricsModule } from './common/metrics/metrics.module';
           TypeOrmModule.forRootAsync({
             imports: [ConfigModule],
             inject: [ConfigService],
-            useFactory: (config: ConfigService) => ({
-              type: 'postgres',
-              url:
-                config.get<string>('DATABASE_URL') || process.env.DATABASE_URL,
-              host: config.get<string>('DB_HOST') || process.env.DB_HOST,
-              port: parseInt(
-                config.get('DB_PORT') || process.env.DB_PORT || '5432',
-                10,
-              ),
-              username: config.get<string>('DB_USER') || process.env.DB_USER,
-              password: config.get<string>('DB_PASS') || process.env.DB_PASS,
-              database: config.get<string>('DB_NAME') || process.env.DB_NAME,
-              autoLoadEntities: true,
-              synchronize: true,
-              logging: config.get('NODE_ENV') === 'development',
-              extra: {
-                max: parseInt(
-                  config.get('DB_POOL_SIZE') ||
-                    process.env.DB_POOL_SIZE ||
-                    '20',
-                  10,
-                ),
-                idleTimeoutMillis: parseInt(
-                  config.get('DB_IDLE_TIMEOUT_MS') ||
-                    process.env.DB_IDLE_TIMEOUT_MS ||
-                    '30000',
-                  10,
-                ),
-                connectionTimeoutMillis: parseInt(
-                  config.get('DB_CONNECTION_TIMEOUT_MS') ||
-                    process.env.DB_CONNECTION_TIMEOUT_MS ||
-                    '10000',
-                  10,
-                ),
-              },
-            }),
+            useFactory: (config: ConfigService) => createTypeOrmOptions(config),
           }),
           UsersModule,
           AdminModule,
