@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
@@ -16,6 +17,8 @@ import { MarketplaceSettlementClient } from '../stellar/marketplace-settlement.c
 
 @Injectable()
 export class OrderService {
+  private readonly logger = new Logger(OrderService.name);
+
   constructor(
     @InjectRepository(Order)
     private readonly orderRepository: Repository<Order>,
@@ -33,9 +36,53 @@ export class OrderService {
       // On-chain: call contract for bundle or trade
       // If you add a bundle contract, update this check
       if (createOrderDto.type === OrderType.PURCHASE) {
-        // TODO: Map to create_bundle contract call if implemented
-        // const contractId = await this.settlementClient.createBundle(...);
-        return { success: true, contractId: -1 }; // Placeholder
+        if (!createOrderDto.items || createOrderDto.items.length < 2) {
+          throw new BadRequestException(
+            'Bundle orders must contain at least 2 items',
+          );
+        }
+        if (
+          !createOrderDto.totalPrice ||
+          parseFloat(createOrderDto.totalPrice) <= 0
+        ) {
+          throw new BadRequestException(
+            'Bundle orders require a valid totalPrice > 0',
+          );
+        }
+        if (
+          !createOrderDto.durationSeconds ||
+          createOrderDto.durationSeconds < 1 ||
+          createOrderDto.durationSeconds > 2592000
+        ) {
+          throw new BadRequestException(
+            'Bundle duration must be between 1 second and 30 days',
+          );
+        }
+
+        this.logger.log(
+          `Creating on-chain bundle order for seller ${createOrderDto.sellerId} with ${createOrderDto.items.length} items`,
+        );
+
+        const contractId = await this.settlementClient.createBundle({
+          seller: createOrderDto.sellerId,
+          items: createOrderDto.items.map((i) => ({
+            nftContract: i.nftContractAddress,
+            tokenId: i.tokenId,
+          })),
+          totalPrice: createOrderDto.totalPrice,
+          currency: createOrderDto.currency ?? 'XLM',
+          durationSeconds: createOrderDto.durationSeconds,
+        });
+
+        const order = this.orderRepository.create({
+          ...createOrderDto,
+          transactionHash: contractId.toString(),
+          status: OrderStatus.PENDING,
+        });
+        await this.orderRepository.save(order);
+
+        this.logger.log(`Bundle order created on-chain with ID ${contractId}`);
+        return { success: true, contractId };
       } else if (createOrderDto.type === OrderType.SALE) {
         // Map to createTrade contract call
         const params = {
@@ -54,6 +101,51 @@ export class OrderService {
     const order = this.orderRepository.create(createOrderDto);
     const saved = await this.orderRepository.save(order);
     return this.toOrderInterface(saved);
+  }
+
+  async executeBundle(
+    id: string,
+    buyer: string,
+    amount?: string,
+  ): Promise<{ success: boolean }> {
+    try {
+      this.logger.log(`Executing bundle ${id} for buyer ${buyer}`);
+      await this.settlementClient.executeBundle(Number(id), buyer, amount);
+      this.logger.log(`Bundle ${id} executed successfully`);
+      return { success: true };
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Failed to execute bundle ${id}: ${errMsg}`);
+      if (errMsg.includes('timeout'))
+        throw new BadRequestException('Bundle execution timed out');
+      if (errMsg.includes('insufficient funds') || errMsg.includes('balance'))
+        throw new BadRequestException('Insufficient funds to execute bundle');
+      if (errMsg.includes('expired'))
+        throw new BadRequestException('Bundle has expired');
+      if (errMsg.includes('sold'))
+        throw new BadRequestException(
+          'One or more items in the bundle are already sold',
+        );
+      throw new BadRequestException(`Failed to execute bundle: ${errMsg}`);
+    }
+  }
+
+  async cancelBundle(
+    id: string,
+    seller: string,
+  ): Promise<{ success: boolean }> {
+    try {
+      this.logger.log(`Cancelling bundle ${id} for seller ${seller}`);
+      await this.settlementClient.cancelBundle(Number(id), seller);
+      this.logger.log(`Bundle ${id} cancelled successfully`);
+      return { success: true };
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Failed to cancel bundle ${id}: ${errMsg}`);
+      if (errMsg.includes('timeout'))
+        throw new BadRequestException('Bundle cancellation timed out');
+      throw new BadRequestException(`Failed to cancel bundle: ${errMsg}`);
+    }
   }
 
   async findAll(query: OrderQueryDto): Promise<OrderInterface[]> {

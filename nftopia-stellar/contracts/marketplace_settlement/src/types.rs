@@ -79,8 +79,10 @@ pub struct Bid {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RoyaltyDistribution {
     pub creator_address: Address,
-    pub creator_percentage: u64,  // Basis points (10000 = 100%)
-    pub seller_percentage: u64,   // Basis points
+    pub creator_percentage: u64, // Basis points (10000 = 100%)
+    pub seller_address: Address,
+    pub seller_percentage: u64, // Basis points
+    pub platform_address: Address,
     pub platform_percentage: u64, // Basis points
     pub total_amount: i128,
     pub amounts: Map<Address, i128>, // Final amounts for each party

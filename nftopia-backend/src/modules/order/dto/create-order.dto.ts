@@ -59,6 +59,17 @@ export class CreateOrderDto {
   @IsEnum(OrderStatus)
   status?: OrderStatus;
 
+  // Bundle specific fields
+  @IsOptional()
+  items?: { nftContractAddress: string; tokenId: string }[];
+
+  @IsString()
+  @IsOptional()
+  totalPrice?: string;
+
+  @IsOptional()
+  durationSeconds?: number;
+
   @IsString()
   @IsOptional()
   transactionHash?: string;

@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { Interval } from '@nestjs/schedule';
 import {
   ConnectedSocket,
   MessageBody,
@@ -28,6 +29,15 @@ type AuthenticatedSocket = Socket & {
   };
 };
 
+/** Metadata tracked per connected socket. */
+export interface ClientMeta {
+  socketId: string;
+  userId: string;
+  connectedAt: number;
+  lastHeartbeat: number;
+  rooms: Set<string>;
+}
+
 /**
  * JWT-authenticated WebSocket gateway that powers real-time notifications.
  *
@@ -37,28 +47,26 @@ type AuthenticatedSocket = Socket & {
  *   2. query parameter:    io('/notifications?token=...')
  *   3. `Authorization` hdr: extraHeaders: { Authorization: 'Bearer ...' }
  *
- * Invalid/missing tokens cause `handleConnection` to call `client.disconnect()`
- * with an explanatory `auth_error` payload. This mirrors the JwtStrategy
- * used for REST (same secret, same claims).
+ * ### Heartbeat / ping-pong
+ * - Socket.IO transport-level ping is configured via `pingInterval` /
+ *   `pingTimeout` (from env `WS_PING_INTERVAL_MS` / `WS_PING_TIMEOUT_MS`).
+ * - Clients may also emit `ping` to receive a `pong` response with a server
+ *   timestamp. This updates the client's last-heartbeat timestamp.
+ * - A `@Interval`-based job runs every minute to force-disconnect sockets
+ *   whose last heartbeat is older than `WS_STALE_THRESHOLD_MS` (default 60 s).
+ *
+ * ### Client heartbeat strategy
+ * ```js
+ * // Recommended: emit ping every 30 s and handle reconnection
+ * setInterval(() => socket.emit('ping'), 30_000);
+ * socket.on('disconnect', () => reconnectWithBackoff());
+ * socket.on('connection_recovered', () => socket.emit('join_auction', { auctionId }));
+ * ```
  *
  * ### Rooms
- * On successful auth the socket is added to `user:{userId}` so the
- * `NotificationsService.notifyUser()` helper can target a single user
- * without tracking socket ids. Clients may additionally join
- * `auction:{auctionId}` rooms via `join_auction` / `leave_auction`
- * messages to receive `bid_update` broadcasts.
- *
- * ### Message Size Limits
- * All incoming WebSocket messages are subject to a maximum size limit
- * (default: 64KB). Messages exceeding this limit are rejected and the
- * connection is terminated. The limit can be configured via the
- * `WEBSOCKET_MAX_MESSAGE_SIZE_BYTES` environment variable.
- *
- * ### Why a new gateway when BidGateway exists?
- * `BidGateway` is anonymous and auction-scoped — designed for public
- * price tickers. This gateway is *user*-scoped and authenticated, which
- * is what toast-style notifications (`New Bid`, `Item Sold`, etc.)
- * require. Keeping them separate keeps the auth boundary obvious.
+ * On successful auth the socket is added to `user:{userId}`.
+ * Clients may additionally join `auction:{auctionId}` rooms via
+ * `join_auction` / `leave_auction`.
  */
 @WebSocketGateway({
   namespace: '/notifications',
@@ -67,7 +75,10 @@ type AuthenticatedSocket = Socket & {
     methods: ['GET', 'POST'],
     credentials: true,
   },
-  maxHttpBufferSize: 1e6, // Set to 1MB initially, will be overridden in afterInit
+  maxHttpBufferSize: 1e6,
+  pingInterval: Number(process.env.WS_PING_INTERVAL_MS ?? 25_000),
+  pingTimeout: Number(process.env.WS_PING_TIMEOUT_MS ?? 30_000),
+  transports: ['websocket', 'polling'],
 })
 export class NotificationsGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
@@ -76,6 +87,11 @@ export class NotificationsGateway
   private server!: Server;
 
   private readonly logger = new Logger(NotificationsGateway.name);
+
+  /** Per-socket metadata map: socketId → ClientMeta */
+  private readonly clients = new Map<string, ClientMeta>();
+
+  private staleThresholdMs!: number;
 
   constructor(
     private readonly jwtService: JwtService,
@@ -87,10 +103,15 @@ export class NotificationsGateway
     return this.server;
   }
 
+  /** Expose client metadata map (used in tests / monitoring). */
+  getClients(): ReadonlyMap<string, ClientMeta> {
+    return this.clients;
+  }
+
   afterInit(): void {
     const config = getNotificationsConfig(this.configService);
+    this.staleThresholdMs = config.websocket.staleThresholdMs;
 
-    // Check if server and engine exist before accessing opts
     if (this.server?.engine?.opts) {
       this.server.engine.opts.maxHttpBufferSize =
         config.websocket.maxMessageSizeBytes;
@@ -103,7 +124,6 @@ export class NotificationsGateway
       );
     }
 
-    // Add error handling for oversized messages
     if (this.server) {
       this.server.on(
         'connection_error',
@@ -162,10 +182,32 @@ export class NotificationsGateway
       typedClient.data.user = user;
 
       void client.join(userRoom(user.userId));
+
+      const now = Date.now();
+      this.clients.set(client.id, {
+        socketId: client.id,
+        userId: user.userId,
+        connectedAt: now,
+        lastHeartbeat: now,
+        rooms: new Set([userRoom(user.userId)]),
+      });
+
       this.logger.debug(
         `Client ${client.id} authenticated as user ${user.userId}`,
       );
-      client.emit('connected', { userId: user.userId });
+
+      // Emit connection_recovered when a prior session for this user existed
+      const hadPriorSession = [...this.clients.values()].some(
+        (m) => m.userId === user.userId && m.socketId !== client.id,
+      );
+      if (hadPriorSession) {
+        client.emit('connection_recovered', { userId: user.userId });
+        this.logger.debug(
+          `connection_recovered emitted for user ${user.userId}`,
+        );
+      } else {
+        client.emit('connected', { userId: user.userId });
+      }
     } catch (err) {
       const reason =
         err instanceof Error && /expired/i.test(err.message)
@@ -176,21 +218,73 @@ export class NotificationsGateway
   }
 
   handleDisconnect(client: Socket): void {
-    const typedClient = client as AuthenticatedSocket;
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-    const user = typedClient.data.user;
-    if (user) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      this.logger.debug(`User ${user.userId} disconnected (${client.id})`);
+    const meta = this.clients.get(client.id);
+    this.clients.delete(client.id);
+
+    if (meta) {
+      this.logger.debug(`User ${meta.userId} disconnected (${client.id})`);
     } else {
-      this.logger.debug(`Anonymous socket ${client.id} disconnected`);
+      const typedClient = client as AuthenticatedSocket;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+      const user = typedClient.data.user;
+      if (user) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        this.logger.debug(`User ${user.userId} disconnected (${client.id})`);
+      } else {
+        this.logger.debug(`Anonymous socket ${client.id} disconnected`);
+      }
+    }
+  }
+
+  /**
+   * Respond to client ping with server timestamp.
+   * Updates last-heartbeat so the stale-cleanup job won't evict this socket.
+   */
+  @SubscribeMessage('ping')
+  handlePing(
+    @MessageBody() _body: unknown,
+    @ConnectedSocket() client: Socket,
+  ): { event: string; timestamp: number } {
+    const now = Date.now();
+    const meta = this.clients.get(client.id);
+    if (meta) {
+      meta.lastHeartbeat = now;
+    }
+    return { event: 'pong', timestamp: now };
+  }
+
+  /**
+   * Scheduled job: runs every 60 s, disconnects sockets whose last
+   * heartbeat is older than `staleThresholdMs`.
+   */
+  @Interval(60_000)
+  cleanupStaleConnections(): void {
+    const now = Date.now();
+    let cleaned = 0;
+
+    for (const [socketId, meta] of this.clients) {
+      if (now - meta.lastHeartbeat > this.staleThresholdMs) {
+        const socket = this.server?.sockets?.sockets?.get(socketId);
+        if (socket) {
+          this.logger.warn(
+            `Force-disconnecting stale socket ${socketId} (user ${meta.userId}, idle ${now - meta.lastHeartbeat} ms)`,
+          );
+          socket.disconnect(true);
+        }
+        this.clients.delete(socketId);
+        cleaned++;
+      }
+    }
+
+    if (cleaned > 0) {
+      this.logger.log(
+        `Stale cleanup: removed ${cleaned} connection(s). Active: ${this.clients.size}`,
+      );
     }
   }
 
   /**
    * Client opts into public bid-update broadcasts for a specific auction.
-   * Authentication is still required for this gateway; subscribing to a
-   * public room doesn't change that.
    */
   @SubscribeMessage('join_auction')
   handleJoinAuction(
@@ -202,6 +296,7 @@ export class NotificationsGateway
       return { event: 'join_auction:error', error: 'auctionId required' };
     }
     void client.join(auctionRoom(auctionId));
+    this.clients.get(client.id)?.rooms.add(auctionRoom(auctionId));
     return { event: 'join_auction:ok', auctionId };
   }
 
@@ -215,15 +310,12 @@ export class NotificationsGateway
       return { event: 'leave_auction:error', error: 'auctionId required' };
     }
     void client.leave(auctionRoom(auctionId));
+    this.clients.get(client.id)?.rooms.delete(auctionRoom(auctionId));
     return { event: 'leave_auction:ok', auctionId };
   }
 
   // ── private helpers ─────────────────────────────────────────────────────
 
-  /**
-   * Extract the token in priority order: auth.token → query.token →
-   * Authorization header (Bearer <token> | raw token).
-   */
   private extractToken(client: Socket): string | null {
     const auth = client.handshake.auth as Record<string, unknown> | undefined;
     if (auth && typeof auth.token === 'string' && auth.token.length > 0) {

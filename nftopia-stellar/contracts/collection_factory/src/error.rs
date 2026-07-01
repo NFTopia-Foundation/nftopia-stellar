@@ -16,4 +16,5 @@ pub enum ContractError {
     InvalidRoyalty = 10,
     InvalidRecipient = 11,
     TokenAlreadyExists = 12,
+    MaxCollectionsExceeded = 13,
 }

@@ -1,4 +1,4 @@
-import { Inter } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import ApolloWrapper from "@/lib/graphql/apollo-wrapper";
 import { AuthProvider } from "@/lib/context/AuthContext";
@@ -13,9 +13,11 @@ const TelemetryProvider = dynamic(
   { ssr: false }
 );
 
-const inter = Inter({
-  subsets: ["latin"],
+const inter = localFont({
+  src: "../public/fonts/inter-var.woff2",
   display: "swap",
+  weight: "100 900",
+  variable: "--font-inter",
   fallback: ['system-ui', 'arial'],
 });
 

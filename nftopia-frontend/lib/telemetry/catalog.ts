@@ -291,4 +291,12 @@ export const TELEMETRY_EVENT_CATALOG: Record<TelemetryEventName, TelemetryEventC
     owner: "growth",
     status: "active",
   },
+  creator_dashboard_error: {
+    name: EVENT_NAMES.creatorDashboardError,
+    category: "creator",
+    description: "Creator dashboard render error event",
+    version: 1,
+    owner: "creator",
+    status: "active",
+  },
 };

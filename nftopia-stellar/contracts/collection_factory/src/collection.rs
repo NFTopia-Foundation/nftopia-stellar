@@ -9,7 +9,7 @@ pub struct NftCollection;
 
 #[contractimpl]
 impl NftCollection {
-    pub fn init(env: Env, admin: Address, config: CollectionConfig) {
+    pub fn init(env: Env, admin: Address, factory_address: Address, config: CollectionConfig) {
         if env.storage().instance().has(&DataKey::CollectionConfig) {
             panic_with_error!(&env, ContractError::AlreadyInitialized);
         }
@@ -28,6 +28,9 @@ impl NftCollection {
             panic_with_error!(&env, ContractError::InvalidRoyalty);
         }
         env.storage().instance().set(&DataKey::FactoryAdmin, &admin);
+        env.storage()
+            .instance()
+            .set(&DataKey::FactoryAddress, &factory_address);
         env.storage()
             .instance()
             .set(&DataKey::CollectionConfig, &config);
@@ -299,5 +302,20 @@ impl NftCollection {
             .instance()
             .get(&DataKey::Minter(address.clone()))
             .unwrap_or(false)
+    }
+
+    pub fn get_factory(env: Env) -> Option<Address> {
+        env.storage().instance().get(&DataKey::FactoryAddress)
+    }
+
+    pub fn is_fact(env: Env, factory: Address) -> bool {
+        match env
+            .storage()
+            .instance()
+            .get::<DataKey, Address>(&DataKey::FactoryAddress)
+        {
+            Some(stored_factory) => stored_factory == factory,
+            None => false,
+        }
     }
 }

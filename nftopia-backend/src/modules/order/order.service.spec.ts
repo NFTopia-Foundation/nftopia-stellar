@@ -11,6 +11,8 @@ import { SelectQueryBuilder } from 'typeorm';
 describe('OrderService', () => {
   let service: OrderService;
   let orderRepository: jest.Mocked<Repository<Order>>;
+  let configService: ConfigService;
+  let settlementClient: MarketplaceSettlementClient;
 
   beforeEach(async () => {
     const mockConfigService = {
@@ -19,10 +21,14 @@ describe('OrderService', () => {
     const mockSettlementClient = {
       createTrade: jest.fn(),
       createBundle: jest.fn(),
+      executeBundle: jest.fn(),
+      cancelBundle: jest.fn(),
     };
 
     const mockRepository = {
       createQueryBuilder: jest.fn(),
+      create: jest.fn().mockReturnValue({}),
+      save: jest.fn().mockResolvedValue({}),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -45,10 +51,185 @@ describe('OrderService', () => {
 
     service = module.get<OrderService>(OrderService);
     orderRepository = module.get(getRepositoryToken(Order));
+    configService = module.get<ConfigService>(ConfigService);
+    settlementClient = module.get<MarketplaceSettlementClient>(
+      MarketplaceSettlementClient,
+    );
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  describe('create', () => {
+    beforeEach(() => {
+      jest.spyOn(configService, 'get').mockImplementation((key) => {
+        if (key === 'ENABLE_ONCHAIN_SETTLEMENT') return true;
+        return false;
+      });
+      jest.spyOn(settlementClient, 'createBundle').mockResolvedValue(123);
+    });
+
+    it('should throw BadRequestException if bundle has less than 2 items', async () => {
+      const dto = {
+        type: OrderType.PURCHASE,
+        items: [{ nftContractAddress: 'contract1', tokenId: '1' }],
+        totalPrice: '100',
+        durationSeconds: 3600,
+        sellerId: 'seller-id',
+        buyerId: 'buyer-id',
+        nftId: 'nft-id',
+        price: '100',
+      };
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+      await expect(service.create(dto as any)).rejects.toThrow(
+        'Bundle orders must contain at least 2 items',
+      );
+    });
+
+    it('should throw BadRequestException if bundle totalPrice is invalid', async () => {
+      const dto = {
+        type: OrderType.PURCHASE,
+        items: [
+          { nftContractAddress: 'contract1', tokenId: '1' },
+          { nftContractAddress: 'contract2', tokenId: '2' },
+        ],
+        totalPrice: '0',
+        durationSeconds: 3600,
+        sellerId: 'seller-id',
+        buyerId: 'buyer-id',
+        nftId: 'nft-id',
+        price: '0',
+      };
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+      await expect(service.create(dto as any)).rejects.toThrow(
+        'Bundle orders require a valid totalPrice > 0',
+      );
+    });
+
+    it('should throw BadRequestException if bundle duration is invalid', async () => {
+      const dto = {
+        type: OrderType.PURCHASE,
+        items: [
+          { nftContractAddress: 'contract1', tokenId: '1' },
+          { nftContractAddress: 'contract2', tokenId: '2' },
+        ],
+        totalPrice: '100',
+        durationSeconds: 0,
+        sellerId: 'seller-id',
+        buyerId: 'buyer-id',
+        nftId: 'nft-id',
+        price: '100',
+      };
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+      await expect(service.create(dto as any)).rejects.toThrow(
+        'Bundle duration must be between 1 second and 30 days',
+      );
+    });
+
+    it('should successfully call createBundle on settlement client', async () => {
+      const dto = {
+        type: OrderType.PURCHASE,
+        items: [
+          { nftContractAddress: 'contract1', tokenId: '1' },
+          { nftContractAddress: 'contract2', tokenId: '2' },
+        ],
+        totalPrice: '100',
+        durationSeconds: 3600,
+        currency: 'USDC',
+        sellerId: 'seller-id',
+        buyerId: 'buyer-id',
+        nftId: 'nft-id',
+        price: '100',
+      };
+
+      const result = await service.create(dto);
+      expect(result).toEqual({ success: true, contractId: 123 });
+      expect(settlementClient.createBundle).toHaveBeenCalledWith({
+        seller: 'seller-id',
+        items: [
+          { nftContract: 'contract1', tokenId: '1' },
+          { nftContract: 'contract2', tokenId: '2' },
+        ],
+        totalPrice: '100',
+        currency: 'USDC',
+        durationSeconds: 3600,
+      });
+    });
+  });
+
+  describe('executeBundle', () => {
+    it('should successfully execute bundle', async () => {
+      jest
+        .spyOn(settlementClient, 'executeBundle')
+        .mockResolvedValue({ success: true });
+      const result = await service.executeBundle('123', 'buyer-id', '100');
+      expect(result).toEqual({ success: true });
+      expect(settlementClient.executeBundle).toHaveBeenCalledWith(
+        123,
+        'buyer-id',
+        '100',
+      );
+    });
+
+    it('should map timeout error correctly', async () => {
+      jest
+        .spyOn(settlementClient, 'executeBundle')
+        .mockRejectedValue(new Error('timeout'));
+      await expect(service.executeBundle('123', 'buyer-id')).rejects.toThrow(
+        'Bundle execution timed out',
+      );
+    });
+
+    it('should map insufficient funds error correctly', async () => {
+      jest
+        .spyOn(settlementClient, 'executeBundle')
+        .mockRejectedValue(new Error('insufficient funds'));
+      await expect(service.executeBundle('123', 'buyer-id')).rejects.toThrow(
+        'Insufficient funds to execute bundle',
+      );
+    });
+
+    it('should map expired error correctly', async () => {
+      jest
+        .spyOn(settlementClient, 'executeBundle')
+        .mockRejectedValue(new Error('expired'));
+      await expect(service.executeBundle('123', 'buyer-id')).rejects.toThrow(
+        'Bundle has expired',
+      );
+    });
+
+    it('should map sold error correctly', async () => {
+      jest
+        .spyOn(settlementClient, 'executeBundle')
+        .mockRejectedValue(new Error('sold'));
+      await expect(service.executeBundle('123', 'buyer-id')).rejects.toThrow(
+        'One or more items in the bundle are already sold',
+      );
+    });
+  });
+
+  describe('cancelBundle', () => {
+    it('should successfully cancel bundle', async () => {
+      jest
+        .spyOn(settlementClient, 'cancelBundle')
+        .mockResolvedValue({ success: true });
+      const result = await service.cancelBundle('123', 'seller-id');
+      expect(result).toEqual({ success: true });
+      expect(settlementClient.cancelBundle).toHaveBeenCalledWith(
+        123,
+        'seller-id',
+      );
+    });
+
+    it('should map timeout error correctly', async () => {
+      jest
+        .spyOn(settlementClient, 'cancelBundle')
+        .mockRejectedValue(new Error('timeout'));
+      await expect(service.cancelBundle('123', 'seller-id')).rejects.toThrow(
+        'Bundle cancellation timed out',
+      );
+    });
   });
 
   describe('getSalesAnalytics', () => {

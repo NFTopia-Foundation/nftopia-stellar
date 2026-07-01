@@ -7,6 +7,7 @@ import { OrderResolver } from './order.resolver';
 import { UserResolver } from './user.resolver';
 import { AuctionResolver } from './auction.resolver';
 import { BidResolver } from './bid.resolver';
+import { PublicCreatorResolver } from './public-creator.resolver';
 
 export const graphqlResolvers = [
   BaseResolver,
@@ -17,6 +18,7 @@ export const graphqlResolvers = [
   UserResolver,
   AuctionResolver,
   BidResolver,
+  PublicCreatorResolver,
 ] as const;
 
 export const graphqlScalarClasses = [JsonScalar] as const;
@@ -30,3 +32,4 @@ export { OrderResolver };
 export { UserResolver };
 export { AuctionResolver };
 export { BidResolver };
+export { PublicCreatorResolver };

@@ -26,103 +26,111 @@ pub struct RoyaltyInfo {
 pub struct RoyaltyDistributor;
 
 impl RoyaltyDistributor {
-    /// Calculate royalties for an NFT sale
+    /// Calculate royalties for an NFT sale.
+    /// Royalty is calculated on the full sale price, then seller and platform
+    /// fees are calculated only on the post-royalty remainder.
     pub fn calculate_royalties(
         env: &Env,
         nft_contract: &Address,
         token_id: u64,
         sale_price: i128,
+        seller: &Address,
+        platform_address: &Address,
     ) -> Result<RoyaltyDistribution, SettlementError> {
-        // Get royalty information for the NFT
         let royalty_info = Self::get_royalty_info(env, nft_contract, token_id)?;
 
-        // Calculate royalty amount
+        // Calculate royalty amount on full sale price (rounds in creator's favor via half-up)
         let royalty_amount =
             math_utils::calculate_percentage(sale_price, royalty_info.royalty_percentage, env)?;
 
-        // For now, assume 95% goes to seller, 5% to platform (this would be configurable)
-        let seller_percentage = 9500u64; // 95%
-        let platform_percentage = 500u64; // 5%
+        // Post-royalty remainder: seller and platform split only this amount
+        let remainder = math_utils::safe_sub(sale_price, royalty_amount, env)?;
 
-        let _seller_amount = math_utils::calculate_percentage(sale_price, seller_percentage, env)?;
-        let _platform_amount =
-            math_utils::calculate_percentage(sale_price, platform_percentage, env)?;
+        let seller_percentage = 9500u64; // 95% of remainder
+        let platform_percentage = 500u64; // 5% of remainder
 
-        // Create distribution map
+        // Platform fee calculated on the remainder (not the full sale price)
+        let platform_amount =
+            math_utils::calculate_percentage(remainder, platform_percentage, env)?;
+        let seller_amount = math_utils::safe_sub(remainder, platform_amount, env)?;
+
+        // Add all amounts to the distribution map
         let mut amounts = Map::new(env);
         amounts.set(royalty_info.creator.clone(), royalty_amount);
+        amounts.set(seller.clone(), seller_amount);
+        amounts.set(platform_address.clone(), platform_amount);
 
-        let royalty_distribution = RoyaltyDistribution {
+        Ok(RoyaltyDistribution {
             creator_address: royalty_info.creator,
             creator_percentage: royalty_info.royalty_percentage,
+            seller_address: seller.clone(),
             seller_percentage,
+            platform_address: platform_address.clone(),
             platform_percentage,
             total_amount: sale_price,
             amounts,
-        };
-
-        Ok(royalty_distribution)
+        })
     }
 
-    /// Distribute royalties for a transaction
+    /// Distribute royalties for a transaction.
+    /// Validates the distribution sums to total before any transfer.
+    /// Fails the entire transaction if any individual transfer fails.
     pub fn distribute_royalties(
         env: &Env,
         transaction_id: u64,
         royalty_distribution: &RoyaltyDistribution,
         payment_asset: &Asset,
     ) -> Result<DistributionResult, SettlementError> {
-        let mut total_distributed = 0i128;
-        let mut distribution_success = true;
+        // Validate distribution sums before any transfer
+        Self::validate_royalty_distribution(env, royalty_distribution)?;
 
-        // Distribute to each recipient
+        let mut total_distributed = 0i128;
+
+        // Distribute to each recipient — fail entire tx if any transfer fails
         for (recipient, amount) in royalty_distribution.amounts.iter() {
-            match asset_utils::transfer_tokens(
+            asset_utils::transfer_tokens(
                 &payment_asset.contract,
                 &env.current_contract_address(),
                 &recipient,
                 amount,
                 env,
-            ) {
-                Ok(_) => {
-                    total_distributed = math_utils::safe_add(total_distributed, amount, env)?;
-                }
-                Err(_) => {
-                    distribution_success = false;
-                    // Log error but continue with other distributions
-                }
-            }
+            )?;
+            total_distributed = math_utils::safe_add(total_distributed, amount, env)?;
         }
+
+        // Look up amounts from the distribution map using stored addresses
+        let creator_amount = royalty_distribution
+            .amounts
+            .get(royalty_distribution.creator_address.clone())
+            .unwrap_or(0);
+        let seller_amount = royalty_distribution
+            .amounts
+            .get(royalty_distribution.seller_address.clone())
+            .unwrap_or(0);
+        let platform_amount = royalty_distribution
+            .amounts
+            .get(royalty_distribution.platform_address.clone())
+            .unwrap_or(0);
 
         let result = DistributionResult {
             transaction_id,
             total_amount: royalty_distribution.total_amount,
-            creator_amount: royalty_distribution
-                .amounts
-                .get(royalty_distribution.creator_address.clone())
-                .unwrap_or(0),
-            seller_amount: math_utils::calculate_percentage(
-                royalty_distribution.total_amount,
-                royalty_distribution.seller_percentage,
-                env,
-            )?,
-            platform_amount: math_utils::calculate_percentage(
-                royalty_distribution.total_amount,
-                royalty_distribution.platform_percentage,
-                env,
-            )?,
-            distribution_success,
+            creator_amount,
+            seller_amount,
+            platform_amount,
+            distribution_success: true,
             timestamp: env.ledger().timestamp(),
         };
 
         // Emit distribution event
         let event = RoyaltiesDistributedEvent {
             transaction_id,
-            nft_address: royalty_distribution.creator_address.clone(), // Use creator address as placeholder
-            token_id: 0,                                               // This would be passed in
+            nft_address: royalty_distribution.creator_address.clone(),
+            token_id: 0,
             creator: royalty_distribution.creator_address.clone(),
-            creator_amount: result.creator_amount,
-            seller_amount: result.seller_amount,
-            platform_amount: result.platform_amount,
+            creator_amount,
+            seller_amount,
+            platform_amount,
             total_amount: result.total_amount,
             timestamp: result.timestamp,
         };
@@ -203,28 +211,53 @@ impl RoyaltyDistributor {
         Ok(())
     }
 
-    /// Calculate royalty splits for complex transactions
+    /// Calculate royalty splits for complex transactions (bundles).
+    /// Uses value-proportional splitting based on `value_weights` rather than equal division.
     pub fn calculate_complex_royalties(
         env: &Env,
         nft_contracts: &Vec<Address>,
         token_ids: &Vec<u64>,
         sale_price: i128,
+        seller: &Address,
+        platform_address: &Address,
+        value_weights: &Vec<i128>,
     ) -> Result<RoyaltyDistribution, SettlementError> {
         if nft_contracts.len() != token_ids.len() {
             return Err(SettlementError::InvalidAmount);
+        }
+        if nft_contracts.len() != value_weights.len() {
+            return Err(SettlementError::InvalidAmount);
+        }
+
+        // Calculate total weight for proportional distribution
+        let mut total_weight: i128 = 0;
+        for w in value_weights.iter() {
+            total_weight = math_utils::safe_add(total_weight, w, env)?;
         }
 
         let mut total_royalty_amount = 0i128;
         let mut amounts = Map::new(env);
 
-        // Calculate royalties for each NFT
+        // Calculate royalties for each NFT proportionally by value weight
         for i in 0..nft_contracts.len() {
             let nft_contract = nft_contracts.get(i).ok_or(SettlementError::InvalidAmount)?;
             let token_id = token_ids.get(i).ok_or(SettlementError::InvalidAmount)?;
+            let weight = value_weights.get(i).ok_or(SettlementError::InvalidAmount)?;
 
             let royalty_info = Self::get_royalty_info(env, &nft_contract, token_id)?;
-            let individual_price =
-                math_utils::safe_div(sale_price, nft_contracts.len() as i128, env)?;
+
+            // Calculate proportional price: sale_price * weight / total_weight
+            let individual_price = if total_weight > 0 {
+                math_utils::calculate_percentage_with_rounding_and_basis(
+                    sale_price,
+                    weight as u64,
+                    math_utils::RoundingMode::HalfUp,
+                    total_weight as u64,
+                    env,
+                )?
+            } else {
+                math_utils::safe_div(sale_price, nft_contracts.len() as i128, env)?
+            };
 
             let royalty_amount = math_utils::calculate_percentage(
                 individual_price,
@@ -232,7 +265,7 @@ impl RoyaltyDistributor {
                 env,
             )?;
 
-            // Add to total for this creator
+            // Aggregate by creator
             let current_amount = amounts.get(royalty_info.creator.clone()).unwrap_or(0);
             let new_amount = math_utils::safe_add(current_amount, royalty_amount, env)?;
             amounts.set(royalty_info.creator, new_amount);
@@ -240,34 +273,23 @@ impl RoyaltyDistributor {
             total_royalty_amount = math_utils::safe_add(total_royalty_amount, royalty_amount, env)?;
         }
 
-        // Calculate remaining amounts for seller and platform
-        let seller_amount = math_utils::safe_sub(sale_price, total_royalty_amount, env)?;
-        let platform_amount = math_utils::calculate_percentage(seller_amount, 500, env)?; // 5%
-        let final_seller_amount = math_utils::safe_sub(seller_amount, platform_amount, env)?;
+        // Calculate remaining amounts for seller and platform on post-royalty remainder
+        let remainder = math_utils::safe_sub(sale_price, total_royalty_amount, env)?;
+        let platform_percentage = 500u64; // 5%
+        let platform_amount =
+            math_utils::calculate_percentage(remainder, platform_percentage, env)?;
+        let seller_amount = math_utils::safe_sub(remainder, platform_amount, env)?;
 
-        // Add seller and platform to distribution
-        let seller_str = soroban_sdk::String::from_str(
-            env,
-            "GBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
-        );
-        let platform_str = soroban_sdk::String::from_str(
-            env,
-            "GCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
-        );
-        let seller_address = Address::from_string(&seller_str); // Seller address placeholder
-        let platform_address = Address::from_string(&platform_str); // Platform address placeholder
+        // Use real addresses passed as parameters
+        amounts.set(seller.clone(), seller_amount);
+        amounts.set(platform_address.clone(), platform_amount);
 
-        amounts.set(seller_address, final_seller_amount);
-        amounts.set(platform_address, platform_amount);
-
-        let creator_str = soroban_sdk::String::from_str(
-            env,
-            "GDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
-        );
         Ok(RoyaltyDistribution {
-            creator_address: Address::from_string(&creator_str), // Creator address placeholder
-            creator_percentage: 0,                               // Not applicable for complex
+            creator_address: seller.clone(), // Fallback — multiple creators in amounts map
+            creator_percentage: 0,
+            seller_address: seller.clone(),
             seller_percentage: 9500,
+            platform_address: platform_address.clone(),
             platform_percentage: 500,
             total_amount: sale_price,
             amounts,
@@ -366,9 +388,17 @@ impl RoyaltyEnforcer {
         token_id: u64,
         sale_price: i128,
         _payment_asset: &Asset,
+        seller: &Address,
+        platform_address: &Address,
     ) -> Result<(), SettlementError> {
-        let royalty_distribution =
-            RoyaltyDistributor::calculate_royalties(env, nft_contract, token_id, sale_price)?;
+        let royalty_distribution = RoyaltyDistributor::calculate_royalties(
+            env,
+            nft_contract,
+            token_id,
+            sale_price,
+            seller,
+            platform_address,
+        )?;
 
         // Check if sufficient funds are available for royalties
         let royalty_amount = math_utils::calculate_percentage(

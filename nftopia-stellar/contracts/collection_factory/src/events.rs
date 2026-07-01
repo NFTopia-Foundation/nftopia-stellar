@@ -10,6 +10,14 @@ pub struct Created {
 
 #[contractevent]
 #[derive(Clone, Debug)]
+pub struct CollectionRegistered {
+    pub factory: Address,
+    pub collection: Address,
+    pub registered_at: u64,
+}
+
+#[contractevent]
+#[derive(Clone, Debug)]
 pub struct Mint {
     pub collection: Address,
     pub to: Address,
@@ -36,6 +44,30 @@ pub struct Burn {
     pub amount: u32,
 }
 
+// New Event Structs for Issue #288
+
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct MaxCollectionsUpdated {
+    pub old_limit: u32,
+    pub new_limit: u32,
+}
+
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct CreatorLimitExceededAttempt {
+    pub creator: Address,
+    pub current_count: u32,
+}
+
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct CollectionCountReset {
+    pub creator: Address,
+}
+
+/* Emission Helpers */
+
 pub fn emit_collection_created(
     env: &Env,
     creator: Address,
@@ -46,6 +78,15 @@ pub fn emit_collection_created(
         creator,
         collection: collection_address,
         id: collection_id,
+    }
+    .publish(env);
+}
+
+pub fn emit_collection_registered(env: &Env, factory: Address, collection: Address) {
+    CollectionRegistered {
+        factory,
+        collection,
+        registered_at: env.ledger().timestamp(),
     }
     .publish(env);
 }
@@ -86,4 +127,26 @@ pub fn emit_burn(env: &Env, collection: Address, from: Address, token_id: u32, a
         amount,
     }
     .publish(env);
+}
+
+// New Emission Helpers for Issue #288
+
+pub fn emit_max_collections_updated(env: &Env, old_limit: u32, new_limit: u32) {
+    MaxCollectionsUpdated {
+        old_limit,
+        new_limit,
+    }
+    .publish(env);
+}
+
+pub fn emit_creator_limit_exceeded_attempt(env: &Env, creator: Address, current_count: u32) {
+    CreatorLimitExceededAttempt {
+        creator,
+        current_count,
+    }
+    .publish(env);
+}
+
+pub fn emit_collection_count_reset(env: &Env, creator: Address) {
+    CollectionCountReset { creator }.publish(env);
 }

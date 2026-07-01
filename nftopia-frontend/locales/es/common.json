@@ -101,6 +101,24 @@
       "royalties": "Regalías",
       "mint": "Acuñar NFT"
     },
+    "creatorProfile": {
+      "verified": "Verificado",
+      "followers": "seguidores",
+      "nftsCreated": "NFTs",
+      "volume": "volumen",
+      "tabNfts": "NFTs",
+      "tabCollections": "Colecciones",
+      "tabActivity": "Actividad",
+      "sortNewest": "Más recientes",
+      "sortPrice": "Precio",
+      "emptyNfts": "Sin NFTs",
+      "emptyCollections": "Sin colecciones",
+      "emptyActivity": "Sin actividad",
+      "notFound": "Creador no encontrado",
+      "activityMint": "Acuñado",
+      "activitySale": "Vendido",
+      "activityListing": "Listado"
+    },
     "common": {
       "loading": "Cargando...",
       "error": "Error",
@@ -262,7 +280,11 @@
       "singleOrBatch": "Subida única o por lotes",
       "goToMint": "Ir a acuñar",
       "createCollection": "Crear colección",
-      "collectionDescription": "Configure las propiedades del contrato inteligente y las opciones de implementación de las colecciones."
+      "collectionDescription": "Configure las propiedades del contrato inteligente y las opciones de implementación de las colecciones.",
+      "errorFallbackTitle": "No se pudo cargar el panel",
+      "errorFallbackMessage": "Ocurrió un problema al cargar el panel de control. Hemos registrado este error y estamos trabajando para solucionarlo.",
+      "errorOfflineTitle": "Sin conexión a Internet",
+      "errorOfflineMessage": "Parece que estás desconectado. Por favor, comprueba tu conexión de red e inténtalo de nuevo."
     },
     "mintNFT": {
       "title": "Acuñar NFT",

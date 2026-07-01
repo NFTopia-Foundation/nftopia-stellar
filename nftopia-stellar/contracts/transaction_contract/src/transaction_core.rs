@@ -223,6 +223,7 @@ impl TransactionContract {
         let tx = storage::load_transaction(&env, transaction_id)
             .ok_or(TransactionError::TransactionNotFound)?;
 
+        gas_calculator::validate_gas_limits(&tx.operations)?;
         Ok(gas_calculator::total_gas(&tx.operations))
     }
 

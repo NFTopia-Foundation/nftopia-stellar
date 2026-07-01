@@ -11,6 +11,8 @@ export const GLOBAL_ALLOWED_FIELDS = [
   "placement",
   "destination_route",
   "surface",
+  "component_name",
+  "error_message",
 ] as const;
 
 export const CATEGORY_ALLOWED_FIELDS: Record<string, readonly string[]> = {

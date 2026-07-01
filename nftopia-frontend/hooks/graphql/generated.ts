@@ -123,6 +123,11 @@ export type CollectionStats = {
   totalVolume: Scalars['String']['output'];
 };
 
+export type CreateBidInput = {
+  amount: Scalars['Float']['input'];
+  auctionId: Scalars['ID']['input'];
+};
+
 export type CreateCollectionInput = {
   bannerImage?: InputMaybe<Scalars['String']['input']>;
   contractAddress: Scalars['String']['input'];
@@ -137,6 +142,45 @@ export type CreateListingInput = {
   expiresAt?: InputMaybe<Scalars['String']['input']>;
   nftId: Scalars['ID']['input'];
   price: Scalars['Float']['input'];
+};
+
+export type CreatorActivityConnection = {
+  __typename?: 'CreatorActivityConnection';
+  edges: Array<CreatorActivityEdge>;
+  totalCount: Scalars['Int']['output'];
+};
+
+export type CreatorActivityEdge = {
+  __typename?: 'CreatorActivityEdge';
+  cursor: Scalars['String']['output'];
+  node: CreatorActivityItem;
+};
+
+export type CreatorActivityItem = {
+  __typename?: 'CreatorActivityItem';
+  currency?: Maybe<Scalars['String']['output']>;
+  nftId?: Maybe<Scalars['ID']['output']>;
+  occurredAt: Scalars['DateTime']['output'];
+  price?: Maybe<Scalars['String']['output']>;
+  type: CreatorActivityType;
+};
+
+export enum CreatorActivityType {
+  Listing = 'LISTING',
+  Mint = 'MINT',
+  Sale = 'SALE'
+}
+
+export enum CreatorNftSort {
+  Newest = 'NEWEST',
+  Price = 'PRICE'
+}
+
+export type FollowResult = {
+  __typename?: 'FollowResult';
+  followerCount: Scalars['Int']['output'];
+  isFollowing: Scalars['Boolean']['output'];
+  success: Scalars['Boolean']['output'];
 };
 
 export type GraphqlHealthResponse = {
@@ -212,8 +256,14 @@ export type Mutation = {
   createCollection: Collection;
   /** Create a new marketplace listing */
   createListing: Listing;
+  /** Follow a creator */
+  followCreator: FollowResult;
   /** Mint a new NFT */
   mintNFT: Nft;
+  /** Place a bid on an auction */
+  placeBid: Bid;
+  /** Unfollow a creator */
+  unfollowCreator: FollowResult;
   /** Update NFT metadata */
   updateNFTMetadata: Nft;
 };
@@ -239,8 +289,23 @@ export type MutationCreateListingArgs = {
 };
 
 
+export type MutationFollowCreatorArgs = {
+  creatorId: Scalars['ID']['input'];
+};
+
+
 export type MutationMintNftArgs = {
   input: MintNftInput;
+};
+
+
+export type MutationPlaceBidArgs = {
+  input: CreateBidInput;
+};
+
+
+export type MutationUnfollowCreatorArgs = {
+  creatorId: Scalars['ID']['input'];
 };
 
 
@@ -371,6 +436,44 @@ export type PaginationInput = {
   first?: InputMaybe<Scalars['Int']['input']>;
 };
 
+export type PublicCreator = {
+  __typename?: 'PublicCreator';
+  activity?: Maybe<CreatorActivityConnection>;
+  avatarUrl?: Maybe<Scalars['String']['output']>;
+  bannerUrl?: Maybe<Scalars['String']['output']>;
+  bio?: Maybe<Scalars['String']['output']>;
+  collections?: Maybe<CollectionConnection>;
+  createdAt: Scalars['DateTime']['output'];
+  followerCount: Scalars['Int']['output'];
+  followingCount: Scalars['Int']['output'];
+  id: Scalars['ID']['output'];
+  instagramHandle?: Maybe<Scalars['String']['output']>;
+  isFollowing?: Maybe<Scalars['Boolean']['output']>;
+  isVerified: Scalars['Boolean']['output'];
+  nfts?: Maybe<NftConnection>;
+  totalNftsCreated: Scalars['Int']['output'];
+  totalSalesVolume: Scalars['String']['output'];
+  twitterHandle?: Maybe<Scalars['String']['output']>;
+  username?: Maybe<Scalars['String']['output']>;
+  website?: Maybe<Scalars['String']['output']>;
+};
+
+
+export type PublicCreatorActivityArgs = {
+  pagination?: InputMaybe<PaginationInput>;
+};
+
+
+export type PublicCreatorCollectionsArgs = {
+  pagination?: InputMaybe<PaginationInput>;
+};
+
+
+export type PublicCreatorNftsArgs = {
+  pagination?: InputMaybe<PaginationInput>;
+  sortBy?: InputMaybe<CreatorNftSort>;
+};
+
 export type Query = {
   __typename?: 'Query';
   /** Fetch a single auction by ID */
@@ -407,6 +510,8 @@ export type Query = {
   nftsByOwner: NftConnection;
   /** Fetch single order by ID */
   order: Order;
+  /** Fetch a public creator profile by id, username, or wallet address */
+  publicCreator: PublicCreator;
   /** Fetch sales analytics (admin only) */
   salesAnalytics: SalesAnalytics;
   /** Fetch top collections ordered by total volume */
@@ -501,6 +606,11 @@ export type QueryNftsByOwnerArgs = {
 
 export type QueryOrderArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type QueryPublicCreatorArgs = {
+  identifier: Scalars['String']['input'];
 };
 
 
@@ -652,7 +762,14 @@ export type GetAuctionByIdQueryVariables = Exact<{
 }>;
 
 
-export type GetAuctionByIdQuery = { __typename?: 'Query', auction: { __typename?: 'Auction', id: string, nftId: string, sellerId: string, startPrice: string, currentPrice: string, reservePrice?: string | null, startTime: any, endTime: any, status: AuctionStatus, winnerId?: string | null, nft?: { __typename?: 'NFT', id: string, name: string, image?: string | null, tokenId: string } | null, bids?: Array<{ __typename?: 'Bid', id: string, amount: string, bidderId: string, createdAt: any }> | null, highestBid?: { __typename?: 'Bid', id: string, amount: string, bidderId: string, createdAt: any } | null, seller?: { __typename?: 'User', id: string, username?: string | null, walletAddress?: string | null } | null } };
+export type GetAuctionByIdQuery = { __typename?: 'Query', auction: { __typename?: 'Auction', id: string, nftId: string, sellerId: string, startPrice: string, currentPrice: string, reservePrice?: string | null, startTime: any, endTime: any, status: AuctionStatus, winnerId?: string | null, nft?: { __typename?: 'NFT', id: string, name: string, image?: string | null, tokenId: string, description?: string | null, attributes: Array<{ __typename?: 'NFTAttribute', traitType: string, value: string, displayType?: string | null }>, collection?: { __typename?: 'Collection', id: string, name: string, symbol: string, image: string } | null, creator?: { __typename?: 'User', id: string, username?: string | null, walletAddress?: string | null } | null, owner?: { __typename?: 'User', id: string, username?: string | null, walletAddress?: string | null } | null } | null, bids?: Array<{ __typename?: 'Bid', id: string, amount: string, bidderId: string, createdAt: any, bidder?: { __typename?: 'User', id: string, username?: string | null, walletAddress?: string | null } | null }> | null, highestBid?: { __typename?: 'Bid', id: string, amount: string, bidderId: string, createdAt: any, bidder?: { __typename?: 'User', id: string, username?: string | null } | null } | null, seller?: { __typename?: 'User', id: string, username?: string | null, walletAddress?: string | null } | null, winner?: { __typename?: 'User', id: string, username?: string | null, walletAddress?: string | null } | null } };
+
+export type PlaceBidMutationVariables = Exact<{
+  input: CreateBidInput;
+}>;
+
+
+export type PlaceBidMutation = { __typename?: 'Mutation', placeBid: { __typename?: 'Bid', id: string, auctionId: string, bidderId: string, amount: string, createdAt: any, bidder?: { __typename?: 'User', id: string, username?: string | null, walletAddress?: string | null } | null } };
 
 export type GetCollectionsQueryVariables = Exact<{
   pagination?: InputMaybe<PaginationInput>;
@@ -682,6 +799,43 @@ export type GetCollectionStatsQueryVariables = Exact<{
 
 
 export type GetCollectionStatsQuery = { __typename?: 'Query', collectionStats: { __typename?: 'CollectionStats', totalVolume: string, floorPrice: string, totalSupply: number, ownerCount: number } };
+
+export type PublicCreatorFieldsFragment = { __typename?: 'PublicCreator', id: string, username?: string | null, bio?: string | null, avatarUrl?: string | null, bannerUrl?: string | null, website?: string | null, twitterHandle?: string | null, instagramHandle?: string | null, isVerified: boolean, followerCount: number, followingCount: number, totalNftsCreated: number, totalSalesVolume: string, createdAt: any, isFollowing?: boolean | null };
+
+export type GetPublicCreatorQueryVariables = Exact<{
+  identifier: Scalars['String']['input'];
+  nftFirst?: InputMaybe<Scalars['Int']['input']>;
+  nftAfter?: InputMaybe<Scalars['String']['input']>;
+  nftSort?: InputMaybe<CreatorNftSort>;
+  collectionFirst?: InputMaybe<Scalars['Int']['input']>;
+  collectionAfter?: InputMaybe<Scalars['String']['input']>;
+  activityFirst?: InputMaybe<Scalars['Int']['input']>;
+  activityAfter?: InputMaybe<Scalars['String']['input']>;
+}>;
+
+
+export type GetPublicCreatorQuery = { __typename?: 'Query', publicCreator: { __typename?: 'PublicCreator', id: string, username?: string | null, bio?: string | null, avatarUrl?: string | null, bannerUrl?: string | null, website?: string | null, twitterHandle?: string | null, instagramHandle?: string | null, isVerified: boolean, followerCount: number, followingCount: number, totalNftsCreated: number, totalSalesVolume: string, createdAt: any, isFollowing?: boolean | null, nfts?: { __typename?: 'NFTConnection', totalCount: number, edges: Array<{ __typename?: 'NFTEdge', cursor: string, node: { __typename?: 'NFT', lastPrice?: string | null, id: string, tokenId: string, name: string, description?: string | null, image?: string | null, ownerId: string, collectionId?: string | null, mintedAt: any } }>, pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null } } | null, collections?: { __typename?: 'CollectionConnection', totalCount: number, edges: Array<{ __typename?: 'CollectionEdge', cursor: string, node: { __typename?: 'Collection', floorPrice: string, totalSupply: number, id: string, name: string, description?: string | null, image: string, creatorId: string, createdAt: any } }>, pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null } } | null, activity?: { __typename?: 'CreatorActivityConnection', totalCount: number, edges: Array<{ __typename?: 'CreatorActivityEdge', cursor: string, node: { __typename?: 'CreatorActivityItem', type: CreatorActivityType, occurredAt: any, nftId?: string | null, price?: string | null, currency?: string | null } }> } | null } };
+
+export type GetPublicCreatorMetaQueryVariables = Exact<{
+  identifier: Scalars['String']['input'];
+}>;
+
+
+export type GetPublicCreatorMetaQuery = { __typename?: 'Query', publicCreator: { __typename?: 'PublicCreator', id: string, username?: string | null, bio?: string | null, avatarUrl?: string | null, bannerUrl?: string | null } };
+
+export type FollowCreatorMutationVariables = Exact<{
+  creatorId: Scalars['ID']['input'];
+}>;
+
+
+export type FollowCreatorMutation = { __typename?: 'Mutation', followCreator: { __typename?: 'FollowResult', success: boolean, followerCount: number, isFollowing: boolean } };
+
+export type UnfollowCreatorMutationVariables = Exact<{
+  creatorId: Scalars['ID']['input'];
+}>;
+
+
+export type UnfollowCreatorMutation = { __typename?: 'Mutation', unfollowCreator: { __typename?: 'FollowResult', success: boolean, followerCount: number, isFollowing: boolean } };
 
 export type GetListingsQueryVariables = Exact<{
   pagination?: InputMaybe<PaginationInput>;
@@ -854,6 +1008,25 @@ export const TransferEventFieldsFragmentDoc = gql`
   blockExplorerUrl
 }
     `;
+export const PublicCreatorFieldsFragmentDoc = gql`
+    fragment PublicCreatorFields on PublicCreator {
+  id
+  username
+  bio
+  avatarUrl
+  bannerUrl
+  website
+  twitterHandle
+  instagramHandle
+  isVerified
+  followerCount
+  followingCount
+  totalNftsCreated
+  totalSalesVolume
+  createdAt
+  isFollowing
+}
+    `;
 export const GetAuctionByIdDocument = gql`
     query GetAuctionById($id: ID!) {
   auction(id: $id) {
@@ -863,20 +1036,56 @@ export const GetAuctionByIdDocument = gql`
       name
       image
       tokenId
+      description
+      attributes {
+        traitType
+        value
+        displayType
+      }
+      collection {
+        id
+        name
+        symbol
+        image
+      }
+      creator {
+        id
+        username
+        walletAddress
+      }
+      owner {
+        id
+        username
+        walletAddress
+      }
     }
     bids {
       id
       amount
       bidderId
+      bidder {
+        id
+        username
+        walletAddress
+      }
       createdAt
     }
     highestBid {
       id
       amount
       bidderId
+      bidder {
+        id
+        username
+      }
       createdAt
     }
     seller {
+      id
+      username
+      walletAddress
+    }
+    winner {
       id
       username
       walletAddress
@@ -920,6 +1129,48 @@ export type GetAuctionByIdQueryHookResult = ReturnType<typeof useGetAuctionByIdQ
 export type GetAuctionByIdLazyQueryHookResult = ReturnType<typeof useGetAuctionByIdLazyQuery>;
 export type GetAuctionByIdSuspenseQueryHookResult = ReturnType<typeof useGetAuctionByIdSuspenseQuery>;
 export type GetAuctionByIdQueryResult = Apollo.QueryResult<GetAuctionByIdQuery, GetAuctionByIdQueryVariables>;
+export const PlaceBidDocument = gql`
+    mutation PlaceBid($input: CreateBidInput!) {
+  placeBid(input: $input) {
+    id
+    auctionId
+    bidderId
+    amount
+    createdAt
+    bidder {
+      id
+      username
+      walletAddress
+    }
+  }
+}
+    `;
+export type PlaceBidMutationFn = Apollo.MutationFunction<PlaceBidMutation, PlaceBidMutationVariables>;
+
+/**
+ * __usePlaceBidMutation__
+ *
+ * To run a mutation, you first call `usePlaceBidMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `usePlaceBidMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [placeBidMutation, { data, loading, error }] = usePlaceBidMutation({
+ *   variables: {
+ *      input: // value for 'input'
+ *   },
+ * });
+ */
+export function usePlaceBidMutation(baseOptions?: Apollo.MutationHookOptions<PlaceBidMutation, PlaceBidMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<PlaceBidMutation, PlaceBidMutationVariables>(PlaceBidDocument, options);
+      }
+export type PlaceBidMutationHookResult = ReturnType<typeof usePlaceBidMutation>;
+export type PlaceBidMutationResult = Apollo.MutationResult<PlaceBidMutation>;
+export type PlaceBidMutationOptions = Apollo.BaseMutationOptions<PlaceBidMutation, PlaceBidMutationVariables>;
 export const GetCollectionsDocument = gql`
     query GetCollections($pagination: PaginationInput, $filter: CollectionFilterInput) {
   collections(pagination: $pagination, filter: $filter) {
@@ -1136,6 +1387,217 @@ export type GetCollectionStatsQueryHookResult = ReturnType<typeof useGetCollecti
 export type GetCollectionStatsLazyQueryHookResult = ReturnType<typeof useGetCollectionStatsLazyQuery>;
 export type GetCollectionStatsSuspenseQueryHookResult = ReturnType<typeof useGetCollectionStatsSuspenseQuery>;
 export type GetCollectionStatsQueryResult = Apollo.QueryResult<GetCollectionStatsQuery, GetCollectionStatsQueryVariables>;
+export const GetPublicCreatorDocument = gql`
+    query GetPublicCreator($identifier: String!, $nftFirst: Int = 12, $nftAfter: String, $nftSort: CreatorNftSort, $collectionFirst: Int = 12, $collectionAfter: String, $activityFirst: Int = 10, $activityAfter: String) {
+  publicCreator(identifier: $identifier) {
+    ...PublicCreatorFields
+    nfts(pagination: {first: $nftFirst, after: $nftAfter}, sortBy: $nftSort) {
+      edges {
+        node {
+          ...NftFields
+          lastPrice
+        }
+        cursor
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      totalCount
+    }
+    collections(pagination: {first: $collectionFirst, after: $collectionAfter}) {
+      edges {
+        node {
+          ...CollectionFields
+          floorPrice
+          totalSupply
+        }
+        cursor
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      totalCount
+    }
+    activity(pagination: {first: $activityFirst, after: $activityAfter}) {
+      edges {
+        node {
+          type
+          occurredAt
+          nftId
+          price
+          currency
+        }
+        cursor
+      }
+      totalCount
+    }
+  }
+}
+    ${PublicCreatorFieldsFragmentDoc}
+${NftFieldsFragmentDoc}
+${CollectionFieldsFragmentDoc}`;
+
+/**
+ * __useGetPublicCreatorQuery__
+ *
+ * To run a query within a React component, call `useGetPublicCreatorQuery` and pass it any options that fit your needs.
+ * When your component renders, `useGetPublicCreatorQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useGetPublicCreatorQuery({
+ *   variables: {
+ *      identifier: // value for 'identifier'
+ *      nftFirst: // value for 'nftFirst'
+ *      nftAfter: // value for 'nftAfter'
+ *      nftSort: // value for 'nftSort'
+ *      collectionFirst: // value for 'collectionFirst'
+ *      collectionAfter: // value for 'collectionAfter'
+ *      activityFirst: // value for 'activityFirst'
+ *      activityAfter: // value for 'activityAfter'
+ *   },
+ * });
+ */
+export function useGetPublicCreatorQuery(baseOptions: Apollo.QueryHookOptions<GetPublicCreatorQuery, GetPublicCreatorQueryVariables> & ({ variables: GetPublicCreatorQueryVariables; skip?: boolean; } | { skip: boolean; }) ) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useQuery<GetPublicCreatorQuery, GetPublicCreatorQueryVariables>(GetPublicCreatorDocument, options);
+      }
+export function useGetPublicCreatorLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<GetPublicCreatorQuery, GetPublicCreatorQueryVariables>) {
+          const options = {...defaultOptions, ...baseOptions}
+          return Apollo.useLazyQuery<GetPublicCreatorQuery, GetPublicCreatorQueryVariables>(GetPublicCreatorDocument, options);
+        }
+// @ts-ignore
+export function useGetPublicCreatorSuspenseQuery(baseOptions?: Apollo.SuspenseQueryHookOptions<GetPublicCreatorQuery, GetPublicCreatorQueryVariables>): Apollo.UseSuspenseQueryResult<GetPublicCreatorQuery, GetPublicCreatorQueryVariables>;
+export function useGetPublicCreatorSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<GetPublicCreatorQuery, GetPublicCreatorQueryVariables>): Apollo.UseSuspenseQueryResult<GetPublicCreatorQuery | undefined, GetPublicCreatorQueryVariables>;
+export function useGetPublicCreatorSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<GetPublicCreatorQuery, GetPublicCreatorQueryVariables>) {
+          const options = baseOptions === Apollo.skipToken ? baseOptions : {...defaultOptions, ...baseOptions}
+          return Apollo.useSuspenseQuery<GetPublicCreatorQuery, GetPublicCreatorQueryVariables>(GetPublicCreatorDocument, options);
+        }
+export type GetPublicCreatorQueryHookResult = ReturnType<typeof useGetPublicCreatorQuery>;
+export type GetPublicCreatorLazyQueryHookResult = ReturnType<typeof useGetPublicCreatorLazyQuery>;
+export type GetPublicCreatorSuspenseQueryHookResult = ReturnType<typeof useGetPublicCreatorSuspenseQuery>;
+export type GetPublicCreatorQueryResult = Apollo.QueryResult<GetPublicCreatorQuery, GetPublicCreatorQueryVariables>;
+export const GetPublicCreatorMetaDocument = gql`
+    query GetPublicCreatorMeta($identifier: String!) {
+  publicCreator(identifier: $identifier) {
+    id
+    username
+    bio
+    avatarUrl
+    bannerUrl
+  }
+}
+    `;
+
+/**
+ * __useGetPublicCreatorMetaQuery__
+ *
+ * To run a query within a React component, call `useGetPublicCreatorMetaQuery` and pass it any options that fit your needs.
+ * When your component renders, `useGetPublicCreatorMetaQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useGetPublicCreatorMetaQuery({
+ *   variables: {
+ *      identifier: // value for 'identifier'
+ *   },
+ * });
+ */
+export function useGetPublicCreatorMetaQuery(baseOptions: Apollo.QueryHookOptions<GetPublicCreatorMetaQuery, GetPublicCreatorMetaQueryVariables> & ({ variables: GetPublicCreatorMetaQueryVariables; skip?: boolean; } | { skip: boolean; }) ) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useQuery<GetPublicCreatorMetaQuery, GetPublicCreatorMetaQueryVariables>(GetPublicCreatorMetaDocument, options);
+      }
+export function useGetPublicCreatorMetaLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<GetPublicCreatorMetaQuery, GetPublicCreatorMetaQueryVariables>) {
+          const options = {...defaultOptions, ...baseOptions}
+          return Apollo.useLazyQuery<GetPublicCreatorMetaQuery, GetPublicCreatorMetaQueryVariables>(GetPublicCreatorMetaDocument, options);
+        }
+// @ts-ignore
+export function useGetPublicCreatorMetaSuspenseQuery(baseOptions?: Apollo.SuspenseQueryHookOptions<GetPublicCreatorMetaQuery, GetPublicCreatorMetaQueryVariables>): Apollo.UseSuspenseQueryResult<GetPublicCreatorMetaQuery, GetPublicCreatorMetaQueryVariables>;
+export function useGetPublicCreatorMetaSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<GetPublicCreatorMetaQuery, GetPublicCreatorMetaQueryVariables>): Apollo.UseSuspenseQueryResult<GetPublicCreatorMetaQuery | undefined, GetPublicCreatorMetaQueryVariables>;
+export function useGetPublicCreatorMetaSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<GetPublicCreatorMetaQuery, GetPublicCreatorMetaQueryVariables>) {
+          const options = baseOptions === Apollo.skipToken ? baseOptions : {...defaultOptions, ...baseOptions}
+          return Apollo.useSuspenseQuery<GetPublicCreatorMetaQuery, GetPublicCreatorMetaQueryVariables>(GetPublicCreatorMetaDocument, options);
+        }
+export type GetPublicCreatorMetaQueryHookResult = ReturnType<typeof useGetPublicCreatorMetaQuery>;
+export type GetPublicCreatorMetaLazyQueryHookResult = ReturnType<typeof useGetPublicCreatorMetaLazyQuery>;
+export type GetPublicCreatorMetaSuspenseQueryHookResult = ReturnType<typeof useGetPublicCreatorMetaSuspenseQuery>;
+export type GetPublicCreatorMetaQueryResult = Apollo.QueryResult<GetPublicCreatorMetaQuery, GetPublicCreatorMetaQueryVariables>;
+export const FollowCreatorDocument = gql`
+    mutation FollowCreator($creatorId: ID!) {
+  followCreator(creatorId: $creatorId) {
+    success
+    followerCount
+    isFollowing
+  }
+}
+    `;
+export type FollowCreatorMutationFn = Apollo.MutationFunction<FollowCreatorMutation, FollowCreatorMutationVariables>;
+
+/**
+ * __useFollowCreatorMutation__
+ *
+ * To run a mutation, you first call `useFollowCreatorMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useFollowCreatorMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [followCreatorMutation, { data, loading, error }] = useFollowCreatorMutation({
+ *   variables: {
+ *      creatorId: // value for 'creatorId'
+ *   },
+ * });
+ */
+export function useFollowCreatorMutation(baseOptions?: Apollo.MutationHookOptions<FollowCreatorMutation, FollowCreatorMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<FollowCreatorMutation, FollowCreatorMutationVariables>(FollowCreatorDocument, options);
+      }
+export type FollowCreatorMutationHookResult = ReturnType<typeof useFollowCreatorMutation>;
+export type FollowCreatorMutationResult = Apollo.MutationResult<FollowCreatorMutation>;
+export type FollowCreatorMutationOptions = Apollo.BaseMutationOptions<FollowCreatorMutation, FollowCreatorMutationVariables>;
+export const UnfollowCreatorDocument = gql`
+    mutation UnfollowCreator($creatorId: ID!) {
+  unfollowCreator(creatorId: $creatorId) {
+    success
+    followerCount
+    isFollowing
+  }
+}
+    `;
+export type UnfollowCreatorMutationFn = Apollo.MutationFunction<UnfollowCreatorMutation, UnfollowCreatorMutationVariables>;
+
+/**
+ * __useUnfollowCreatorMutation__
+ *
+ * To run a mutation, you first call `useUnfollowCreatorMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useUnfollowCreatorMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [unfollowCreatorMutation, { data, loading, error }] = useUnfollowCreatorMutation({
+ *   variables: {
+ *      creatorId: // value for 'creatorId'
+ *   },
+ * });
+ */
+export function useUnfollowCreatorMutation(baseOptions?: Apollo.MutationHookOptions<UnfollowCreatorMutation, UnfollowCreatorMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<UnfollowCreatorMutation, UnfollowCreatorMutationVariables>(UnfollowCreatorDocument, options);
+      }
+export type UnfollowCreatorMutationHookResult = ReturnType<typeof useUnfollowCreatorMutation>;
+export type UnfollowCreatorMutationResult = Apollo.MutationResult<UnfollowCreatorMutation>;
+export type UnfollowCreatorMutationOptions = Apollo.BaseMutationOptions<UnfollowCreatorMutation, UnfollowCreatorMutationVariables>;
 export const GetListingsDocument = gql`
     query GetListings($pagination: PaginationInput, $filter: ListingFilterInput) {
   listings(pagination: $pagination, filter: $filter) {

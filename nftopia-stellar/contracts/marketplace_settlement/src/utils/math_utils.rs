@@ -33,19 +33,73 @@ pub fn safe_div(a: i128, b: i128, _env: &Env) -> Result<i128, SettlementError> {
     Ok(a / b)
 }
 
+/// Rounding mode for percentage calculations
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RoundingMode {
+    /// Round half-up (standard rounding): 0.5 rounds to 1
+    HalfUp,
+    /// Truncate toward zero (always round down for positive amounts)
+    Truncate,
+}
+
 /// Calculate percentage using basis points (10000 = 100%)
+/// Uses round-half-up to prevent systematic underpayment
 pub fn calculate_percentage(
     amount: i128,
     basis_points: u64,
     env: &Env,
 ) -> Result<i128, SettlementError> {
-    if basis_points > 10000 {
+    calculate_percentage_with_rounding(amount, basis_points, RoundingMode::HalfUp, env)
+}
+
+/// Calculate percentage with explicit rounding mode and custom basis
+pub fn calculate_percentage_with_rounding_and_basis(
+    amount: i128,
+    basis_points: u64,
+    rounding: RoundingMode,
+    basis: u64,
+    _env: &Env,
+) -> Result<i128, SettlementError> {
+    if basis_points > basis {
         return Err(SettlementError::InvalidRoyaltyPercentage);
     }
 
-    // amount * basis_points / 10000
-    let scaled_amount = safe_mul(amount, basis_points as i128, env)?;
-    safe_div(scaled_amount, 10000, env)
+    if basis_points == 0 || amount == 0 {
+        return Ok(0);
+    }
+
+    let scaled_amount = match amount.checked_mul(basis_points as i128) {
+        Some(v) => v,
+        None => return Err(SettlementError::Overflow),
+    };
+    let basis_i128 = basis as i128;
+
+    match rounding {
+        RoundingMode::HalfUp => {
+            let half_basis = basis_i128 / 2;
+            if scaled_amount >= 0 {
+                Ok((scaled_amount + half_basis) / basis_i128)
+            } else {
+                Ok((scaled_amount - half_basis) / basis_i128)
+            }
+        }
+        RoundingMode::Truncate => {
+            if basis_i128 == 0 {
+                return Err(SettlementError::DivisionByZero);
+            }
+            Ok(scaled_amount / basis_i128)
+        }
+    }
+}
+
+/// Calculate percentage using basis points (10000 = 100%) with explicit rounding mode
+pub fn calculate_percentage_with_rounding(
+    amount: i128,
+    basis_points: u64,
+    rounding: RoundingMode,
+    env: &Env,
+) -> Result<i128, SettlementError> {
+    calculate_percentage_with_rounding_and_basis(amount, basis_points, rounding, 10000, env)
 }
 
 /// Calculate fee based on amount and fee structure

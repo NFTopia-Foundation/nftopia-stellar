@@ -18,7 +18,28 @@ describe('AuctionResolver', () => {
       }),
     };
 
-    const resolver = new AuctionResolver(auctionService as never);
+    const bidService = {
+      create: jest.fn().mockResolvedValue({
+        id: 'b1',
+        auctionId: 'a1',
+        bidderId: 'u1',
+        amount: 1.5,
+        createdAt: new Date('2026-03-20T11:00:00.000Z'),
+      }),
+      findByAuctionId: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn().mockResolvedValue({
+        id: 'b1',
+        auctionId: 'a1',
+        bidderId: 'u1',
+        amount: 1.5,
+        createdAt: new Date('2026-03-20T11:00:00.000Z'),
+      }),
+    };
+
+    const resolver = new AuctionResolver(
+      auctionService as never,
+      bidService as never,
+    );
     const result = await resolver.auction('a1');
 
     expect(auctionService.findOne).toHaveBeenCalledWith('a1');
@@ -27,7 +48,44 @@ describe('AuctionResolver', () => {
   });
 
   it('resolves bids via DataLoader', async () => {
-    const resolver = new AuctionResolver({ findOne: jest.fn() } as never);
+    const auctionService = {
+      findOne: jest.fn().mockResolvedValue({
+        id: 'a1',
+        nftContractId: 'C'.repeat(56),
+        nftTokenId: '1',
+        sellerId: 'seller-1',
+        startPrice: 1,
+        currentPrice: 2,
+        reservePrice: 3,
+        startTime: new Date('2026-03-20T10:00:00.000Z'),
+        endTime: new Date('2026-03-21T10:00:00.000Z'),
+        status: 'ACTIVE',
+        winnerId: null,
+      }),
+    };
+
+    const bidService = {
+      create: jest.fn().mockResolvedValue({
+        id: 'b1',
+        auctionId: 'a1',
+        bidderId: 'u1',
+        amount: 1.5,
+        createdAt: new Date('2026-03-20T11:00:00.000Z'),
+      }),
+      findByAuctionId: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn().mockResolvedValue({
+        id: 'b1',
+        auctionId: 'a1',
+        bidderId: 'u1',
+        amount: 1.5,
+        createdAt: new Date('2026-03-20T11:00:00.000Z'),
+      }),
+    };
+
+    const resolver = new AuctionResolver(
+      auctionService as never,
+      bidService as never,
+    );
     const result = await resolver.bids(
       {
         id: 'a1',

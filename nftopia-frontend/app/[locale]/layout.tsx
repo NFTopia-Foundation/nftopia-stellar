@@ -1,6 +1,6 @@
 "use client";
 
-import { Inter } from "next/font/google";
+import localFont from "next/font/local";
 import { Navbar } from "@/components/navbar";
 import "../globals.css";
 import Footer from "@/components/Footer";
@@ -13,9 +13,11 @@ import { usePathname } from "next/navigation";
 import { useTranslation } from "@/hooks/useTranslation";
 import { ClientBody } from "@/components/layout/ClientBody";
 
-const inter = Inter({
-  subsets: ["latin"],
+const inter = localFont({
+  src: "../../public/fonts/inter-var.woff2",
   display: "swap",
+  weight: "100 900",
+  variable: "--font-inter",
 });
 
 interface LocaleLayoutProps {
@@ -30,6 +32,7 @@ export default function LocaleLayout({ children, params }: LocaleLayoutProps) {
   const { t, locales } = useTranslation();
   const isAuthPage = pathname?.includes("/auth/");
   const isCreatorDashboard = pathname?.includes("/creator-dashboard");
+  const isNftDetailPage = pathname ? /^\/[a-z]{2}\/marketplace\/(?!auction$|auctions$|auction\/|auctions\/)[^/]+$/.test(pathname) : false;
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
   const currentPath = pathname?.replace(/^\/[a-z]{2}/, "") || "";
@@ -55,30 +58,38 @@ export default function LocaleLayout({ children, params }: LocaleLayoutProps) {
         <meta name="msapplication-TileColor" content="#181359" />
         <meta name="msapplication-tap-highlight" content="no" />
 
-        <title>{t("seo.title")}</title>
-        <meta name="description" content={t("seo.description")} />
-        <meta name="keywords" content={t("seo.keywords")} />
+        {!isNftDetailPage && (
+          <>
+            <title>{t("seo.title")}</title>
+            <meta name="description" content={t("seo.description")} />
+            <meta name="keywords" content={t("seo.keywords")} />
 
-        {/* Hreflang Tags */}
-        {Object.entries(hreflangUrls).map(([lang, url]) => (
-          <link key={lang} rel="alternate" hrefLang={lang} href={url} />
-        ))}
-        <link rel="alternate" hrefLang="x-default" href={hreflangUrls.en} />
+            {/* Hreflang Tags */}
+            {Object.entries(hreflangUrls).map(([lang, url]) => (
+              <link key={lang} rel="alternate" hrefLang={lang} href={url} />
+            ))}
+            <link rel="alternate" hrefLang="x-default" href={hreflangUrls.en} />
+          </>
+        )}
 
         <link rel="icon" href="/nftopia-03.svg" id="favicon" />
 
-        <meta property="og:title" content={t("seo.title")} />
-        <meta property="og:description" content={t("seo.description")} />
-        <meta property="og:type" content="website" />
-        <meta property="og:locale" content={params.locale} />
-        {locales
-          .filter((loc) => loc !== params.locale)
-          .map((alt) => (
-            <meta key={alt} property="og:locale:alternate" content={alt} />
-          ))}
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={t("seo.title")} />
-        <meta name="twitter:description" content={t("seo.description")} />
+        {!isNftDetailPage && (
+          <>
+            <meta property="og:title" content={t("seo.title")} />
+            <meta property="og:description" content={t("seo.description")} />
+            <meta property="og:type" content="website" />
+            <meta property="og:locale" content={params.locale} />
+            {locales
+              .filter((loc) => loc !== params.locale)
+              .map((alt) => (
+                <meta key={alt} property="og:locale:alternate" content={alt} />
+              ))}
+            <meta name="twitter:card" content="summary_large_image" />
+            <meta name="twitter:title" content={t("seo.title")} />
+            <meta name="twitter:description" content={t("seo.description")} />
+          </>
+        )}
       </head>
       <body className={inter.className}>
         <StoreProvider>

@@ -5,11 +5,16 @@ import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 import { User } from './user.entity'; // Point to the entity file
 import { UserWallet } from '../auth/entities/user-wallet.entity';
+import { UserFollow } from './user-follow.entity';
+import { UserFollowService } from './user-follow.service';
 
 @Module({
-  imports: [EventEmitterModule, TypeOrmModule.forFeature([User, UserWallet])], // Registers the Repository
+  imports: [
+    EventEmitterModule,
+    TypeOrmModule.forFeature([User, UserWallet, UserFollow]),
+  ],
   controllers: [UsersController],
-  providers: [UsersService],
-  exports: [UsersService], // Good practice to export if other modules need it
+  providers: [UsersService, UserFollowService],
+  exports: [UsersService, UserFollowService],
 })
 export class UsersModule {}

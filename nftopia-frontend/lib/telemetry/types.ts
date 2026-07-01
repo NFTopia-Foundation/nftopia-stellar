@@ -162,6 +162,12 @@ export interface TelemetryPayloadMap {
     section_id: string;
     placement: string;
   };
+  creator_dashboard_error: {
+    error_message: string;
+    component_name: string;
+    surface: "creator-dashboard";
+    status: "layout_crashed" | "widget_crashed";
+  };
 }
 
 export type TelemetryPayload<T extends TelemetryEventName> =

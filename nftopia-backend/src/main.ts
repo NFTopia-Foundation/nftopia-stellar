@@ -7,7 +7,7 @@ import { Logger as PinoLogger } from 'nestjs-pino';
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@apollo/server/express4';
 import { GraphQLSchemaFactory } from '@nestjs/graphql';
-import { json } from 'express';
+import { json, urlencoded } from 'express';
 import type { Request, Response } from 'express';
 import { GraphqlGatewayModule } from './graphql/graphql.module';
 import {
@@ -30,7 +30,7 @@ import { StellarTimeoutInterceptor } from './interceptors/stellar-timeout.interc
 import { StellarTransformInterceptor } from './interceptors/stellar-transform.interceptor';
 import { SorobanRpcService } from './services/soroban-rpc.service';
 import { StellarAccountService } from './services/stellar-account.service';
-import { HealthService } from './health/health.service';
+import { MetricsInterceptor } from './common/metrics/metrics.interceptor';
 
 function createCorsConfig() {
   const customOrigin = process.env.CORS_ORIGIN;
@@ -65,12 +65,16 @@ async function bootstrapRestApi() {
   );
   const healthService = app.get<HealthService>(HealthService);
 
+  app.use(json({ limit: '10mb' }));
+  app.use(urlencoded({ extended: true, limit: '10mb' }));
+
   app.useGlobalInterceptors(
     new StellarErrorInterceptor(sorobanRpcService),
     new StellarLoggingInterceptor(sorobanRpcService),
     new StellarTimeoutInterceptor(sorobanRpcService),
     new StellarResponseInterceptor(sorobanRpcService),
     new StellarTransformInterceptor(stellarAccountService),
+    new MetricsInterceptor(),
   );
 
   app.enableCors(createCorsConfig());

@@ -223,6 +223,16 @@ export const GET_USER_BY_ID_QUERY = gql`
   ${USER_FIELDS_FRAGMENT}
 `;
 
+export const GET_DASHBOARD_STATS = gql`
+  query GetDashboardStats {
+    dashboardStats {
+      nftsCreated
+      totalSales
+      totalViews
+      followers
+    }
+  }
+`;
 export const GET_USER_BY_ADDRESS_QUERY = gql`
   query GetUserByAddress($address: String!) {
     userByAddress(address: $address) {

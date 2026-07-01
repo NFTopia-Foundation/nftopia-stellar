@@ -1,9 +1,10 @@
 use crate::error::SettlementError;
 use crate::events::{
     emit_auction_cancelled_with_refunds, emit_auction_created, emit_auction_ended,
-    emit_auction_extended, emit_bid_escrowed, emit_bid_placed, emit_bid_refunded,
-    emit_bid_revealed, AuctionCancelledWithRefundsEvent, AuctionCreatedEvent, AuctionEndedEvent,
-    AuctionExtendedEvent, BidEscrowedEvent, BidPlacedEvent, BidRefundedEvent, BidRevealedEvent,
+    emit_auction_extended, emit_bid_below_minimum_increment, emit_bid_escrowed, emit_bid_placed,
+    emit_bid_refunded, emit_bid_revealed, AuctionCancelledWithRefundsEvent, AuctionCreatedEvent,
+    AuctionEndedEvent, AuctionExtendedEvent, BidBelowMinimumIncrementEvent, BidEscrowedEvent,
+    BidPlacedEvent, BidRefundedEvent, BidRevealedEvent,
 };
 use crate::security::frontrun_protection::{CommitRevealScheme, FrontRunningDetector};
 use crate::storage::auction_store::{AuctionStore, DutchAuctionStore};
@@ -82,13 +83,15 @@ impl AuctionEngine {
             extension_window: config.extension_window,
             currency: currency.clone(),
             royalty_info: RoyaltyDistribution {
-                creator_address: seller.clone(), // Placeholder
-                creator_percentage: 500,         // 5%
-                seller_percentage: 9500,         // 95%
+                creator_address: seller.clone(),
+                creator_percentage: 500,
+                seller_address: seller.clone(),
+                seller_percentage: 9500,
+                platform_address: seller.clone(),
                 platform_percentage: 0,
                 total_amount: 0,
                 amounts: Map::new(env),
-            }, // Would be set from NFT contract
+            },
             platform_fee: 0, // Would be calculated
         };
 
@@ -141,7 +144,7 @@ impl AuctionEngine {
         }
 
         // Validate bid amount
-        Self::validate_bid_amount(&auction, bid_amount, env)?;
+        Self::validate_bid_amount(&auction, bid_amount, bidder, env)?;
 
         let config = Self::get_auction_config(env)?;
         let timestamp = env.ledger().timestamp();
@@ -575,6 +578,18 @@ impl AuctionEngine {
         Ok(())
     }
 
+    /// Update minimum bid increment in auction configuration (admin only)
+    pub fn update_min_bid_increment(
+        env: &Env,
+        min_bid_increment_bps: u64,
+        _admin: &Address,
+    ) -> Result<(), SettlementError> {
+        let mut config = Self::get_auction_config(env)?;
+        config.min_bid_increment_bps = min_bid_increment_bps;
+        env.storage().instance().set(&AUCTION_CONFIG, &config);
+        Ok(())
+    }
+
     /// Internal: Validate auction parameters
     fn validate_auction_params(
         starting_price: i128,
@@ -599,6 +614,13 @@ impl AuctionEngine {
             return Err(SettlementError::InvalidBidIncrement);
         }
 
+        // Validate that bid_increment meets or exceeds min_bid_increment_bps
+        // Convert bid_increment from absolute value to basis points relative to starting_price
+        let bid_increment_bps = (bid_increment * 10000) / starting_price;
+        if bid_increment_bps < config.min_bid_increment_bps as i128 {
+            return Err(SettlementError::InvalidBidIncrement);
+        }
+
         Ok(())
     }
 
@@ -614,8 +636,11 @@ impl AuctionEngine {
     fn validate_bid_amount(
         auction: &AuctionTransaction,
         bid_amount: i128,
+        bidder: &Address,
         env: &Env,
     ) -> Result<(), SettlementError> {
+        let config = Self::get_auction_config(env)?;
+
         // Must be higher than current highest bid
         if bid_amount <= auction.highest_bid {
             return Err(SettlementError::BidTooLow);
@@ -623,13 +648,25 @@ impl AuctionEngine {
 
         // Must meet minimum increment
         if auction.highest_bid > 0 {
-            let min_increment = math_utils::calculate_bid_increment(
-                auction.highest_bid,
-                (auction.bid_increment.max(100) as u64).max(100), // At least 1%
-                env,
-            )?;
-            if bid_amount < auction.highest_bid + min_increment {
-                return Err(SettlementError::BidTooLow);
+            // Calculate minimum increment using config.min_bid_increment_bps
+            let min_increment =
+                (auction.highest_bid * config.min_bid_increment_bps as i128) / 10000;
+            let min_required_bid = auction.highest_bid + min_increment;
+
+            if bid_amount < min_required_bid {
+                // Emit event for minimum increment violation
+                let timestamp = env.ledger().timestamp();
+                let event = BidBelowMinimumIncrementEvent {
+                    auction_id: auction.auction_id,
+                    bidder: bidder.clone(),
+                    bid_amount,
+                    current_highest_bid: auction.highest_bid,
+                    min_required_bid,
+                    min_increment_bps: config.min_bid_increment_bps,
+                    timestamp,
+                };
+                emit_bid_below_minimum_increment(env, event);
+                return Err(SettlementError::BidBelowMinimumIncrement);
             }
         } else {
             // First bid must meet or exceed starting price

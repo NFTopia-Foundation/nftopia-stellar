@@ -31,6 +31,14 @@ export interface CreateTradeParams {
   expiresAt: string;
 }
 
+export interface CreateBundleParams {
+  seller: string;
+  items: { nftContract: string; tokenId: string }[];
+  totalPrice: string;
+  currency: string;
+  durationSeconds: number;
+}
+
 export interface AcceptOfferParams {
   offerId: string;
   owner: string;

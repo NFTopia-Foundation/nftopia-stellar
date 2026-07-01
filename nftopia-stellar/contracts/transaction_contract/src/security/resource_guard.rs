@@ -16,8 +16,8 @@ pub const MAX_PARAMS_PER_OP: u32 = 20;
 /// Maximum number of transactions in a batch call.
 pub const MAX_BATCH_SIZE: u32 = 10;
 
-/// Enforced gas ceiling per transaction when no override is provided.
-pub const DEFAULT_GAS_CEILING: u64 = 100_000;
+/// Enforced gas ceiling per transaction when no override is provided (aligned with mainnet CPU instruction limit).
+pub const DEFAULT_GAS_CEILING: u64 = 100_000_000;
 
 pub fn check_operation_count(count: u32, _env: &Env) -> Result<(), TransactionError> {
     if count > MAX_OPERATIONS {

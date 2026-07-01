@@ -9,6 +9,9 @@ import { ThemeLogo } from "@/components/ThemeLogo";
 import { usePathname } from "next/navigation";
 import { useCollectionStore } from "@/lib/stores/collection-store";
 import { ApiErrorFallback } from "@/components/api/ApiErrorFallback";
+import ErrorBoundary from "@/components/ErrorBoundary";
+import { DashboardErrorFallback } from "@/components/dashboard/DashboardErrorFallback";
+import { telemetry } from "@/lib/telemetry";
 import {
   LayoutDashboard,
   Plus,
@@ -214,7 +217,19 @@ export default function CreatorDashboardLayout({
             />
           </div>
         ) : (
-          children
+          <ErrorBoundary
+            FallbackComponent={DashboardErrorFallback}
+            onError={(error) => {
+              telemetry.track("creator_dashboard_error", {
+                error_message: error.message.slice(0, 200),
+                component_name: "creator-dashboard-layout",
+                surface: "creator-dashboard",
+                status: "layout_crashed",
+              });
+            }}
+          >
+            {children}
+          </ErrorBoundary>
         )}
       </main>
     </div>

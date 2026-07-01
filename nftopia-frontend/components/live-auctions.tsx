@@ -1,10 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { OptimizedImage } from './image';
 import { Button } from "@/components/ui/button";
 import { Clock, ChevronRight, ChevronLeft } from "lucide-react";
 import { useTranslation } from "@/hooks/useTranslation";
+
+
 
 type AuctionItem = {
   id: string;
@@ -134,13 +137,15 @@ export function LiveAuctions() {
     <section className="py-16 relative">
       <div className="flex justify-between items-center mb-8">
         <h2 className="text-2xl font-bold">{t("liveAuctions.title")}</h2>
-        <Button
-          variant="link"
-          className="text-[#9398a8] hover:text-purple-300 flex items-center gap-1 text-xs"
-        >
-          {t("liveAuctions.exploreMore")}
-          <ChevronRight className="h-3.5 w-3.5" />
-        </Button>
+        <Link href="/marketplace/auctions">
+          <Button
+            variant="link"
+            className="text-[#9398a8] hover:text-purple-300 flex items-center gap-1 text-xs"
+          >
+            {t("liveAuctions.exploreMore")}
+            <ChevronRight className="h-3.5 w-3.5" />
+          </Button>
+        </Link>
       </div>
 
       {/* Carousel Navigation Buttons */}
@@ -209,12 +214,14 @@ export function LiveAuctions() {
                   </span>
                   <span className="text-xs font-medium">{item.bidCount}</span>
                 </div>
-                <Button
-                  size="sm"
-                  className="bg-purple-600 hover:bg-purple-700 text-white rounded-full px-4 py-1 text-xs"
-                >
-                  {t("liveAuctions.bid")}
-                </Button>
+                <Link href={`/marketplace/auction/${item.id}`}>
+                  <Button
+                    size="sm"
+                    className="bg-purple-600 hover:bg-purple-700 text-white rounded-full px-4 py-1 text-xs"
+                  >
+                    {t("liveAuctions.bid")}
+                  </Button>
+                </Link>
               </div>
             </div>
           </div>

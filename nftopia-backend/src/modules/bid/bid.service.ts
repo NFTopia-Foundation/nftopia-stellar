@@ -47,6 +47,12 @@ import {
   type BidListResult,
 } from './interfaces/bid.interface';
 
+export interface CreateBidParams {
+  auctionId: string;
+  bidderId: string;
+  amount: number;
+}
+
 @Injectable()
 export class BidService {
   private readonly logger = new Logger(BidService.name);
@@ -67,6 +73,39 @@ export class BidService {
   ) {}
 
   // ─── Public API ──────────────────────────────────────────────────────────────
+
+  /**
+   * Simple bid creation for GraphQL mutation
+   * Creates a bid in the database without on-chain settlement
+   */
+  async create(params: CreateBidParams): Promise<Bid> {
+    const { auctionId, bidderId, amount } = params;
+
+    // Find the auction
+    const auction = await this.auctionRepo.findOne({
+      where: { id: auctionId },
+    });
+
+    if (!auction) {
+      throw new NotFoundException('Auction not found');
+    }
+
+    // Create the bid
+    const bid = this.bidRepo.create({
+      auctionId,
+      bidderId,
+      amount,
+    });
+
+    const savedBid = await this.bidRepo.save(bid);
+
+    // Update auction current price
+    await this.auctionRepo.update(auctionId, {
+      currentPrice: amount,
+    });
+
+    return savedBid;
+  }
 
   async placeBid(
     auctionId: string,

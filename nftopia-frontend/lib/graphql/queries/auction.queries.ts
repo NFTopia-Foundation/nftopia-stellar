@@ -1,6 +1,7 @@
 import { gql } from "@apollo/client";
 import { AUCTION_FIELDS_FRAGMENT } from "../fragments";
 
+
 export const GET_AUCTION_BY_ID_QUERY = gql`
   query GetAuctionById($id: ID!) {
     auction(id: $id) {
@@ -10,17 +11,48 @@ export const GET_AUCTION_BY_ID_QUERY = gql`
         name
         image
         tokenId
+        description
+        attributes {
+          traitType
+          value
+          displayType
+        }
+        collection {
+          id
+          name
+          symbol
+          image
+        }
+        creator {
+          id
+          username
+          walletAddress
+        }
+        owner {
+          id
+          username
+          walletAddress
+        }
       }
       bids {
         id
         amount
         bidderId
+        bidder {
+          id
+          username
+          walletAddress
+        }
         createdAt
       }
       highestBid {
         id
         amount
         bidderId
+        bidder {
+          id
+          username
+        }
         createdAt
       }
       seller {
@@ -28,7 +60,50 @@ export const GET_AUCTION_BY_ID_QUERY = gql`
         username
         walletAddress
       }
+      winner {
+        id
+        username
+        walletAddress
+      }
     }
   }
   ${AUCTION_FIELDS_FRAGMENT}
+`;
+
+// TODO: Re-enable GET_AUCTIONS_QUERY once the backend implements the 'auctions' query and 'serverTime' field
+// export const GET_AUCTIONS_QUERY = gql`
+//   query GetAuctions {
+//     serverTime # Fetches instantaneous reference time from backend
+//     auctions {
+//       id
+//       title
+//       currentBid
+//       endTime # Required Change: Fetch target deadline timestamp
+//     }
+//   }
+// `;
+
+/**
+ * Mutation to place a bid on an auction
+ * Requires authentication
+ * 
+ * Note: The backend must implement:
+ * 1. CreateBidInput type
+ * 2. placeBid mutation in AuctionResolver
+ */
+export const PLACE_BID_MUTATION = gql`
+  mutation PlaceBid($input: CreateBidInput!) {
+    placeBid(input: $input) {
+      id
+      auctionId
+      bidderId
+      amount
+      createdAt
+      bidder {
+        id
+        username
+        walletAddress
+      }
+    }
+  }
 `;

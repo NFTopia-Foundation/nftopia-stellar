@@ -101,6 +101,24 @@
       "royalties": "Lizenzgebühren",
       "mint": "NFT prägen"
     },
+    "creatorProfile": {
+      "verified": "Verifiziert",
+      "followers": "Follower",
+      "nftsCreated": "NFTs",
+      "volume": "Volumen",
+      "tabNfts": "NFTs",
+      "tabCollections": "Kollektionen",
+      "tabActivity": "Aktivität",
+      "sortNewest": "Neueste",
+      "sortPrice": "Preis",
+      "emptyNfts": "Noch keine NFTs",
+      "emptyCollections": "Noch keine Kollektionen",
+      "emptyActivity": "Noch keine Aktivität",
+      "notFound": "Creator nicht gefunden",
+      "activityMint": "Gemintet",
+      "activitySale": "Verkauft",
+      "activityListing": "Gelistet"
+    },
     "common": {
       "loading": "Wird geladen...",
       "error": "Fehler",
@@ -255,7 +273,11 @@
       "quickActions": "Schnellaktionen",
       "mintNewNFT": "Neues NFT prägen",
       "singleOrBatch": "Einzel- oder Stapelupload",
-      "goToMint": "Zum Prägen"
+      "goToMint": "Zum Prägen",
+      "errorFallbackTitle": "Dashboard konnte nicht geladen werden",
+      "errorFallbackMessage": "Beim Laden des Dashboards ist ein Fehler aufgetreten. Wir haben diesen Fehler aufgezeichnet und arbeiten an einer Lösung.",
+      "errorOfflineTitle": "Keine Internetverbindung",
+      "errorOfflineMessage": "Es scheint, als wären Sie offline. Bitte überprüfen Sie Ihre Netzwerkverbindung und versuchen Sie es erneut."
     },
     "mintNFT": {
       "title": "NFT prägen",

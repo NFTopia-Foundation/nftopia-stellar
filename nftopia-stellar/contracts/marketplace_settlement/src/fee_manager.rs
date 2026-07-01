@@ -1,11 +1,15 @@
 use crate::error::SettlementError;
-use crate::events::{emit_platform_fees_collected, PlatformFeesCollectedEvent};
+use crate::events::{
+    emit_fee_config_initialized, emit_platform_fees_collected, FeeConfigInitializedEvent,
+    PlatformFeesCollectedEvent,
+};
 use crate::types::{Asset, FeeConfig, VolumeTier};
 use crate::utils::math_utils;
 use soroban_sdk::{symbol_short, Address, Env, Map, Symbol, Vec};
 
 // Storage keys
 const FEE_CONFIG: Symbol = symbol_short!("fee_cfg");
+const FEE_CONFIG_INITIALIZED: Symbol = symbol_short!("fee_initd");
 const ACCUMULATED_FEES: Symbol = symbol_short!("acc_fees");
 const USER_VOLUMES: Symbol = symbol_short!("usr_vol");
 
@@ -143,6 +147,34 @@ impl FeeManager {
             .set(&ACCUMULATED_FEES, &accumulated_fees);
 
         Ok(amount)
+    }
+
+    /// Initialize fee configuration exactly once at deployment.
+    /// Subsequent calls return FeeAlreadyInitialized.
+    pub fn initialize_fee_config(
+        env: &Env,
+        config: &FeeConfig,
+        initializer: &Address,
+    ) -> Result<(), SettlementError> {
+        if env.storage().instance().has(&FEE_CONFIG_INITIALIZED) {
+            return Err(SettlementError::FeeAlreadyInitialized);
+        }
+
+        Self::validate_fee_config(config)?;
+
+        env.storage().instance().set(&FEE_CONFIG, config);
+        env.storage().instance().set(&FEE_CONFIG_INITIALIZED, &true);
+
+        emit_fee_config_initialized(
+            env,
+            FeeConfigInitializedEvent {
+                config: config.clone(),
+                initialized_by: initializer.clone(),
+                timestamp: env.ledger().timestamp(),
+            },
+        );
+
+        Ok(())
     }
 
     /// Update fee configuration
@@ -339,32 +371,6 @@ impl FeeManager {
             total_accumulated_fees: accumulated_fees,
             total_users: total_users as u64,
             total_volume,
-        }
-    }
-}
-
-impl FeeConfig {
-    /// Create a new fee configuration
-    pub fn new(fee_recipient: Address, env: &Env) -> Self {
-        Self {
-            platform_fee_bps: 250, // 2.5%
-            minimum_fee: 1000,     // Minimum 1000 units
-            maximum_fee: 1000000,  // Maximum 1M units
-            fee_recipient,
-            dynamic_fee_enabled: true,
-            volume_discounts: {
-                let mut discounts = Vec::new(env);
-                discounts.push_back(VolumeTier {
-                    min_volume: 1000000,  // 1M volume
-                    fee_discount_bps: 50, // 0.5% discount
-                });
-                discounts.push_back(VolumeTier {
-                    min_volume: 10000000,  // 10M volume
-                    fee_discount_bps: 100, // 1% discount
-                });
-                discounts
-            },
-            vip_exemptions: Vec::new(env),
         }
     }
 }
