@@ -64,8 +64,7 @@ describe('SorobanRpcService', () => {
     it('respects explicit mainnet config', () => {
       jest.spyOn(configService, 'get').mockImplementation((key: string) => {
         if (key === 'STELLAR_NETWORK') return 'MAINNET';
-        if (key === 'STELLAR_HORIZON_URL')
-          return 'https://horizon.stellar.org';
+        if (key === 'STELLAR_HORIZON_URL') return 'https://horizon.stellar.org';
         return undefined;
       });
 
@@ -113,8 +112,8 @@ describe('SorobanRpcService', () => {
     it('throws in production when Horizon is unreachable', async () => {
       jest.spyOn(configService, 'get').mockImplementation((key: string) => {
         if (key === 'STELLAR_NETWORK') return 'MAINNET';
-        if (key === 'STELLAR_HORIZON_URL')
-          return 'https://horizon.stellar.org';
+        if (key === 'STELLAR_HORIZON_URL') return 'https://horizon.stellar.org';
+        if (key === 'SOROBAN_RPC_URL') return 'https://mainnet.sorobanrpc.com';
         return undefined;
       });
 

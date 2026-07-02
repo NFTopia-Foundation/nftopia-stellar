@@ -1,4 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   getStellarConfig,
@@ -200,13 +205,19 @@ export async function retrySorobanRpcCall<T>(
 }
 
 @Injectable()
-export class SorobanRpcService {
+export class SorobanRpcService implements OnModuleInit {
   private readonly logger = new Logger(SorobanRpcService.name);
 
   constructor(private readonly configService: ConfigService) {}
 
   async onModuleInit(): Promise<void> {
     const config = this.getRuntimeConfig();
+
+    if (config.horizonUrlIsFallback) {
+      this.logger.warn(
+        `STELLAR_HORIZON_URL is not set. Falling back to default Horizon URL: ${config.horizonUrl}`,
+      );
+    }
 
     this.logger.log(
       `Stellar network: ${config.network.toUpperCase()} | Horizon URL: ${config.horizonUrl} | Soroban RPC: ${config.sorobanRpcUrl}`,
