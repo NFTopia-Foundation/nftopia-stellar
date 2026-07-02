@@ -1,17 +1,206 @@
-import {
-  Injectable,
-  Logger,
-  OnModuleInit,
-  ServiceUnavailableException,
-} from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   getStellarConfig,
   type StellarRuntimeConfig,
 } from '../config/stellar.config';
 
+export type SorobanRpcRetryMetrics = {
+  totalRetryAttempts: number;
+  successfulRecoveries: number;
+  exhaustedRetries: number;
+};
+
+export const sorobanRpcRetryMetrics: SorobanRpcRetryMetrics = {
+  totalRetryAttempts: 0,
+  successfulRecoveries: 0,
+  exhaustedRetries: 0,
+};
+
+export type SorobanRpcRetryOptions = {
+  config: Pick<
+    StellarRuntimeConfig,
+    | 'sorobanRpcMaxRetries'
+    | 'sorobanRpcRetryDelayMs'
+    | 'sorobanRpcRetryBackoffMultiplier'
+    | 'sorobanRpcRetryMaxDelayMs'
+  >;
+  methodName?: string;
+  logger?: Logger;
+};
+
+const RETRYABLE_NETWORK_CODES = new Set([
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'ETIMEDOUT',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'UND_ERR_CONNECT_TIMEOUT',
+]);
+
+const NON_RETRYABLE_MESSAGE_PATTERNS = [
+  'simulation failed',
+  'bad sequence',
+  'tx_bad_seq',
+  'insufficient',
+  'invalid',
+  'unauthorized',
+  'forbidden',
+  'bad request',
+  'soroban submission error',
+];
+
+const RETRYABLE_MESSAGE_PATTERNS = [
+  'timeout',
+  'timed out',
+  'network error',
+  'fetch failed',
+  'unavailable',
+  'socket hang up',
+  'rate limit',
+  'too many requests',
+  '502',
+  '503',
+  '504',
+  '500',
+  '429',
+  'econnreset',
+  'econnrefused',
+  'etimedout',
+  'enotfound',
+];
+
+const wait = async (delayMs: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, delayMs));
+
+function formatUnknownError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  if (
+    typeof error === 'number' ||
+    typeof error === 'boolean' ||
+    typeof error === 'bigint'
+  ) {
+    return String(error);
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return 'Unknown error';
+  }
+}
+
+export function calculateExponentialBackoffDelayMs(
+  attempt: number,
+  baseDelayMs: number,
+  backoffMultiplier: number,
+  maxDelayMs: number,
+): number {
+  const exponentialDelay =
+    baseDelayMs * Math.pow(backoffMultiplier, Math.max(0, attempt - 1));
+
+  return Math.min(exponentialDelay, maxDelayMs);
+}
+
+export function isRetryableSorobanRpcError(error: unknown): boolean {
+  if (!error) {
+    return false;
+  }
+
+  const status =
+    (error as { status?: number }).status ??
+    (error as { response?: { status?: number } }).response?.status;
+
+  if (typeof status === 'number') {
+    if (status >= 500) {
+      return true;
+    }
+
+    if (status === 408 || status === 429) {
+      return true;
+    }
+
+    if (status >= 400 && status < 500) {
+      return false;
+    }
+  }
+
+  const code = (error as { code?: string }).code;
+  if (code && RETRYABLE_NETWORK_CODES.has(code)) {
+    return true;
+  }
+
+  const message = formatUnknownError(error).toLowerCase();
+
+  if (
+    NON_RETRYABLE_MESSAGE_PATTERNS.some((pattern) => message.includes(pattern))
+  ) {
+    return false;
+  }
+
+  if (RETRYABLE_MESSAGE_PATTERNS.some((pattern) => message.includes(pattern))) {
+    return true;
+  }
+
+  return false;
+}
+
+export async function retrySorobanRpcCall<T>(
+  operation: () => Promise<T>,
+  options: SorobanRpcRetryOptions,
+): Promise<T> {
+  const maxAttempts = Math.max(1, options.config.sorobanRpcMaxRetries);
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const result = await operation();
+
+      if (attempt > 1) {
+        sorobanRpcRetryMetrics.successfulRecoveries += 1;
+      }
+
+      return result;
+    } catch (error) {
+      const canRetry =
+        attempt < maxAttempts && isRetryableSorobanRpcError(error);
+
+      if (!canRetry) {
+        if (attempt >= maxAttempts && isRetryableSorobanRpcError(error)) {
+          sorobanRpcRetryMetrics.exhaustedRetries += 1;
+        }
+
+        throw error;
+      }
+
+      const delayMs = calculateExponentialBackoffDelayMs(
+        attempt,
+        options.config.sorobanRpcRetryDelayMs,
+        options.config.sorobanRpcRetryBackoffMultiplier,
+        options.config.sorobanRpcRetryMaxDelayMs,
+      );
+
+      sorobanRpcRetryMetrics.totalRetryAttempts += 1;
+
+      options.logger?.warn(
+        `Soroban RPC retry: method=${options.methodName ?? 'unknown'} attempt=${attempt}/${maxAttempts} delayMs=${delayMs} error=${formatUnknownError(error)}`,
+      );
+
+      await wait(delayMs);
+    }
+  }
+
+  throw new Error('Soroban RPC retry operation failed');
+}
+
 @Injectable()
-export class SorobanRpcService implements OnModuleInit {
+export class SorobanRpcService {
   private readonly logger = new Logger(SorobanRpcService.name);
 
   constructor(private readonly configService: ConfigService) {}
@@ -50,6 +239,35 @@ export class SorobanRpcService implements OnModuleInit {
       STELLAR_OBFUSCATE_SENSITIVE_ERRORS: this.configService.get<string>(
         'STELLAR_OBFUSCATE_SENSITIVE_ERRORS',
       ),
+      SOROBAN_RPC_MAX_RETRIES: this.configService.get<string>(
+        'SOROBAN_RPC_MAX_RETRIES',
+      ),
+      SOROBAN_RPC_RETRY_DELAY_MS: this.configService.get<string>(
+        'SOROBAN_RPC_RETRY_DELAY_MS',
+      ),
+      SOROBAN_RPC_RETRY_BACKOFF_MULTIPLIER: this.configService.get<string>(
+        'SOROBAN_RPC_RETRY_BACKOFF_MULTIPLIER',
+      ),
+      SOROBAN_RPC_RETRY_MAX_DELAY_MS: this.configService.get<string>(
+        'SOROBAN_RPC_RETRY_MAX_DELAY_MS',
+      ),
+    });
+  }
+
+  getRetryMetrics(): SorobanRpcRetryMetrics {
+    return { ...sorobanRpcRetryMetrics };
+  }
+
+  retryRpcCall<T>(
+    operation: () => Promise<T>,
+    methodName?: string,
+  ): Promise<T> {
+    const config = this.getRuntimeConfig();
+
+    return retrySorobanRpcCall(operation, {
+      config,
+      methodName,
+      logger: this.logger,
     });
   }
 
