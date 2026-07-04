@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState } from 'react';
-import { OptimizedImage } from './image';
+import { ImageWithFallback } from './image';
 import Link from 'next/link';
 import { Heart } from 'lucide-react'; // Assuming lucide-react is installed
 import { Collection } from '@/types'; // Assuming '@/*' path alias is configured for 'apps/frontend/*'
@@ -33,7 +33,7 @@ const CollectionCard: React.FC<CollectionCardProps> = ({ collection }) => {
         <div className="grid grid-cols-2 grid-rows-2 gap-2 mb-4 aspect-[4/3] overflow-hidden rounded-lg">
           {/* Main Image */}
           <div className="relative col-span-1 row-span-2 bg-orange-300 group-hover:opacity-90 transition-opacity flex items-center justify-center p-2">
-            <OptimizedImage
+            <ImageWithFallback
               src={collection.images.main}
               alt={`${collection.title} main image`}
               width={400}
@@ -55,7 +55,7 @@ const CollectionCard: React.FC<CollectionCardProps> = ({ collection }) => {
           {/* Secondary Image 1 */}
           <div className="relative col-span-1 row-span-1 bg-purple-400 group-hover:opacity-90 transition-opacity flex items-center justify-center p-1">
              {/* Replace Placeholder N Logo with SVG Image */}
-             <OptimizedImage
+             <ImageWithFallback
               src={collection.images.secondary1}
               alt={`${collection.title} secondary image 1`}
               width={160}
@@ -63,7 +63,7 @@ const CollectionCard: React.FC<CollectionCardProps> = ({ collection }) => {
               sizes="(max-width: 768px) 40vw, (max-width: 1200px) 20vw, 12vw"
               className="transition-transform duration-300 group-hover:scale-105"
               containerClassName="w-full h-full"
-              fallbackSrc="/images/fallbacks/collection-fallback.svg"
+              fallbackSrc="/images/fallbacks/nft-fallback.svg"
             />
             {/* <Image
               src={collection.images.secondary1}
@@ -82,7 +82,7 @@ const CollectionCard: React.FC<CollectionCardProps> = ({ collection }) => {
           {/* Secondary Image 2 */}
           <div className="relative col-span-1 row-span-1 bg-cyan-400 group-hover:opacity-90 transition-opacity flex items-center justify-center p-1">
              {/* Replace Placeholder N Logo with SVG Image */}
-             <OptimizedImage
+             <ImageWithFallback
               src={collection.images.secondary2}
               alt={`${collection.title} secondary image 2`}
               width={160}
@@ -90,7 +90,7 @@ const CollectionCard: React.FC<CollectionCardProps> = ({ collection }) => {
               sizes="(max-width: 768px) 40vw, (max-width: 1200px) 20vw, 12vw"
               className="transition-transform duration-300 group-hover:scale-105"
               containerClassName="w-full h-full"
-              fallbackSrc="/images/fallbacks/collection-fallback.svg"
+              fallbackSrc="/images/fallbacks/nft-fallback.svg"
             />
             {/* <Image
               src={collection.images.secondary2}
@@ -112,7 +112,7 @@ const CollectionCard: React.FC<CollectionCardProps> = ({ collection }) => {
             <div className="flex items-center gap-2">
               {/* Placeholder Creator Avatar */}
               <div className="w-5 h-5 rounded-full overflow-hidden flex-shrink-0">
-                <OptimizedImage
+                <ImageWithFallback
                   src={collection.creatorImage}
                   alt={`${collection.creatorName} avatar`}
                   width={20}
