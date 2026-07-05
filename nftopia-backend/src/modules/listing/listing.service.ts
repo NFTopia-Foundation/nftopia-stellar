@@ -156,7 +156,11 @@ export class ListingService {
   }> {
     const qb = this.listingRepo
       .createQueryBuilder('l')
-      .leftJoinAndSelect('StellarNft', 'nft', 'nft.contractId = l.nftContractId AND nft.tokenId = l.nftTokenId');
+      .leftJoinAndSelect(
+        'StellarNft',
+        'nft',
+        'nft.contractId = l.nftContractId AND nft.tokenId = l.nftTokenId',
+      );
 
     this.applyFilters(qb, query);
 
@@ -192,8 +196,13 @@ export class ListingService {
       );
     }
 
-    const totalQb = this.listingRepo.createQueryBuilder('l')
-      .leftJoinAndSelect('StellarNft', 'nft', 'nft.contractId = l.nftContractId AND nft.tokenId = l.nftTokenId');
+    const totalQb = this.listingRepo
+      .createQueryBuilder('l')
+      .leftJoinAndSelect(
+        'StellarNft',
+        'nft',
+        'nft.contractId = l.nftContractId AND nft.tokenId = l.nftTokenId',
+      );
     this.applyFilters(totalQb, query);
 
     const [rows, total] = await Promise.all([
@@ -244,10 +253,9 @@ export class ListingService {
       qb.andWhere('l.price <= :maxPrice', { maxPrice: query.maxPrice });
     }
     if (query.search) {
-      qb.andWhere(
-        '(nft.name ILIKE :search OR nft.description ILIKE :search)',
-        { search: `%${query.search}%` },
-      );
+      qb.andWhere('(nft.name ILIKE :search OR nft.description ILIKE :search)', {
+        search: `%${query.search}%`,
+      });
     }
     if (query.category) {
       // Assuming collection or attributes would hold category. This is a basic placeholder.

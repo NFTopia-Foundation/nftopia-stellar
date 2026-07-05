@@ -82,6 +82,8 @@ export type Collection = {
   floorPrice: Scalars['String']['output'];
   id: Scalars['ID']['output'];
   image: Scalars['String']['output'];
+  isVerified?: Maybe<Scalars['Boolean']['output']>;
+  likes?: Maybe<Scalars['Int']['output']>;
   name: Scalars['String']['output'];
   /** NFTs that belong to this collection */
   nfts?: Maybe<NftConnection>;
@@ -113,6 +115,12 @@ export type CollectionFilterInput = {
   creatorId?: InputMaybe<Scalars['ID']['input']>;
   search?: InputMaybe<Scalars['String']['input']>;
   verifiedOnly?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+export type CollectionLikesInfo = {
+  __typename?: 'CollectionLikesInfo';
+  count: Scalars['Int']['output'];
+  isLiked: Scalars['Boolean']['output'];
 };
 
 export type CollectionStats = {
@@ -198,6 +206,19 @@ export type GraphqlHealthResponse = {
   timestamp: Scalars['String']['output'];
 };
 
+export type LikeCollectionInput = {
+  collectionId: Scalars['ID']['input'];
+};
+
+export type LikeCollectionResult = {
+  __typename?: 'LikeCollectionResult';
+  collectionId: Scalars['ID']['output'];
+  likesCount: Scalars['Int']['output'];
+  message?: Maybe<Scalars['String']['output']>;
+  success: Scalars['Boolean']['output'];
+  userLiked: Scalars['Boolean']['output'];
+};
+
 export type Listing = {
   __typename?: 'Listing';
   createdAt: Scalars['DateTime']['output'];
@@ -271,12 +292,16 @@ export type Mutation = {
   createListing: Listing;
   /** Follow a creator (authenticated) */
   followCreator: FollowResult;
+  /** Like a collection */
+  likeCollection: LikeCollectionResult;
   /** Mint a new NFT */
   mintNFT: Nft;
   /** Place a bid on an auction */
   placeBid: Bid;
   /** Unfollow a creator (authenticated) */
   unfollowCreator: FollowResult;
+  /** Unlike a collection */
+  unlikeCollection: UnlikeCollectionResult;
   /** Update NFT metadata */
   updateNFTMetadata: Nft;
 };
@@ -307,6 +332,11 @@ export type MutationFollowCreatorArgs = {
 };
 
 
+export type MutationLikeCollectionArgs = {
+  input: LikeCollectionInput;
+};
+
+
 export type MutationMintNftArgs = {
   input: MintNftInput;
 };
@@ -319,6 +349,11 @@ export type MutationPlaceBidArgs = {
 
 export type MutationUnfollowCreatorArgs = {
   creatorId: Scalars['ID']['input'];
+};
+
+
+export type MutationUnlikeCollectionArgs = {
+  input: UnlikeCollectionInput;
 };
 
 
@@ -495,6 +530,8 @@ export type Query = {
   auction: Auction;
   /** Fetch a single collection by ID */
   collection: Collection;
+  /** Get likes info for a collection */
+  collectionLikes: CollectionLikesInfo;
   /** Fetch aggregated statistics for a collection */
   collectionStats: CollectionStats;
   /** Fetch collections with cursor pagination and optional filters */
@@ -549,6 +586,11 @@ export type QueryAuctionArgs = {
 
 export type QueryCollectionArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type QueryCollectionLikesArgs = {
+  collectionId: Scalars['ID']['input'];
 };
 
 
@@ -705,6 +747,19 @@ export type TransferEventEdge = {
   node: TransferEvent;
 };
 
+export type UnlikeCollectionInput = {
+  collectionId: Scalars['ID']['input'];
+};
+
+export type UnlikeCollectionResult = {
+  __typename?: 'UnlikeCollectionResult';
+  collectionId: Scalars['ID']['output'];
+  likesCount: Scalars['Int']['output'];
+  message?: Maybe<Scalars['String']['output']>;
+  success: Scalars['Boolean']['output'];
+  userLiked: Scalars['Boolean']['output'];
+};
+
 export type UpdateNftMetadataInput = {
   animationUrl?: InputMaybe<Scalars['String']['input']>;
   attributes?: InputMaybe<Array<NftAttributeInput>>;
@@ -774,6 +829,27 @@ export type AuctionFieldsFragment = { __typename?: 'Auction', id: string, nftId:
 
 export type TransferEventFieldsFragment = { __typename?: 'TransferEvent', id: string, fromAddress: string, toAddress: string, transactionHash: string, eventType: string, price?: string | null, currency?: string | null, timestamp: any, fromAddressTruncated?: string | null, toAddressTruncated?: string | null, blockExplorerUrl?: string | null };
 
+export type LikeCollectionMutationVariables = Exact<{
+  input: LikeCollectionInput;
+}>;
+
+
+export type LikeCollectionMutation = { __typename?: 'Mutation', likeCollection: { __typename?: 'LikeCollectionResult', success: boolean, collectionId: string, likesCount: number, userLiked: boolean, message?: string | null } };
+
+export type UnlikeCollectionMutationVariables = Exact<{
+  input: UnlikeCollectionInput;
+}>;
+
+
+export type UnlikeCollectionMutation = { __typename?: 'Mutation', unlikeCollection: { __typename?: 'UnlikeCollectionResult', success: boolean, collectionId: string, likesCount: number, userLiked: boolean, message?: string | null } };
+
+export type GetCollectionLikesQueryVariables = Exact<{
+  collectionId: Scalars['ID']['input'];
+}>;
+
+
+export type GetCollectionLikesQuery = { __typename?: 'Query', collectionLikes: { __typename?: 'CollectionLikesInfo', count: number, isLiked: boolean } };
+
 export type BuyNftMutationVariables = Exact<{
   listingId: Scalars['ID']['input'];
 }>;
@@ -808,14 +884,14 @@ export type GetCollectionByIdQueryVariables = Exact<{
 }>;
 
 
-export type GetCollectionByIdQuery = { __typename?: 'Query', collection: { __typename?: 'Collection', totalVolume: string, floorPrice: string, totalSupply: number, id: string, name: string, description?: string | null, image: string, creatorId: string, createdAt: any, creator?: { __typename?: 'User', id: string, username?: string | null, walletAddress?: string | null } | null, nfts?: { __typename?: 'NFTConnection', totalCount: number, edges: Array<{ __typename?: 'NFTEdge', cursor: string, node: { __typename?: 'NFT', id: string, name: string, image?: string | null, tokenId: string, lastPrice?: string | null } }>, pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, startCursor?: string | null, endCursor?: string | null } } | null } };
+export type GetCollectionByIdQuery = { __typename?: 'Query', collection: { __typename?: 'Collection', totalVolume: string, floorPrice: string, totalSupply: number, id: string, name: string, description?: string | null, image: string, creatorId: string, createdAt: any, creator?: { __typename?: 'User', id: string, username?: string | null, walletAddress?: string | null, avatar?: string | null } | null, nfts?: { __typename?: 'NFTConnection', totalCount: number, edges: Array<{ __typename?: 'NFTEdge', cursor: string, node: { __typename?: 'NFT', id: string, name: string, image?: string | null, tokenId: string, lastPrice?: string | null } }>, pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, startCursor?: string | null, endCursor?: string | null } } | null } };
 
 export type GetTopCollectionsQueryVariables = Exact<{
   limit?: InputMaybe<Scalars['Int']['input']>;
 }>;
 
 
-export type GetTopCollectionsQuery = { __typename?: 'Query', topCollections: Array<{ __typename?: 'Collection', totalVolume: string, floorPrice: string, totalSupply: number, id: string, name: string, description?: string | null, image: string, creatorId: string, createdAt: any }> };
+export type GetTopCollectionsQuery = { __typename?: 'Query', topCollections: Array<{ __typename?: 'Collection', totalVolume: string, floorPrice: string, totalSupply: number, likes?: number | null, id: string, name: string, description?: string | null, image: string, creatorId: string, createdAt: any, creator?: { __typename?: 'User', id: string, username?: string | null, walletAddress?: string | null, avatar?: string | null } | null, nfts?: { __typename?: 'NFTConnection', totalCount: number, edges: Array<{ __typename?: 'NFTEdge', cursor: string, node: { __typename?: 'NFT', id: string, image?: string | null, name: string } }>, pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, startCursor?: string | null, endCursor?: string | null } } | null }> };
 
 export type GetCollectionStatsQueryVariables = Exact<{
   collectionId: Scalars['ID']['input'];
@@ -1049,6 +1125,124 @@ export const PublicCreatorFieldsFragmentDoc = gql`
   isFollowing
 }
     `;
+export const LikeCollectionDocument = gql`
+    mutation LikeCollection($input: LikeCollectionInput!) {
+  likeCollection(input: $input) {
+    success
+    collectionId
+    likesCount
+    userLiked
+    message
+  }
+}
+    `;
+export type LikeCollectionMutationFn = Apollo.MutationFunction<LikeCollectionMutation, LikeCollectionMutationVariables>;
+
+/**
+ * __useLikeCollectionMutation__
+ *
+ * To run a mutation, you first call `useLikeCollectionMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useLikeCollectionMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [likeCollectionMutation, { data, loading, error }] = useLikeCollectionMutation({
+ *   variables: {
+ *      input: // value for 'input'
+ *   },
+ * });
+ */
+export function useLikeCollectionMutation(baseOptions?: Apollo.MutationHookOptions<LikeCollectionMutation, LikeCollectionMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<LikeCollectionMutation, LikeCollectionMutationVariables>(LikeCollectionDocument, options);
+      }
+export type LikeCollectionMutationHookResult = ReturnType<typeof useLikeCollectionMutation>;
+export type LikeCollectionMutationResult = Apollo.MutationResult<LikeCollectionMutation>;
+export type LikeCollectionMutationOptions = Apollo.BaseMutationOptions<LikeCollectionMutation, LikeCollectionMutationVariables>;
+export const UnlikeCollectionDocument = gql`
+    mutation UnlikeCollection($input: UnlikeCollectionInput!) {
+  unlikeCollection(input: $input) {
+    success
+    collectionId
+    likesCount
+    userLiked
+    message
+  }
+}
+    `;
+export type UnlikeCollectionMutationFn = Apollo.MutationFunction<UnlikeCollectionMutation, UnlikeCollectionMutationVariables>;
+
+/**
+ * __useUnlikeCollectionMutation__
+ *
+ * To run a mutation, you first call `useUnlikeCollectionMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useUnlikeCollectionMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [unlikeCollectionMutation, { data, loading, error }] = useUnlikeCollectionMutation({
+ *   variables: {
+ *      input: // value for 'input'
+ *   },
+ * });
+ */
+export function useUnlikeCollectionMutation(baseOptions?: Apollo.MutationHookOptions<UnlikeCollectionMutation, UnlikeCollectionMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<UnlikeCollectionMutation, UnlikeCollectionMutationVariables>(UnlikeCollectionDocument, options);
+      }
+export type UnlikeCollectionMutationHookResult = ReturnType<typeof useUnlikeCollectionMutation>;
+export type UnlikeCollectionMutationResult = Apollo.MutationResult<UnlikeCollectionMutation>;
+export type UnlikeCollectionMutationOptions = Apollo.BaseMutationOptions<UnlikeCollectionMutation, UnlikeCollectionMutationVariables>;
+export const GetCollectionLikesDocument = gql`
+    query GetCollectionLikes($collectionId: ID!) {
+  collectionLikes(collectionId: $collectionId) {
+    count
+    isLiked
+  }
+}
+    `;
+
+/**
+ * __useGetCollectionLikesQuery__
+ *
+ * To run a query within a React component, call `useGetCollectionLikesQuery` and pass it any options that fit your needs.
+ * When your component renders, `useGetCollectionLikesQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useGetCollectionLikesQuery({
+ *   variables: {
+ *      collectionId: // value for 'collectionId'
+ *   },
+ * });
+ */
+export function useGetCollectionLikesQuery(baseOptions: Apollo.QueryHookOptions<GetCollectionLikesQuery, GetCollectionLikesQueryVariables> & ({ variables: GetCollectionLikesQueryVariables; skip?: boolean; } | { skip: boolean; }) ) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useQuery<GetCollectionLikesQuery, GetCollectionLikesQueryVariables>(GetCollectionLikesDocument, options);
+      }
+export function useGetCollectionLikesLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<GetCollectionLikesQuery, GetCollectionLikesQueryVariables>) {
+          const options = {...defaultOptions, ...baseOptions}
+          return Apollo.useLazyQuery<GetCollectionLikesQuery, GetCollectionLikesQueryVariables>(GetCollectionLikesDocument, options);
+        }
+// @ts-ignore
+export function useGetCollectionLikesSuspenseQuery(baseOptions?: Apollo.SuspenseQueryHookOptions<GetCollectionLikesQuery, GetCollectionLikesQueryVariables>): Apollo.UseSuspenseQueryResult<GetCollectionLikesQuery, GetCollectionLikesQueryVariables>;
+export function useGetCollectionLikesSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<GetCollectionLikesQuery, GetCollectionLikesQueryVariables>): Apollo.UseSuspenseQueryResult<GetCollectionLikesQuery | undefined, GetCollectionLikesQueryVariables>;
+export function useGetCollectionLikesSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<GetCollectionLikesQuery, GetCollectionLikesQueryVariables>) {
+          const options = baseOptions === Apollo.skipToken ? baseOptions : {...defaultOptions, ...baseOptions}
+          return Apollo.useSuspenseQuery<GetCollectionLikesQuery, GetCollectionLikesQueryVariables>(GetCollectionLikesDocument, options);
+        }
+export type GetCollectionLikesQueryHookResult = ReturnType<typeof useGetCollectionLikesQuery>;
+export type GetCollectionLikesLazyQueryHookResult = ReturnType<typeof useGetCollectionLikesLazyQuery>;
+export type GetCollectionLikesSuspenseQueryHookResult = ReturnType<typeof useGetCollectionLikesSuspenseQuery>;
+export type GetCollectionLikesQueryResult = Apollo.QueryResult<GetCollectionLikesQuery, GetCollectionLikesQueryVariables>;
 export const BuyNftDocument = gql`
     mutation BuyNFT($listingId: ID!) {
   buyNFT(listingId: $listingId) {
@@ -1294,6 +1488,7 @@ export const GetCollectionByIdDocument = gql`
       id
       username
       walletAddress
+      avatar
     }
     nfts(pagination: {first: 20}) {
       edges {
@@ -1359,6 +1554,29 @@ export const GetTopCollectionsDocument = gql`
     totalVolume
     floorPrice
     totalSupply
+    creator {
+      id
+      username
+      walletAddress
+      avatar
+    }
+    likes
+    nfts(pagination: {first: 3}) {
+      edges {
+        node {
+          id
+          image
+          name
+        }
+        cursor
+      }
+      pageInfo {
+        hasNextPage
+        startCursor
+        endCursor
+      }
+      totalCount
+    }
   }
 }
     ${CollectionFieldsFragmentDoc}`;

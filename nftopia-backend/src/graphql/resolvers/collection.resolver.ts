@@ -25,11 +25,16 @@ import { NFTFilterInput, PaginationInput } from '../inputs/nft.inputs';
 import {
   CollectionFilterInput,
   CreateCollectionInput,
+  LikeCollectionInput,
+  UnlikeCollectionInput,
 } from '../inputs/collection.inputs';
 import {
   CollectionConnection,
   CollectionStats,
   GraphqlCollection,
+  LikeCollectionResult,
+  UnlikeCollectionResult,
+  CollectionLikesInfo,
 } from '../types/collection.types';
 import { GraphqlNft, NFTConnection } from '../types/nft.types';
 import { GraphqlUserType } from '../types/user.types';
@@ -186,7 +191,7 @@ export class CollectionResolver {
     return this.toNftConnection(result.data, result.total, result.hasNextPage);
   }
 
-  // NEW: Resolve field for likes
+  // NEW: Resolve field for likes - now using real database data
   @ResolveField(() => Int, {
     name: 'likes',
     nullable: true,
@@ -194,15 +199,110 @@ export class CollectionResolver {
   })
   async likes(
     @Parent() collection: GraphqlCollection,
-    @Context() context: GraphqlContext,
+    // @Context() context: GraphqlContext,
   ): Promise<number> {
-    // If you have a like/favorite system, fetch the count here
-    // For now, return a random number or 0 as placeholder
-    // You can replace this with actual database query
-    // For demo purposes, return a deterministic number based on collection ID
-    // This ensures consistency across requests
-    const hash = collection.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    return (hash % 150) + 50; // Return between 50-200
+    return this.collectionService.getLikesCount(collection.id);
+  }
+
+  // NEW: Query to get likes info for a collection
+  @Query(() => CollectionLikesInfo, {
+    name: 'collectionLikes',
+    description: 'Get likes info for a collection',
+  })
+  async collectionLikes(
+    @Args('collectionId', { type: () => ID }) collectionId: string,
+    @Context() context: GraphqlContext,
+  ): Promise<CollectionLikesInfo> {
+    const count = await this.collectionService.getLikesCount(collectionId);
+
+    let isLiked = false;
+    if (context.user?.userId) {
+      isLiked = await this.collectionService.hasUserLiked(
+        collectionId,
+        context.user.userId,
+      );
+    }
+
+    return {
+      count,
+      isLiked,
+    };
+  }
+
+  // NEW: Mutation to like a collection
+  @UseGuards(GqlAuthGuard)
+  @Mutation(() => LikeCollectionResult, {
+    name: 'likeCollection',
+    description: 'Like a collection',
+  })
+  async likeCollection(
+    @Args('input', { type: () => LikeCollectionInput })
+    input: LikeCollectionInput,
+    @Context() context: GraphqlContext,
+  ): Promise<LikeCollectionResult> {
+    const userId = this.getAuthenticatedUserId(context);
+
+    try {
+      const result = await this.collectionService.likeCollection(
+        input.collectionId,
+        userId,
+      );
+
+      return {
+        success: true,
+        collectionId: input.collectionId,
+        likesCount: result.likesCount,
+        userLiked: result.userLiked,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        collectionId: input.collectionId,
+        likesCount: 0,
+        userLiked: false,
+        message:
+          error instanceof Error ? error.message : 'Failed to like collection',
+      };
+    }
+  }
+
+  // NEW: Mutation to unlike a collection
+  @UseGuards(GqlAuthGuard)
+  @Mutation(() => UnlikeCollectionResult, {
+    name: 'unlikeCollection',
+    description: 'Unlike a collection',
+  })
+  async unlikeCollection(
+    @Args('input', { type: () => UnlikeCollectionInput })
+    input: UnlikeCollectionInput,
+    @Context() context: GraphqlContext,
+  ): Promise<UnlikeCollectionResult> {
+    const userId = this.getAuthenticatedUserId(context);
+
+    try {
+      const result = await this.collectionService.unlikeCollection(
+        input.collectionId,
+        userId,
+      );
+
+      return {
+        success: true,
+        collectionId: input.collectionId,
+        likesCount: result.likesCount,
+        userLiked: result.userLiked,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        collectionId: input.collectionId,
+        likesCount: 0,
+        userLiked: false,
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Failed to unlike collection',
+      };
+    }
   }
 
   private getAuthenticatedUserId(context: GraphqlContext): string {
@@ -271,8 +371,7 @@ export class CollectionResolver {
       createdAt: collection.createdAt,
       isVerified: collection.isVerified || false,
       nfts: undefined,
-      // Likes will be resolved by the @ResolveField
-      likes: undefined,
+      likes: undefined, // Will be resolved by the @ResolveField
     };
   }
 

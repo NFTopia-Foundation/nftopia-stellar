@@ -2,17 +2,38 @@ export interface Collection {
   id: string;
   title: string;
   creatorName: string;
-  creatorImage: string; // Path to creator's avatar image
+  creatorImage: string;
   images: {
-    main: string; // Path to main collection image (larger grid item)
-    secondary1: string; // Path to first smaller grid item image
-    secondary2: string; // Path to second smaller grid item image
+    main: string;
+    secondary1: string;
+    secondary2: string;
   };
   likes: number;
-  // Optional fields for future use
   description?: string;
   totalVolume?: string;
   floorPrice?: string;
   totalSupply?: number;
   isVerified?: boolean;
+}
+
+// NEW: Types for likes
+export interface CollectionLikesInfo {
+  count: number;
+  isLiked: boolean;
+}
+
+export interface LikeCollectionResult {
+  success: boolean;
+  collectionId: string;
+  likesCount: number;
+  userLiked: boolean;
+  message?: string;
+}
+
+export interface UnlikeCollectionResult {
+  success: boolean;
+  collectionId: string;
+  likesCount: number;
+  userLiked: boolean;
+  message?: string;
 }
