@@ -27,6 +27,7 @@ type MockQb = {
   take: jest.Mock;
   getMany: jest.Mock;
   getCount: jest.Mock;
+  leftJoinAndSelect: jest.Mock;
 };
 
 const makeQb = (): MockQb => {
@@ -54,6 +55,7 @@ const makeQb = (): MockQb => {
   qb.take = jest.fn().mockReturnValue(qb);
   qb.getMany = jest.fn().mockResolvedValue([]);
   qb.getCount = jest.fn().mockResolvedValue(0);
+  qb.leftJoinAndSelect = jest.fn().mockReturnValue(qb);
   return qb as MockQb;
 };
 
@@ -268,7 +270,14 @@ describe('ListingService', () => {
   it('findConnection returns page data and hasNextPage', async () => {
     const mainQb = makeQb();
     const totalQb = makeQb();
-    mainQb.getMany.mockResolvedValue([{ id: '3' }, { id: '2' }, { id: '1' }]);
+    // Service fetches first + 1 items to determine hasNextPage
+    // For first=2, it fetches 3 items
+    const listings = [
+      { id: 'listing-1', status: ListingStatus.ACTIVE },
+      { id: 'listing-2', status: ListingStatus.ACTIVE },
+      { id: 'listing-3', status: ListingStatus.ACTIVE }, // Extra item for hasNextPage
+    ];
+    mainQb.getMany.mockResolvedValue(listings);
     totalQb.getCount.mockResolvedValue(7);
 
     listingRepo.createQueryBuilder
@@ -281,15 +290,19 @@ describe('ListingService', () => {
       sellerId: 'seller-1',
     });
 
+    // Should only return first 2 items
     expect(result.data).toHaveLength(2);
     expect(result.total).toBe(7);
     expect(result.hasNextPage).toBe(true);
+    expect(mainQb.leftJoinAndSelect).toHaveBeenCalled();
   });
 
   it('findConnection handles cursor and hasNextPage false', async () => {
     const mainQb = makeQb();
     const totalQb = makeQb();
-    mainQb.getMany.mockResolvedValue([{ id: '3' }]);
+    // Only 1 item returned, so hasNextPage should be false
+    const listings = [{ id: 'listing-1', status: ListingStatus.ACTIVE }];
+    mainQb.getMany.mockResolvedValue(listings);
     totalQb.getCount.mockResolvedValue(1);
 
     listingRepo.createQueryBuilder
@@ -303,9 +316,12 @@ describe('ListingService', () => {
       nftTokenId: '1',
     });
 
+    // Should return 1 item (less than first, so hasNextPage false)
+    expect(result.data).toHaveLength(1);
     expect(result.total).toBe(1);
     expect(result.hasNextPage).toBe(false);
     expect(mainQb.andWhere).toHaveBeenCalled();
+    expect(mainQb.leftJoinAndSelect).toHaveBeenCalled();
   });
 
   it('findOne returns listing when found', async () => {
@@ -347,15 +363,20 @@ describe('ListingService', () => {
 
   it('findByNFTIds queries active non-expired listings', async () => {
     const qb = makeQb();
-    qb.getMany.mockResolvedValue([{ id: 'listing-1' }]);
+    const listings = [{ id: 'listing-1' }];
+    qb.getMany.mockResolvedValue(listings);
     listingRepo.createQueryBuilder.mockReturnValue(qb);
 
     const result = await service.findByNFTIds(['C1:1', 'C2:2', 'C1:1']);
 
-    expect(result).toEqual([{ id: 'listing-1' }]);
+    expect(result).toEqual(listings);
     expect(qb.andWhere).toHaveBeenCalledWith('l.status = :status', {
       status: ListingStatus.ACTIVE,
     });
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('l.expiresAt IS NULL OR l.expiresAt > :now'),
+      expect.any(Object),
+    );
   });
 
   it('cancel throws 403 when non-seller attempts cancellation', async () => {
@@ -491,21 +512,28 @@ describe('ListingService', () => {
 
   it('expireListings marks active expired listings', async () => {
     const qb = makeQb();
-    qb.getMany.mockResolvedValue([
+    const expiredListings = [
       { id: 'l1', status: ListingStatus.ACTIVE },
       { id: 'l2', status: ListingStatus.ACTIVE },
-    ]);
+    ];
+    qb.getMany.mockResolvedValue(expiredListings);
     listingRepo.createQueryBuilder.mockReturnValue(qb);
-    listingRepo.save.mockResolvedValue(undefined);
+    listingRepo.save.mockImplementation((listing: Listing) => 
+      Promise.resolve(listing)
+    );
 
     await service.expireListings();
 
     expect(listingRepo.save).toHaveBeenCalledTimes(2);
+    expect(listingRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({ status: ListingStatus.EXPIRED })
+    );
   });
 
   it('expireListings continues and logs when save fails', async () => {
     const qb = makeQb();
-    qb.getMany.mockResolvedValue([{ id: 'l1', status: ListingStatus.ACTIVE }]);
+    const expiredListings = [{ id: 'l1', status: ListingStatus.ACTIVE }];
+    qb.getMany.mockResolvedValue(expiredListings);
     listingRepo.createQueryBuilder.mockReturnValue(qb);
     listingRepo.save.mockRejectedValue(new Error('db failed'));
     const loggerHost = service as unknown as {
@@ -516,5 +544,15 @@ describe('ListingService', () => {
     await service.expireListings();
 
     expect(errorSpy).toHaveBeenCalled();
+  });
+
+  it('expireListings handles empty expired listings gracefully', async () => {
+    const qb = makeQb();
+    qb.getMany.mockResolvedValue([]);
+    listingRepo.createQueryBuilder.mockReturnValue(qb);
+
+    await service.expireListings();
+
+    expect(listingRepo.save).not.toHaveBeenCalled();
   });
 });
