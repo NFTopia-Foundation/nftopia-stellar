@@ -176,6 +176,14 @@ export enum CreatorNftSort {
   Price = 'PRICE'
 }
 
+export type DashboardStats = {
+  __typename?: 'DashboardStats';
+  followers: Scalars['Int']['output'];
+  nftsCreated: Scalars['Int']['output'];
+  totalSales: Scalars['Int']['output'];
+  totalViews: Scalars['Int']['output'];
+};
+
 export type FollowResult = {
   __typename?: 'FollowResult';
   followerCount: Scalars['Int']['output'];
@@ -218,8 +226,13 @@ export type ListingEdge = {
 };
 
 export type ListingFilterInput = {
+  category?: InputMaybe<Scalars['String']['input']>;
+  maxPrice?: InputMaybe<Scalars['Float']['input']>;
+  minPrice?: InputMaybe<Scalars['Float']['input']>;
   nftId?: InputMaybe<Scalars['ID']['input']>;
+  search?: InputMaybe<Scalars['String']['input']>;
   sellerId?: InputMaybe<Scalars['ID']['input']>;
+  sortBy?: InputMaybe<Scalars['String']['input']>;
   status?: InputMaybe<ListingStatus>;
 };
 
@@ -256,13 +269,13 @@ export type Mutation = {
   createCollection: Collection;
   /** Create a new marketplace listing */
   createListing: Listing;
-  /** Follow a creator */
+  /** Follow a creator (authenticated) */
   followCreator: FollowResult;
   /** Mint a new NFT */
   mintNFT: Nft;
   /** Place a bid on an auction */
   placeBid: Bid;
-  /** Unfollow a creator */
+  /** Unfollow a creator (authenticated) */
   unfollowCreator: FollowResult;
   /** Update NFT metadata */
   updateNFTMetadata: Nft;
@@ -450,7 +463,9 @@ export type PublicCreator = {
   instagramHandle?: Maybe<Scalars['String']['output']>;
   isFollowing?: Maybe<Scalars['Boolean']['output']>;
   isVerified: Scalars['Boolean']['output'];
+  listings?: Maybe<ListingConnection>;
   nfts?: Maybe<NftConnection>;
+  sales?: Maybe<OrderConnection>;
   totalNftsCreated: Scalars['Int']['output'];
   totalSalesVolume: Scalars['String']['output'];
   twitterHandle?: Maybe<Scalars['String']['output']>;
@@ -484,6 +499,8 @@ export type Query = {
   collectionStats: CollectionStats;
   /** Fetch collections with cursor pagination and optional filters */
   collections: CollectionConnection;
+  /** Fetch dashboard stats for the authenticated user */
+  dashboardStats: DashboardStats;
   /** GraphQL gateway health check */
   health: GraphqlHealthResponse;
   /** Fetch a single listing by ID */

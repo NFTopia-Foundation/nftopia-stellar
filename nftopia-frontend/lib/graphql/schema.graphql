@@ -119,10 +119,52 @@ input CreateListingInput {
   expiresAt: String
 }
 
+type CreatorActivityConnection {
+  edges: [CreatorActivityEdge!]!
+  totalCount: Int!
+}
+
+type CreatorActivityEdge {
+  node: CreatorActivityItem!
+  cursor: String!
+}
+
+type CreatorActivityItem {
+  type: CreatorActivityType!
+  occurredAt: DateTime!
+  nftId: ID
+  price: String
+  currency: String
+}
+
+enum CreatorActivityType {
+  MINT
+  SALE
+  LISTING
+}
+
+enum CreatorNftSort {
+  NEWEST
+  PRICE
+}
+
+type DashboardStats {
+  nftsCreated: Int!
+  totalSales: Int!
+  totalViews: Int!
+  followers: Int!
+}
+
 """
 A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
 """
 scalar DateTime
+
+type FollowResult {
+  success: Boolean!
+  followerCount: Int!
+  isFollowing: Boolean!
+}
 
 type GraphqlHealthResponse {
   status: String!
@@ -161,6 +203,11 @@ input ListingFilterInput {
   status: ListingStatus
   nftId: ID
   sellerId: ID
+  search: String
+  minPrice: Float
+  maxPrice: Float
+  category: String
+  sortBy: String
 }
 
 """Current state of a marketplace listing"""
@@ -205,14 +252,14 @@ type Mutation {
   """Execute NFT purchase against an active listing"""
   buyNFT(listingId: ID!): TransactionResult!
 
-  """Follow a creator"""
-  followCreator(creatorId: ID!): FollowResult!
-
-  """Unfollow a creator"""
-  unfollowCreator(creatorId: ID!): FollowResult!
-
   """Place a bid on an auction"""
   placeBid(input: CreateBidInput!): Bid!
+
+  """Follow a creator (authenticated)"""
+  followCreator(creatorId: ID!): FollowResult!
+
+  """Unfollow a creator (authenticated)"""
+  unfollowCreator(creatorId: ID!): FollowResult!
 }
 
 type NFT {
@@ -323,6 +370,29 @@ input PaginationInput {
   after: String
 }
 
+type PublicCreator {
+  id: ID!
+  username: String
+  bio: String
+  avatarUrl: String
+  bannerUrl: String
+  website: String
+  twitterHandle: String
+  instagramHandle: String
+  isVerified: Boolean!
+  followerCount: Int!
+  followingCount: Int!
+  totalNftsCreated: Int!
+  totalSalesVolume: String!
+  createdAt: DateTime!
+  isFollowing: Boolean
+  nfts(pagination: PaginationInput, sortBy: CreatorNftSort): NFTConnection
+  collections(pagination: PaginationInput): CollectionConnection
+  activity(pagination: PaginationInput): CreatorActivityConnection
+  listings: ListingConnection
+  sales: OrderConnection
+}
+
 type Query {
   """GraphQL gateway health check"""
   health: GraphqlHealthResponse!
@@ -384,14 +454,17 @@ type Query {
   """Fetch the currently authenticated user"""
   me: User!
 
+  """Fetch dashboard stats for the authenticated user"""
+  dashboardStats: DashboardStats!
+
   """Fetch a user by Stellar address"""
   userByAddress(address: String!): User
 
-  """Fetch a public creator profile by id, username, or wallet address"""
-  publicCreator(identifier: String!): PublicCreator!
-
   """Fetch a single auction by ID"""
   auction(id: ID!): Auction!
+
+  """Fetch a public creator profile by id, username, or wallet address"""
+  publicCreator(identifier: String!): PublicCreator!
 }
 
 type SalesAnalytics {
@@ -464,58 +537,3 @@ type User {
   sales(pagination: PaginationInput): OrderConnection
 }
 
-type PublicCreator {
-  id: ID!
-  username: String
-  bio: String
-  avatarUrl: String
-  bannerUrl: String
-  website: String
-  twitterHandle: String
-  instagramHandle: String
-  isVerified: Boolean!
-  followerCount: Int!
-  followingCount: Int!
-  totalNftsCreated: Int!
-  totalSalesVolume: String!
-  createdAt: DateTime!
-  isFollowing: Boolean
-  nfts(pagination: PaginationInput, sortBy: CreatorNftSort): NFTConnection
-  collections(pagination: PaginationInput): CollectionConnection
-  activity(pagination: PaginationInput): CreatorActivityConnection
-}
-
-enum CreatorNftSort {
-  NEWEST
-  PRICE
-}
-
-enum CreatorActivityType {
-  MINT
-  SALE
-  LISTING
-}
-
-type CreatorActivityItem {
-  type: CreatorActivityType!
-  occurredAt: DateTime!
-  nftId: ID
-  price: String
-  currency: String
-}
-
-type CreatorActivityEdge {
-  node: CreatorActivityItem!
-  cursor: String!
-}
-
-type CreatorActivityConnection {
-  edges: [CreatorActivityEdge!]!
-  totalCount: Int!
-}
-
-type FollowResult {
-  success: Boolean!
-  followerCount: Int!
-  isFollowing: Boolean!
-}

@@ -77,6 +77,11 @@ export class ListingResolver {
       sellerId: filter?.sellerId,
       nftContractId: nftParts?.contractId,
       nftTokenId: nftParts?.tokenId,
+      search: filter?.search,
+      minPrice: filter?.minPrice,
+      maxPrice: filter?.maxPrice,
+      category: filter?.category,
+      sortBy: filter?.sortBy,
     });
 
     return this.toConnection(result.data, result.total, result.hasNextPage);
