@@ -52,6 +52,14 @@ export class GraphqlCollection {
     description: 'NFTs that belong to this collection',
   })
   nfts?: NFTConnection;
+
+  // NEW: Add likes field
+  @Field(() => Int, { nullable: true, defaultValue: 0 })
+  likes?: number;
+
+  // NEW: Add isVerified field
+  @Field(() => Boolean, { nullable: true, defaultValue: false })
+  isVerified?: boolean;
 }
 
 @ObjectType()

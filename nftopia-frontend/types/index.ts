@@ -9,4 +9,10 @@ export interface Collection {
     secondary2: string; // Path to second smaller grid item image
   };
   likes: number;
-} 
+  // Optional fields for future use
+  description?: string;
+  totalVolume?: string;
+  floorPrice?: string;
+  totalSupply?: number;
+  isVerified?: boolean;
+}

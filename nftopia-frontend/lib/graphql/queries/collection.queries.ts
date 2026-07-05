@@ -32,6 +32,7 @@ export const GET_COLLECTION_BY_ID_QUERY = gql`
         id
         username
         walletAddress
+        avatar
       }
       nfts(pagination: { first: 20 }) {
         edges {
@@ -56,6 +57,7 @@ export const GET_COLLECTION_BY_ID_QUERY = gql`
   ${COLLECTION_FIELDS_FRAGMENT}
 `;
 
+// Updated query to include creator and likes
 export const GET_TOP_COLLECTIONS_QUERY = gql`
   query GetTopCollections($limit: Int) {
     topCollections(limit: $limit) {
@@ -63,6 +65,31 @@ export const GET_TOP_COLLECTIONS_QUERY = gql`
       totalVolume
       floorPrice
       totalSupply
+      creator {
+        id
+        username
+        walletAddress
+        avatar
+      }
+      # Add likes field - will be populated by a resolver
+      likes
+      # Include NFTs to get preview images for secondary thumbnails
+      nfts(pagination: { first: 3 }) {
+        edges {
+          node {
+            id
+            image
+            name
+          }
+          cursor
+        }
+        pageInfo {
+          hasNextPage
+          startCursor
+          endCursor
+        }
+        totalCount
+      }
     }
   }
   ${COLLECTION_FIELDS_FRAGMENT}
@@ -75,6 +102,16 @@ export const GET_COLLECTION_STATS_QUERY = gql`
       floorPrice
       totalSupply
       ownerCount
+    }
+  }
+`;
+
+// New query for collection likes count
+export const GET_COLLECTION_LIKES_QUERY = gql`
+  query GetCollectionLikes($collectionId: ID!) {
+    collectionLikes(collectionId: $collectionId) {
+      count
+      isLiked
     }
   }
 `;
