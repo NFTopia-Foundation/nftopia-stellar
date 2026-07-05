@@ -757,6 +757,13 @@ export type AuctionFieldsFragment = { __typename?: 'Auction', id: string, nftId:
 
 export type TransferEventFieldsFragment = { __typename?: 'TransferEvent', id: string, fromAddress: string, toAddress: string, transactionHash: string, eventType: string, price?: string | null, currency?: string | null, timestamp: any, fromAddressTruncated?: string | null, toAddressTruncated?: string | null, blockExplorerUrl?: string | null };
 
+export type BuyNftMutationVariables = Exact<{
+  listingId: Scalars['ID']['input'];
+}>;
+
+
+export type BuyNftMutation = { __typename?: 'Mutation', buyNFT: { __typename?: 'TransactionResult', success: boolean, listingId: string, buyerId?: string | null } };
+
 export type GetAuctionByIdQueryVariables = Exact<{
   id: Scalars['ID']['input'];
 }>;
@@ -866,13 +873,6 @@ export type CancelListingMutationVariables = Exact<{
 
 export type CancelListingMutation = { __typename?: 'Mutation', cancelListing: boolean };
 
-export type BuyNftMutationVariables = Exact<{
-  listingId: Scalars['ID']['input'];
-}>;
-
-
-export type BuyNftMutation = { __typename?: 'Mutation', buyNFT: { __typename?: 'TransactionResult', success: boolean, listingId: string, buyerId?: string | null } };
-
 export type GatewayHealthQueryVariables = Exact<{ [key: string]: never; }>;
 
 
@@ -929,6 +929,11 @@ export type GetUserByIdQueryVariables = Exact<{
 
 
 export type GetUserByIdQuery = { __typename?: 'Query', user: { __typename?: 'User', id: string, walletAddress?: string | null, username?: string | null, avatar?: string | null, nfts?: { __typename?: 'NFTConnection', totalCount: number, edges: Array<{ __typename?: 'NFTEdge', cursor: string, node: { __typename?: 'NFT', id: string, name: string, image?: string | null, tokenId: string, lastPrice?: string | null } }>, pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, startCursor?: string | null, endCursor?: string | null } } | null, ownedNFTs?: { __typename?: 'NFTConnection', totalCount: number, edges: Array<{ __typename?: 'NFTEdge', cursor: string, node: { __typename?: 'NFT', id: string, name: string, image?: string | null, tokenId: string, lastPrice?: string | null } }>, pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, startCursor?: string | null, endCursor?: string | null } } | null, listings?: { __typename?: 'ListingConnection', totalCount: number, edges: Array<{ __typename?: 'ListingEdge', cursor: string, node: { __typename?: 'Listing', id: string, nftId: string, price: string, currency: string, status: ListingStatus, createdAt: any } }>, pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, startCursor?: string | null, endCursor?: string | null } } | null, purchases?: { __typename?: 'OrderConnection', totalCount: number, edges: Array<{ __typename?: 'OrderEdge', cursor: string, node: { __typename?: 'Order', id: string, nftId: string, price: string, currency: string, status: OrderStatus, createdAt: any } }>, pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, startCursor?: string | null, endCursor?: string | null } } | null, sales?: { __typename?: 'OrderConnection', totalCount: number, edges: Array<{ __typename?: 'OrderEdge', cursor: string, node: { __typename?: 'Order', id: string, nftId: string, price: string, currency: string, status: OrderStatus, createdAt: any } }>, pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, startCursor?: string | null, endCursor?: string | null } } | null } };
+
+export type GetDashboardStatsQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type GetDashboardStatsQuery = { __typename?: 'Query', me: { __typename?: 'User', id: string } };
 
 export type GetUserByAddressQueryVariables = Exact<{
   address: Scalars['String']['input'];
@@ -1027,6 +1032,41 @@ export const PublicCreatorFieldsFragmentDoc = gql`
   isFollowing
 }
     `;
+export const BuyNftDocument = gql`
+    mutation BuyNFT($listingId: ID!) {
+  buyNFT(listingId: $listingId) {
+    success
+    listingId
+    buyerId
+  }
+}
+    `;
+export type BuyNftMutationFn = Apollo.MutationFunction<BuyNftMutation, BuyNftMutationVariables>;
+
+/**
+ * __useBuyNftMutation__
+ *
+ * To run a mutation, you first call `useBuyNftMutation` within a React component and pass it any options that fit your needs.
+ * When your component renders, `useBuyNftMutation` returns a tuple that includes:
+ * - A mutate function that you can call at any time to execute the mutation
+ * - An object with fields that represent the current status of the mutation's execution
+ *
+ * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
+ *
+ * @example
+ * const [buyNftMutation, { data, loading, error }] = useBuyNftMutation({
+ *   variables: {
+ *      listingId: // value for 'listingId'
+ *   },
+ * });
+ */
+export function useBuyNftMutation(baseOptions?: Apollo.MutationHookOptions<BuyNftMutation, BuyNftMutationVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useMutation<BuyNftMutation, BuyNftMutationVariables>(BuyNftDocument, options);
+      }
+export type BuyNftMutationHookResult = ReturnType<typeof useBuyNftMutation>;
+export type BuyNftMutationResult = Apollo.MutationResult<BuyNftMutation>;
+export type BuyNftMutationOptions = Apollo.BaseMutationOptions<BuyNftMutation, BuyNftMutationVariables>;
 export const GetAuctionByIdDocument = gql`
     query GetAuctionById($id: ID!) {
   auction(id: $id) {
@@ -1791,41 +1831,6 @@ export function useCancelListingMutation(baseOptions?: Apollo.MutationHookOption
 export type CancelListingMutationHookResult = ReturnType<typeof useCancelListingMutation>;
 export type CancelListingMutationResult = Apollo.MutationResult<CancelListingMutation>;
 export type CancelListingMutationOptions = Apollo.BaseMutationOptions<CancelListingMutation, CancelListingMutationVariables>;
-export const BuyNftDocument = gql`
-    mutation BuyNFT($listingId: ID!) {
-  buyNFT(listingId: $listingId) {
-    success
-    listingId
-    buyerId
-  }
-}
-    `;
-export type BuyNftMutationFn = Apollo.MutationFunction<BuyNftMutation, BuyNftMutationVariables>;
-
-/**
- * __useBuyNftMutation__
- *
- * To run a mutation, you first call `useBuyNftMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useBuyNftMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [buyNftMutation, { data, loading, error }] = useBuyNftMutation({
- *   variables: {
- *      listingId: // value for 'listingId'
- *   },
- * });
- */
-export function useBuyNftMutation(baseOptions?: Apollo.MutationHookOptions<BuyNftMutation, BuyNftMutationVariables>) {
-        const options = {...defaultOptions, ...baseOptions}
-        return Apollo.useMutation<BuyNftMutation, BuyNftMutationVariables>(BuyNftDocument, options);
-      }
-export type BuyNftMutationHookResult = ReturnType<typeof useBuyNftMutation>;
-export type BuyNftMutationResult = Apollo.MutationResult<BuyNftMutation>;
-export type BuyNftMutationOptions = Apollo.BaseMutationOptions<BuyNftMutation, BuyNftMutationVariables>;
 export const GatewayHealthDocument = gql`
     query GatewayHealth {
   health {
@@ -2436,6 +2441,48 @@ export type GetUserByIdQueryHookResult = ReturnType<typeof useGetUserByIdQuery>;
 export type GetUserByIdLazyQueryHookResult = ReturnType<typeof useGetUserByIdLazyQuery>;
 export type GetUserByIdSuspenseQueryHookResult = ReturnType<typeof useGetUserByIdSuspenseQuery>;
 export type GetUserByIdQueryResult = Apollo.QueryResult<GetUserByIdQuery, GetUserByIdQueryVariables>;
+export const GetDashboardStatsDocument = gql`
+    query GetDashboardStats {
+  me {
+    id
+  }
+}
+    `;
+
+/**
+ * __useGetDashboardStatsQuery__
+ *
+ * To run a query within a React component, call `useGetDashboardStatsQuery` and pass it any options that fit your needs.
+ * When your component renders, `useGetDashboardStatsQuery` returns an object from Apollo Client that contains loading, error, and data properties
+ * you can use to render your UI.
+ *
+ * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
+ *
+ * @example
+ * const { data, loading, error } = useGetDashboardStatsQuery({
+ *   variables: {
+ *   },
+ * });
+ */
+export function useGetDashboardStatsQuery(baseOptions?: Apollo.QueryHookOptions<GetDashboardStatsQuery, GetDashboardStatsQueryVariables>) {
+        const options = {...defaultOptions, ...baseOptions}
+        return Apollo.useQuery<GetDashboardStatsQuery, GetDashboardStatsQueryVariables>(GetDashboardStatsDocument, options);
+      }
+export function useGetDashboardStatsLazyQuery(baseOptions?: Apollo.LazyQueryHookOptions<GetDashboardStatsQuery, GetDashboardStatsQueryVariables>) {
+          const options = {...defaultOptions, ...baseOptions}
+          return Apollo.useLazyQuery<GetDashboardStatsQuery, GetDashboardStatsQueryVariables>(GetDashboardStatsDocument, options);
+        }
+// @ts-ignore
+export function useGetDashboardStatsSuspenseQuery(baseOptions?: Apollo.SuspenseQueryHookOptions<GetDashboardStatsQuery, GetDashboardStatsQueryVariables>): Apollo.UseSuspenseQueryResult<GetDashboardStatsQuery, GetDashboardStatsQueryVariables>;
+export function useGetDashboardStatsSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<GetDashboardStatsQuery, GetDashboardStatsQueryVariables>): Apollo.UseSuspenseQueryResult<GetDashboardStatsQuery | undefined, GetDashboardStatsQueryVariables>;
+export function useGetDashboardStatsSuspenseQuery(baseOptions?: Apollo.SkipToken | Apollo.SuspenseQueryHookOptions<GetDashboardStatsQuery, GetDashboardStatsQueryVariables>) {
+          const options = baseOptions === Apollo.skipToken ? baseOptions : {...defaultOptions, ...baseOptions}
+          return Apollo.useSuspenseQuery<GetDashboardStatsQuery, GetDashboardStatsQueryVariables>(GetDashboardStatsDocument, options);
+        }
+export type GetDashboardStatsQueryHookResult = ReturnType<typeof useGetDashboardStatsQuery>;
+export type GetDashboardStatsLazyQueryHookResult = ReturnType<typeof useGetDashboardStatsLazyQuery>;
+export type GetDashboardStatsSuspenseQueryHookResult = ReturnType<typeof useGetDashboardStatsSuspenseQuery>;
+export type GetDashboardStatsQueryResult = Apollo.QueryResult<GetDashboardStatsQuery, GetDashboardStatsQueryVariables>;
 export const GetUserByAddressDocument = gql`
     query GetUserByAddress($address: String!) {
   userByAddress(address: $address) {

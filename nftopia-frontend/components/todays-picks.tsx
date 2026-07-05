@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { emitCtaClicked, CTA_IDS, CTA_PLACEMENTS } from "@/lib/telemetry/navigation-instrumentation";
 import { Clock, Heart } from "lucide-react";
 import { useTranslation } from "@/hooks/useTranslation";
+import { useState } from 'react';
+import { PurchaseModal } from './marketplace/PurchaseModal';
 
 type NFTItem = {
   id: string;
@@ -19,6 +21,7 @@ type NFTItem = {
 
 export function TodaysPicks() {
   const { t } = useTranslation();
+  const [selectedNFT, setSelectedNFT] = useState<NFTItem | null>(null);
 
   const nftItems: NFTItem[] = [
     {
@@ -232,8 +235,9 @@ export function TodaysPicks() {
                   size="sm"
                   variant="ghost"
                   className="text-purple-400 hover:bg-transparent hover:text-purple-300 rounded-full px-4 py-1 text-xs"
+                  onClick={() => setSelectedNFT(item)}
                 >
-                  {t("todaysPicks.placeBid")}
+                  {t("todaysPicks.buyNow") || "Buy Now"}
                 </Button>
                 <Button
                   size="sm"
@@ -256,6 +260,18 @@ export function TodaysPicks() {
           {t("todaysPicks.loadMore")}
         </Button>
       </div>
+
+      {selectedNFT && (
+        <PurchaseModal
+          isOpen={!!selectedNFT}
+          onClose={() => setSelectedNFT(null)}
+          listingId={selectedNFT.id} // Mock listing id mapping to item id
+          nftName={selectedNFT.name}
+          nftImage="/nftopia-03.svg" // Since we use the fallback in TodaysPicks UI
+          price={selectedNFT.price.split(' ')[0]} // Get price number from "4.89 STRK"
+          currency={selectedNFT.price.split(' ')[1]}
+        />
+      )}
     </section>
   );
 }
