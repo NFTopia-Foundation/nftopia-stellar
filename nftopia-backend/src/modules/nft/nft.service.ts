@@ -23,6 +23,7 @@ import {
 } from './interfaces/nft.interface';
 import { SorobanService } from '../../nft/soroban.service';
 import { User } from '../../users/user.entity';
+import { PrometheusService } from '../../common/metrics/prometheus';
 import { NftTransferEvent } from '../../jobs/entities/nft-transfer-event.entity';
 
 @Injectable()
@@ -38,6 +39,7 @@ export class NftService {
     private readonly userRepository: Repository<User>,
     private readonly sorobanService: SorobanService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly prometheusService: PrometheusService,
     @InjectRepository(NftTransferEvent)
     private readonly transferEventRepo: Repository<NftTransferEvent>,
   ) {}
@@ -212,6 +214,7 @@ export class NftService {
 
     const indexedNft = await this.findById(savedNft.id);
     this.emitSearchEvent('search.nft.upsert', { nftId: indexedNft.id });
+    this.prometheusService.incrementNftMint(dto.collectionId);
     return indexedNft;
   }
 

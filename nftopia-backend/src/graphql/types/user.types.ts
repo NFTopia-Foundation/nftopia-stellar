@@ -1,4 +1,4 @@
-import { Field, ID, ObjectType } from '@nestjs/graphql';
+import { Field, ID, ObjectType, Int } from '@nestjs/graphql';
 import { NFTConnection } from './nft.types';
 import { ListingConnection } from './listing.types';
 import { AuctionConnection } from './auction.types';
@@ -41,4 +41,19 @@ export class GraphqlUserType {
 
   @Field(() => OrderConnection, { nullable: true })
   sales?: OrderConnection;
+}
+
+@ObjectType('DashboardStats')
+export class DashboardStats {
+  @Field(() => Int)
+  nftsCreated: number;
+
+  @Field(() => Int)
+  totalSales: number;
+
+  @Field(() => Int)
+  totalViews: number;
+
+  @Field(() => Int)
+  followers: number;
 }

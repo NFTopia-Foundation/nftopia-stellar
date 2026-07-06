@@ -21,6 +21,8 @@ import {
   type CollectionStatsResult,
 } from './interfaces/collection.interface';
 
+import { CollectionLike } from './entities/collection-like.entity';
+
 type RawCollectionAggregates = {
   ownerCount: string | null;
   nftCount: string | null;
@@ -38,6 +40,8 @@ export class CollectionService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(VerificationRequest)
     private readonly verificationRequestRepository: Repository<VerificationRequest>,
+    @InjectRepository(CollectionLike)
+    private readonly collectionLikeRepository: Repository<CollectionLike>,
   ) {}
 
   async findById(id: string): Promise<Collection> {
@@ -423,5 +427,90 @@ export class CollectionService {
     request.reviewedAt = new Date();
 
     return this.verificationRequestRepository.save(request);
+  }
+
+  /**
+   * Like a collection
+   */
+  async likeCollection(
+    collectionId: string,
+    userId: string,
+  ): Promise<{ likesCount: number; userLiked: boolean }> {
+    // Check if collection exists
+    await this.findById(collectionId);
+
+    // Check if already liked
+    const existingLike = await this.collectionLikeRepository.findOne({
+      where: { collectionId, userId },
+    });
+
+    if (existingLike) {
+      // Already liked - return current state
+      const count = await this.getLikesCount(collectionId);
+      return { likesCount: count, userLiked: true };
+    }
+
+    // Create like
+    const like = this.collectionLikeRepository.create({
+      collectionId,
+      userId,
+    });
+    await this.collectionLikeRepository.save(like);
+
+    const count = await this.getLikesCount(collectionId);
+    return { likesCount: count, userLiked: true };
+  }
+
+  /**
+   * Unlike a collection
+   */
+  async unlikeCollection(
+    collectionId: string,
+    userId: string,
+  ): Promise<{ likesCount: number; userLiked: boolean }> {
+    // Check if collection exists
+    await this.findById(collectionId);
+
+    // Find and remove like
+    const like = await this.collectionLikeRepository.findOne({
+      where: { collectionId, userId },
+    });
+
+    if (like) {
+      await this.collectionLikeRepository.remove(like);
+    }
+
+    const count = await this.getLikesCount(collectionId);
+    return { likesCount: count, userLiked: false };
+  }
+
+  /**
+   * Get likes count for a collection
+   */
+  async getLikesCount(collectionId: string): Promise<number> {
+    return this.collectionLikeRepository.count({
+      where: { collectionId },
+    });
+  }
+
+  /**
+   * Check if a user has liked a collection
+   */
+  async hasUserLiked(collectionId: string, userId: string): Promise<boolean> {
+    const like = await this.collectionLikeRepository.findOne({
+      where: { collectionId, userId },
+    });
+    return !!like;
+  }
+
+  /**
+   * Get user's liked collection IDs
+   */
+  async getUserLikedCollectionIds(userId: string): Promise<string[]> {
+    const likes = await this.collectionLikeRepository.find({
+      where: { userId },
+      select: ['collectionId'],
+    });
+    return likes.map((like) => like.collectionId);
   }
 }
