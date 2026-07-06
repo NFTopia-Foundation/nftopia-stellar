@@ -7,9 +7,15 @@ import {
   ResolveField,
   Resolver,
 } from '@nestjs/graphql';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  NotFoundException,
+  UseGuards,
+} from '@nestjs/common';
 import { GqlAuthGuard } from '../../common/guards/gql-auth.guard';
-import { UseGuards } from '@nestjs/common';
+import { GqlRolesGuard } from '../../common/guards/gql-roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { UserRole } from '../../common/enums/user-role.enum';
 import { OrderService } from '../../modules/order/order.service';
 import {
   GraphqlOrder,
@@ -26,7 +32,6 @@ import type { OrderPaginatedResponseDto } from '../../modules/order/dto/order-pa
 import type { OrderInterface } from '../../modules/order/interfaces/order.interface';
 import type { User } from '../../users/user.entity';
 import type { Nft } from '../../modules/nft/entities/nft.entity';
-// import { UserRole } from '../../common/enums/user-role.enum';
 
 @Resolver(() => GraphqlOrder)
 export class OrderResolver {
@@ -142,12 +147,12 @@ export class OrderResolver {
     name: 'salesAnalytics',
     description: 'Fetch sales analytics (admin only)',
   })
-  @UseGuards(GqlAuthGuard)
+  @UseGuards(GqlAuthGuard, GqlRolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.MODERATOR)
   async salesAnalytics(
     @Args('timeframe', { type: () => TimeframeInput })
     timeframe: TimeframeInput,
   ): Promise<SalesAnalytics> {
-    // TODO: Implement admin check using a real user lookup if needed
     const periodStart = new Date(timeframe.periodStart);
     const periodEnd = new Date(timeframe.periodEnd);
 

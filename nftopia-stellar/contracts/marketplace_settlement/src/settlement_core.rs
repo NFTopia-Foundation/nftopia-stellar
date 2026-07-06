@@ -21,6 +21,7 @@ use crate::types::{
 };
 use crate::utils::{asset_utils, time_utils};
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, Bytes, Env, Symbol, Vec};
+
 /// Marketplace Settlement Contract
 #[contract]
 pub struct MarketplaceSettlement;
@@ -29,6 +30,14 @@ pub struct MarketplaceSettlement;
 #[allow(clippy::too_many_arguments)]
 #[contractimpl]
 impl MarketplaceSettlement {
+    // === HELPER FUNCTIONS ===
+
+    fn supported_assets_key(env: &Env) -> Symbol {
+        Symbol::new(env, "supported_assets")
+    }
+
+    // === INITIALIZATION ===
+
     /// Initialize the contract with admin configuration and explicit fee parameters.
     ///
     /// `fee_config` must be provided with deployment-appropriate values; there
@@ -64,6 +73,102 @@ impl MarketplaceSettlement {
         // Set default dispute config
         let dispute_config = crate::dispute_resolution::DisputeConfig::default();
         DisputeResolutionManager::update_dispute_config(&env, &dispute_config, &admin)?;
+
+        // Initialize with empty supported assets list
+        let empty_assets: Vec<Asset> = Vec::new(&env);
+        env.storage()
+            .persistent()
+            .set(&Self::supported_assets_key(&env), &empty_assets);
+
+        Ok(())
+    }
+
+    // === ASSET WHITELIST FUNCTIONS ===
+
+    /// Get the list of supported assets (view function)
+    pub fn get_supported_assets(env: Env) -> Vec<Asset> {
+        env.storage()
+            .persistent()
+            .get(&Self::supported_assets_key(&env))
+            .unwrap_or_else(|| Vec::new(&env))
+    }
+
+    /// Add a supported asset (admin only)
+    pub fn add_supported_asset(
+        env: Env,
+        admin: Address,
+        asset: Asset,
+    ) -> Result<(), SettlementError> {
+        admin.require_auth();
+
+        // Check admin permissions
+        let admin_config: AdminConfig = env
+            .storage()
+            .instance()
+            .get(&symbol_short!("admin_cfg"))
+            .ok_or(SettlementError::Unauthorized)?;
+
+        if admin_config.admin != admin {
+            return Err(SettlementError::Unauthorized);
+        }
+
+        let supported = Self::get_supported_assets(env.clone());
+
+        // Check if asset already exists
+        for i in 0..supported.len() {
+            if asset_utils::assets_equal(&asset, &supported.get(i).unwrap()) {
+                return Err(SettlementError::AlreadyExists);
+            }
+        }
+
+        let mut new_list = supported;
+        new_list.push_back(asset);
+        env.storage()
+            .persistent()
+            .set(&Self::supported_assets_key(&env), &new_list);
+
+        Ok(())
+    }
+
+    /// Remove a supported asset (admin only)
+    pub fn remove_supported_asset(
+        env: Env,
+        admin: Address,
+        asset: Asset,
+    ) -> Result<(), SettlementError> {
+        admin.require_auth();
+
+        // Check admin permissions
+        let admin_config: AdminConfig = env
+            .storage()
+            .instance()
+            .get(&symbol_short!("admin_cfg"))
+            .ok_or(SettlementError::Unauthorized)?;
+
+        if admin_config.admin != admin {
+            return Err(SettlementError::Unauthorized);
+        }
+
+        let supported = Self::get_supported_assets(env.clone());
+
+        let mut found = false;
+        let mut new_list: Vec<Asset> = Vec::new(&env);
+        for i in 0..supported.len() {
+            let existing = supported.get(i).unwrap();
+            if asset_utils::assets_equal(&asset, &existing) {
+                found = true;
+            } else {
+                new_list.push_back(existing);
+            }
+        }
+
+        if !found {
+            return Err(SettlementError::NotFound);
+        }
+
+        env.storage()
+            .persistent()
+            .set(&Self::supported_assets_key(&env), &new_list);
 
         Ok(())
     }
@@ -260,8 +365,11 @@ impl MarketplaceSettlement {
                 &Symbol::new(&env, "create_sale"),
             )?;
 
+            // Get supported assets from storage
+            let supported_assets = Self::get_supported_assets(env.clone());
+
             // Validate inputs
-            asset_utils::validate_asset(&currency, &Vec::new(&env), &env)?;
+            asset_utils::validate_asset(&currency, &supported_assets, &env)?;
             asset_utils::validate_nft_contract(&nft_address, &env)?;
             time_utils::validate_transaction_timing(
                 env.ledger().timestamp(),
@@ -422,6 +530,12 @@ impl MarketplaceSettlement {
                 &seller,
                 &Symbol::new(&env, "create_auction"),
             )?;
+
+            // Get supported assets from storage
+            let supported_assets = Self::get_supported_assets(env.clone());
+
+            // Validate asset
+            asset_utils::validate_asset(&currency, &supported_assets, &env)?;
 
             AuctionEngine::create_auction(
                 &env,
@@ -683,6 +797,12 @@ impl MarketplaceSettlement {
             if items.is_empty() {
                 return Err(SettlementError::InvalidAmount);
             }
+
+            // Get supported assets from storage
+            let supported_assets = Self::get_supported_assets(env.clone());
+
+            // Validate asset
+            asset_utils::validate_asset(&currency, &supported_assets, &env)?;
 
             let bundle_id = BundleTransactionStore::next_id(&env);
 

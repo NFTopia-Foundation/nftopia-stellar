@@ -3,6 +3,12 @@ import {
   Logger,
   ServiceUnavailableException,
   BadRequestException,
+  NotFoundException,
+  GatewayTimeoutException,
+  UnauthorizedException,
+  UnprocessableEntityException,
+  InternalServerErrorException,
+  HttpException,
 } from '@nestjs/common';
 import {
   AcceptOfferParams,
@@ -14,8 +20,198 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { SorobanService, SorobanContractArg } from './soroban.service';
 
+// Custom error classes for better error discrimination
+export class SorobanContractError extends UnprocessableEntityException {
+  constructor(
+    message: string,
+    public readonly details?: unknown,
+  ) {
+    super(message);
+    this.name = 'ContractError';
+  }
+}
+
+export class SorobanRpcError extends ServiceUnavailableException {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SorobanRpcError';
+  }
+}
+
+export class InsufficientBalanceError extends HttpException {
+  constructor(message: string) {
+    super(message, 402); // Payment Required
+    this.name = 'InsufficientBalanceError';
+  }
+}
+
+export class InvalidSignatureError extends UnauthorizedException {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidSignatureError';
+  }
+}
+
+export class TransactionFailedError extends BadRequestException {
+  constructor(
+    message: string,
+    public readonly txHash?: string,
+  ) {
+    super(message);
+    this.name = 'TransactionFailedError';
+  }
+}
+
 @Injectable()
 export class MarketplaceSettlementClient {
+  constructor(
+    private readonly sorobanService: SorobanService,
+    private readonly configService: ConfigService,
+  ) {
+    const contractId = this.configService.get<string>(
+      'MARKETPLACE_SETTLEMENT_CONTRACT_ID',
+    );
+    if (!contractId) {
+      throw new ServiceUnavailableException(
+        'MARKETPLACE_SETTLEMENT_CONTRACT_ID not set',
+      );
+    }
+    this.contractId = contractId;
+    this.txTimeout =
+      this.configService.get<number>('CONTRACT_TRANSACTION_TIMEOUT') ?? 60;
+  }
+
+  private readonly logger = new Logger(MarketplaceSettlementClient.name);
+  private readonly contractId: string;
+  private readonly txTimeout: number;
+
+  /**
+   * Retry helper for contract calls. Retries up to 3 times with exponential backoff.
+   * Preserves HttpException types when re-throwing after retries.
+   */
+  private async withRetry<T>(fn: () => Promise<T>): Promise<T> {
+    const maxAttempts = 3;
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await fn();
+      } catch (err: unknown) {
+        lastError = err;
+        const msg = this.extractErrorMessage(err);
+
+        // Only retry on transient errors
+        const isTransient =
+          msg.includes('timeout') ||
+          msg.includes('network') ||
+          msg.includes('ServiceUnavailable') ||
+          msg.includes('ECONNREFUSED') ||
+          msg.includes('502') ||
+          msg.includes('503') ||
+          msg.includes('504') ||
+          msg.includes('GatewayTimeout');
+
+        if (attempt < maxAttempts && isTransient) {
+          const backoff = 500 * Math.pow(2, attempt - 1);
+          this.logger.warn(
+            `Retry ${attempt}/${maxAttempts} after ${backoff}ms: ${msg}`,
+          );
+          await new Promise((resolve) => setTimeout(resolve, backoff));
+          continue;
+        }
+        break;
+      }
+    }
+
+    // Preserve the original error type if it's already an HttpException
+    if (lastError instanceof HttpException) {
+      throw lastError;
+    }
+
+    // Otherwise, map and throw the appropriate typed exception
+    this.handleContractError(lastError);
+  }
+
+  private extractErrorMessage(err: unknown): string {
+    if (err instanceof Error) {
+      return err.message;
+    }
+    if (
+      typeof err === 'object' &&
+      err &&
+      'message' in err &&
+      typeof (err as { message?: unknown }).message === 'string'
+    ) {
+      return (err as { message: string }).message;
+    }
+    return '';
+  }
+
+  /**
+   * Map contract errors to domain-specific HttpExceptions.
+   * This method preserves error types and adds proper error codes for the interceptor.
+   */
+  private handleContractError(err: unknown): never {
+    const msg = this.extractErrorMessage(err);
+
+    // Log the error with context
+    this.logger.error(
+      `Contract error: ${msg}`,
+      err instanceof Error ? err.stack : undefined,
+    );
+
+    // Check for specific error patterns and throw appropriate typed exceptions
+    if (
+      msg.includes('insufficient balance') ||
+      msg.includes('insufficient funds')
+    ) {
+      throw new InsufficientBalanceError(
+        'Insufficient balance for contract operation',
+      );
+    }
+
+    if (msg.includes('not found') || msg.includes('does not exist')) {
+      throw new NotFoundException('Resource not found in contract');
+    }
+
+    if (msg.includes('timeout') || msg.includes('timed out')) {
+      throw new GatewayTimeoutException('Contract call timed out');
+    }
+
+    if (msg.includes('invalid signature') || msg.includes('signature')) {
+      throw new InvalidSignatureError(
+        'Invalid signature for contract operation',
+      );
+    }
+
+    if (
+      msg.includes('contract') &&
+      (msg.includes('revert') || msg.includes('failed'))
+    ) {
+      throw new SorobanContractError('Contract execution failed', {
+        originalMessage: msg,
+      });
+    }
+
+    if (
+      msg.includes('rpc') ||
+      msg.includes('network') ||
+      msg.includes('unavailable') ||
+      msg.includes('connection')
+    ) {
+      throw new SorobanRpcError('Soroban RPC service unavailable');
+    }
+
+    if (msg.includes('invalid') || msg.includes('validation')) {
+      throw new BadRequestException(msg);
+    }
+
+    // Unknown error - preserve the original message for debugging
+    throw new InternalServerErrorException(
+      msg || 'Unknown contract error occurred',
+    );
+  }
+
   async createSale(params: CreateSaleParams): Promise<number> {
     return this.withRetry(async () => {
       if (
@@ -45,65 +241,6 @@ export class MarketplaceSettlementClient {
       );
       return result.returnValue as number;
     });
-  }
-  constructor(
-    private readonly sorobanService: SorobanService,
-    private readonly configService: ConfigService,
-  ) {
-    const contractId = this.configService.get<string>(
-      'MARKETPLACE_SETTLEMENT_CONTRACT_ID',
-    );
-    if (!contractId)
-      throw new ServiceUnavailableException(
-        'MARKETPLACE_SETTLEMENT_CONTRACT_ID not set',
-      );
-    this.contractId = contractId;
-    this.txTimeout =
-      this.configService.get<number>('CONTRACT_TRANSACTION_TIMEOUT') ?? 60;
-  }
-  private readonly logger = new Logger(MarketplaceSettlementClient.name);
-  private readonly contractId: string;
-  private readonly txTimeout: number;
-
-  /**
-   * Retry helper for contract calls. Retries up to 3 times with exponential backoff (500ms, 1000ms, 2000ms).
-   * Only retries on transient errors (network, timeout, service unavailable).
-   */
-  private async withRetry<T>(fn: () => Promise<T>): Promise<T> {
-    const maxAttempts = 3;
-    let lastError: unknown;
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        return await fn();
-      } catch (err: unknown) {
-        lastError = err;
-        let msg = '';
-        if (
-          typeof err === 'object' &&
-          err &&
-          'message' in err &&
-          typeof (err as { message?: unknown }).message === 'string'
-        ) {
-          msg = (err as { message: string }).message;
-        }
-        if (
-          attempt < maxAttempts &&
-          (msg.includes('timeout') ||
-            msg.includes('network') ||
-            msg.includes('ServiceUnavailable') ||
-            msg.includes('ECONNREFUSED') ||
-            msg.includes('502') ||
-            msg.includes('503') ||
-            msg.includes('504'))
-        ) {
-          const backoff = 500 * Math.pow(2, attempt - 1);
-          await new Promise((resolve) => setTimeout(resolve, backoff));
-          continue;
-        }
-        break;
-      }
-    }
-    this.handleContractError(lastError);
   }
 
   async executeSale(
@@ -412,25 +549,29 @@ export class MarketplaceSettlementClient {
       `getEventsSince: fetching events from ledger=${fromLedger}`,
     );
 
-    const response = await server.getEvents({
-      startLedger,
-      filters: [{ type: 'contract', contractIds: [this.contractId] }],
-    });
+    try {
+      const response = await server.getEvents({
+        startLedger,
+        filters: [{ type: 'contract', contractIds: [this.contractId] }],
+      });
 
-    const latestLedger: number =
-      (response as unknown as { latestLedger?: number }).latestLedger ??
-      fromLedger;
+      const latestLedger: number =
+        (response as unknown as { latestLedger?: number }).latestLedger ??
+        fromLedger;
 
-    const events = (response.events ?? []).map(
-      (e) => e as unknown as Record<string, unknown>,
-    );
+      const events = (response.events ?? []).map(
+        (e) => e as unknown as Record<string, unknown>,
+      );
 
-    this.logger.log(
-      `getEventsSince: fromLedger=${fromLedger} latestLedger=${latestLedger} ` +
-        `eventsCount=${events.length} durationMs=${Date.now() - fetchStart}`,
-    );
+      this.logger.log(
+        `getEventsSince: fromLedger=${fromLedger} latestLedger=${latestLedger} ` +
+          `eventsCount=${events.length} durationMs=${Date.now() - fetchStart}`,
+      );
 
-    return { events, latestLedger };
+      return { events, latestLedger };
+    } catch (error) {
+      this.handleContractError(error);
+    }
   }
 
   /**
@@ -470,29 +611,5 @@ export class MarketplaceSettlementClient {
       const tx = result.transaction as { transactionXdr?: string } | undefined;
       return tx?.transactionXdr ?? '';
     });
-  }
-
-  // Error mapping
-  private handleContractError(err: any): never {
-    // Map contract errors to application errors
-    let msg = '';
-    if (
-      typeof err === 'object' &&
-      err &&
-      'message' in err &&
-      typeof (err as { message?: unknown }).message === 'string'
-    ) {
-      msg = (err as { message: string }).message;
-    }
-    if (msg.includes('insufficient balance')) {
-      throw new Error('Insufficient balance for contract operation');
-    }
-    if (msg.includes('not found')) {
-      throw new Error('Resource not found in contract');
-    }
-    if (msg.includes('timeout')) {
-      throw new Error('Contract call timed out');
-    }
-    throw new Error(msg || 'Unknown contract error');
   }
 }
