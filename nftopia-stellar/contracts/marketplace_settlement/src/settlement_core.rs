@@ -3,13 +3,10 @@ use crate::auction_engine::AuctionEngine;
 use crate::dispute_resolution::DisputeResolutionManager;
 use crate::error::SettlementError;
 use crate::events::{
-    emit_address_blocked, emit_address_unblocked, emit_contract_paused, emit_contract_unpaused,
-    emit_module_paused, emit_module_unpaused, emit_pause_scheduled, emit_pause_cancelled,
-    AddressBlockedEvent, AddressUnblockedEvent, ContractPausedEvent, ContractUnpausedEvent,
-    ModulePausedEvent, ModuleUnpausedEvent, PauseScheduledEvent, PauseCancelledEvent,
+    emit_address_blocked, emit_address_unblocked, AddressBlockedEvent, AddressUnblockedEvent,
 };
 use crate::fee_manager::FeeManager;
-use crate::pause_manager::{PauseManager, ModuleType};
+use crate::pause_manager::{ModuleType, PauseManager};
 use crate::royalty_distributor::RoyaltyDistributor;
 use crate::security::reentrancy_guard::ReentrancyGuard;
 use crate::storage::{
@@ -24,7 +21,6 @@ use crate::types::{
 };
 use crate::utils::{asset_utils, time_utils};
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, Bytes, Env, Symbol, Vec};
-
 /// Marketplace Settlement Contract
 #[contract]
 pub struct MarketplaceSettlement;
@@ -132,10 +128,7 @@ impl MarketplaceSettlement {
     }
 
     /// Cancel scheduled pause (admin only)
-    pub fn cancel_scheduled_pause(
-        env: Env,
-        admin: Address,
-    ) -> Result<(), SettlementError> {
+    pub fn cancel_scheduled_pause(env: Env, admin: Address) -> Result<(), SettlementError> {
         admin.require_auth();
         let admin_config: AdminConfig = env
             .storage()
@@ -149,10 +142,7 @@ impl MarketplaceSettlement {
     }
 
     /// Execute scheduled pause (admin only)
-    pub fn execute_scheduled_pause(
-        env: Env,
-        admin: Address,
-    ) -> Result<(), SettlementError> {
+    pub fn execute_scheduled_pause(env: Env, admin: Address) -> Result<(), SettlementError> {
         admin.require_auth();
         let admin_config: AdminConfig = env
             .storage()
@@ -193,7 +183,13 @@ impl MarketplaceSettlement {
     /// Get pause state (view function)
     pub fn get_pause_state(
         env: Env,
-    ) -> (bool, Option<u64>, Option<Address>, Option<Bytes>, Vec<Symbol>) {
+    ) -> (
+        bool,
+        Option<u64>,
+        Option<Address>,
+        Option<Bytes>,
+        Vec<Symbol>,
+    ) {
         if let Some(info) = PauseManager::get_pause_info(&env) {
             return (
                 info.paused,
@@ -207,9 +203,7 @@ impl MarketplaceSettlement {
     }
 
     /// Get scheduled pause info (view function)
-    pub fn get_scheduled_pause_info(
-        env: Env,
-    ) -> Option<(u64, u64, Vec<Symbol>, Bytes, Address)> {
+    pub fn get_scheduled_pause_info(env: Env) -> Option<(u64, u64, Vec<Symbol>, Bytes, Address)> {
         if let Some(scheduled) = PauseManager::get_scheduled_pause(&env) {
             return Some((
                 scheduled.scheduled_at,

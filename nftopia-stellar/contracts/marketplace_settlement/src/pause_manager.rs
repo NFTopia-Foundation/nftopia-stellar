@@ -1,15 +1,12 @@
-use soroban_sdk::{Address, Bytes, Env, Symbol, Vec};
-use crate::error::SettlementError;
+use crate::error::{PauseError, SettlementError};
 use crate::events::{
-    emit_contract_paused, emit_contract_unpaused, emit_module_paused,
-    emit_module_unpaused, emit_pause_scheduled, emit_pause_cancelled,
-    ContractPausedEvent, ContractUnpausedEvent, ModulePausedEvent,
-    ModuleUnpausedEvent, PauseScheduledEvent, PauseCancelledEvent,
+    emit_contract_paused, emit_contract_unpaused, emit_module_paused, emit_pause_cancelled,
+    emit_pause_scheduled, ContractPausedEvent, ContractUnpausedEvent, ModulePausedEvent,
+    PauseCancelledEvent, PauseScheduledEvent,
 };
+use soroban_sdk::{contracttype, Address, Bytes, Env, Symbol, Vec};
 
-const PAUSE_KEY: Symbol = Symbol::new("pause_info");
-const PAUSE_SCHEDULE_KEY: Symbol = Symbol::new("pause_schedule");
-
+#[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ModuleType {
     Sales,
@@ -35,6 +32,7 @@ impl ModuleType {
     }
 }
 
+#[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PauseInfo {
     pub paused: bool,
@@ -44,6 +42,7 @@ pub struct PauseInfo {
     pub modules_paused: Vec<Symbol>,
 }
 
+#[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ScheduledPause {
     pub scheduled_at: u64,
@@ -56,12 +55,20 @@ pub struct ScheduledPause {
 pub struct PauseManager;
 
 impl PauseManager {
+    fn pause_key(env: &Env) -> Symbol {
+        Symbol::new(env, "pause_info")
+    }
+
+    fn schedule_key(env: &Env) -> Symbol {
+        Symbol::new(env, "pause_schedule")
+    }
+
     pub fn get_pause_info(env: &Env) -> Option<PauseInfo> {
-        env.storage().instance().get(&PAUSE_KEY)
+        env.storage().instance().get(&Self::pause_key(env))
     }
 
     pub fn get_scheduled_pause(env: &Env) -> Option<ScheduledPause> {
-        env.storage().instance().get(&PAUSE_SCHEDULE_KEY)
+        env.storage().instance().get(&Self::schedule_key(env))
     }
 
     pub fn is_paused(env: &Env) -> bool {
@@ -76,8 +83,10 @@ impl PauseManager {
             if !info.paused {
                 return false;
             }
+            let all_symbol = Symbol::new(env, "all");
             for paused_module in info.modules_paused.iter() {
-                if paused_module == &Symbol::new(env, "all") || paused_module == &module_symbol {
+                // FIXED: Removed ampersands because Soroban's Vec::iter() yields items by value
+                if paused_module == all_symbol || paused_module == module_symbol {
                     return true;
                 }
             }
@@ -94,7 +103,7 @@ impl PauseManager {
 
     pub fn check_module_not_paused(env: &Env, module: ModuleType) -> Result<(), SettlementError> {
         if Self::is_module_paused(env, module) {
-            return Err(SettlementError::ModulePaused);
+            return Err(PauseError::ModulePaused.into());
         }
         Ok(())
     }
@@ -120,7 +129,9 @@ impl PauseManager {
             modules_paused: modules_to_pause.clone(),
         };
 
-        env.storage().instance().set(&PAUSE_KEY, &pause_info);
+        env.storage()
+            .instance()
+            .set(&Self::pause_key(env), &pause_info);
 
         emit_contract_paused(
             env,
@@ -148,15 +159,15 @@ impl PauseManager {
     pub fn unpause(
         env: &Env,
         admin: &Address,
-        reason: Option<Bytes>,
+        _reason: Option<Bytes>,
     ) -> Result<(), SettlementError> {
         let current_time = env.ledger().timestamp();
 
         if !Self::is_paused(env) {
-            return Err(SettlementError::NotPaused);
+            return Err(PauseError::NotPaused.into());
         }
 
-        env.storage().instance().remove(&PAUSE_KEY);
+        env.storage().instance().remove(&Self::pause_key(env));
 
         emit_contract_unpaused(
             env,
@@ -179,10 +190,11 @@ impl PauseManager {
         let current_time = env.ledger().timestamp();
 
         if Self::get_scheduled_pause(env).is_some() {
-            return Err(SettlementError::PauseAlreadyScheduled);
+            return Err(PauseError::PauseAlreadyScheduled.into());
         }
 
-        if delay_seconds < 3600 || delay_seconds > 604800 {
+        // FIXED: Replaced manual boundary checks with an inclusive range pattern
+        if !(3600..=604800).contains(&delay_seconds) {
             return Err(SettlementError::InvalidAmount);
         }
 
@@ -194,7 +206,9 @@ impl PauseManager {
             scheduled_by: admin.clone(),
         };
 
-        env.storage().instance().set(&PAUSE_SCHEDULE_KEY, &scheduled);
+        env.storage()
+            .instance()
+            .set(&Self::schedule_key(env), &scheduled);
 
         emit_pause_scheduled(
             env,
@@ -210,18 +224,14 @@ impl PauseManager {
         Ok(())
     }
 
-    pub fn cancel_scheduled_pause(
-        env: &Env,
-        admin: &Address,
-    ) -> Result<(), SettlementError> {
-        let scheduled = Self::get_scheduled_pause(env)
-            .ok_or(SettlementError::PauseNotScheduled)?;
+    pub fn cancel_scheduled_pause(env: &Env, admin: &Address) -> Result<(), SettlementError> {
+        let scheduled = Self::get_scheduled_pause(env).ok_or(PauseError::PauseNotScheduled)?;
 
         if scheduled.scheduled_by != *admin {
-            return Err(SettlementError::PauseCancellationNotAllowed);
+            return Err(PauseError::PauseCancellationNotAllowed.into());
         }
 
-        env.storage().instance().remove(&PAUSE_SCHEDULE_KEY);
+        env.storage().instance().remove(&Self::schedule_key(env));
 
         emit_pause_cancelled(
             env,
@@ -234,17 +244,13 @@ impl PauseManager {
         Ok(())
     }
 
-    pub fn execute_scheduled_pause(
-        env: &Env,
-        admin: &Address,
-    ) -> Result<(), SettlementError> {
-        let scheduled = Self::get_scheduled_pause(env)
-            .ok_or(SettlementError::PauseNotScheduled)?;
+    pub fn execute_scheduled_pause(env: &Env, admin: &Address) -> Result<(), SettlementError> {
+        let scheduled = Self::get_scheduled_pause(env).ok_or(PauseError::PauseNotScheduled)?;
 
         let current_time = env.ledger().timestamp();
 
         if current_time < scheduled.execution_at {
-            return Err(SettlementError::PauseTimelockActive);
+            return Err(PauseError::PauseTimelockActive.into());
         }
 
         Self::pause(
@@ -254,7 +260,7 @@ impl PauseManager {
             Some(scheduled.modules.clone()),
         )?;
 
-        env.storage().instance().remove(&PAUSE_SCHEDULE_KEY);
+        env.storage().instance().remove(&Self::schedule_key(env));
 
         Ok(())
     }
@@ -262,9 +268,10 @@ impl PauseManager {
     pub fn is_timelock_active(env: &Env) -> bool {
         if let Some(scheduled) = Self::get_scheduled_pause(env) {
             let current_time = env.ledger().timestamp();
-            return current_time < scheduled.execution_at;
+            current_time < scheduled.execution_at
+        } else {
+            false
         }
-        false
     }
 
     pub fn get_timelock_remaining(env: &Env) -> Option<u64> {
