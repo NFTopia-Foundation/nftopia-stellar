@@ -6,8 +6,7 @@ import { OptimizedImage } from './image';
 import { Button } from "@/components/ui/button";
 import { Clock, ChevronRight, ChevronLeft } from "lucide-react";
 import { useTranslation } from "@/hooks/useTranslation";
-
-
+import ErrorBoundary from "./ErrorBoundary";
 
 type AuctionItem = {
   id: string;
@@ -20,7 +19,8 @@ type AuctionItem = {
   bgColor: string;
 };
 
-export function LiveAuctions() {
+// Main component content - all existing logic preserved
+function LiveAuctionsContent() {
   const { t } = useTranslation();
 
   const auctionItems: AuctionItem[] = [
@@ -28,7 +28,7 @@ export function LiveAuctions() {
       id: "1",
       name: "Yonder Contemplation",
       creator: "KittenSoul",
-      price: "4.89 STRK",
+      price: "4.89 XLM", 
       timeLeft: "04:12:41",
       bidCount: 12,
       isLive: true,
@@ -38,7 +38,7 @@ export function LiveAuctions() {
       id: "2",
       name: "Tranquillizer Awakening",
       creator: "Nova Nexus",
-      price: "4.89 STRK",
+      price: "4.89 XLM", 
       timeLeft: "02:34:56",
       bidCount: 8,
       isLive: true,
@@ -48,7 +48,7 @@ export function LiveAuctions() {
       id: "3",
       name: "Loving Vessel By Lumina",
       creator: "Cosmic Conjurer",
-      price: "4.89 STRK",
+      price: "4.89 XLM", 
       timeLeft: "01:23:45",
       bidCount: 15,
       isLive: true,
@@ -58,7 +58,7 @@ export function LiveAuctions() {
       id: "4",
       name: "Tame Beast By Solomon",
       creator: "Zen Voyager",
-      price: "4.89 STRK",
+      price: "4.89 XLM",
       timeLeft: "00:59:59",
       bidCount: 7,
       isLive: true,
@@ -68,7 +68,7 @@ export function LiveAuctions() {
       id: "5",
       name: "Cosmic Dreamer",
       creator: "Astral Artist",
-      price: "5.12 STRK",
+      price: "5.12 XLM",
       timeLeft: "03:45:22",
       bidCount: 9,
       isLive: true,
@@ -78,7 +78,7 @@ export function LiveAuctions() {
       id: "6",
       name: "Digital Horizon",
       creator: "Pixel Prophet",
-      price: "3.75 STRK",
+      price: "3.75 XLM", 
       timeLeft: "05:30:15",
       bidCount: 11,
       isLive: true,
@@ -88,7 +88,7 @@ export function LiveAuctions() {
       id: "7",
       name: "Ethereal Whisper",
       creator: "Mystic Maker",
-      price: "6.20 STRK",
+      price: "6.20 XLM", 
       timeLeft: "01:15:33",
       bidCount: 14,
       isLive: true,
@@ -98,7 +98,7 @@ export function LiveAuctions() {
       id: "8",
       name: "Neon Nostalgia",
       creator: "Retro Renderer",
-      price: "4.50 STRK",
+      price: "4.50 XLM",
       timeLeft: "02:20:10",
       bidCount: 6,
       isLive: true,
@@ -243,3 +243,23 @@ export function LiveAuctions() {
     </section>
   );
 }
+
+// Wrap with Error Boundary - protects against crashes
+export function LiveAuctions() {
+  return (
+    <ErrorBoundary 
+      componentName="LiveAuctions" 
+      showRetry={true}
+      showHome={false} // Section component, hide home button
+      showReport={true}
+      onError={(error, errorInfo) => {
+        console.error('LiveAuctions crashed:', error, errorInfo);
+      }}
+    >
+      <LiveAuctionsContent />
+    </ErrorBoundary>
+  );
+}
+
+// Default export for backward compatibility
+export default LiveAuctions;

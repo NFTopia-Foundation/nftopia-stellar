@@ -144,6 +144,11 @@ export class ListingService {
     sellerId?: string;
     nftContractId?: string;
     nftTokenId?: string;
+    search?: string;
+    minPrice?: number;
+    maxPrice?: number;
+    category?: string;
+    sortBy?: string;
   }): Promise<{
     data: Listing[];
     total: number;
@@ -151,10 +156,35 @@ export class ListingService {
   }> {
     const qb = this.listingRepo
       .createQueryBuilder('l')
-      .orderBy('l.createdAt', 'DESC')
-      .addOrderBy('l.id', 'DESC');
+      .leftJoinAndSelect(
+        'StellarNft',
+        'nft',
+        'nft.contractId = l.nftContractId AND nft.tokenId = l.nftTokenId',
+      );
 
     this.applyFilters(qb, query);
+
+    // Apply sorting
+    if (query.sortBy) {
+      switch (query.sortBy) {
+        case 'price_asc':
+          qb.orderBy('l.price', 'ASC');
+          break;
+        case 'price_desc':
+          qb.orderBy('l.price', 'DESC');
+          break;
+        case 'oldest':
+          qb.orderBy('l.createdAt', 'ASC');
+          break;
+        case 'newest':
+        default:
+          qb.orderBy('l.createdAt', 'DESC');
+          break;
+      }
+    } else {
+      qb.orderBy('l.createdAt', 'DESC');
+    }
+    qb.addOrderBy('l.id', 'DESC');
 
     if (query.after) {
       qb.andWhere(
@@ -166,7 +196,13 @@ export class ListingService {
       );
     }
 
-    const totalQb = this.listingRepo.createQueryBuilder('l');
+    const totalQb = this.listingRepo
+      .createQueryBuilder('l')
+      .leftJoinAndSelect(
+        'StellarNft',
+        'nft',
+        'nft.contractId = l.nftContractId AND nft.tokenId = l.nftTokenId',
+      );
     this.applyFilters(totalQb, query);
 
     const [rows, total] = await Promise.all([
@@ -188,6 +224,10 @@ export class ListingService {
       sellerId?: string;
       nftContractId?: string;
       nftTokenId?: string;
+      search?: string;
+      minPrice?: number;
+      maxPrice?: number;
+      category?: string;
     },
   ) {
     if (query.status) {
@@ -205,6 +245,21 @@ export class ListingService {
       qb.andWhere('l.nftTokenId = :nftTokenId', {
         nftTokenId: query.nftTokenId,
       });
+    }
+    if (query.minPrice !== undefined) {
+      qb.andWhere('l.price >= :minPrice', { minPrice: query.minPrice });
+    }
+    if (query.maxPrice !== undefined) {
+      qb.andWhere('l.price <= :maxPrice', { maxPrice: query.maxPrice });
+    }
+    if (query.search) {
+      qb.andWhere('(nft.name ILIKE :search OR nft.description ILIKE :search)', {
+        search: `%${query.search}%`,
+      });
+    }
+    if (query.category) {
+      // Assuming collection or attributes would hold category. This is a basic placeholder.
+      // Might require joining collections table depending on actual schema.
     }
 
     const status = query.status;

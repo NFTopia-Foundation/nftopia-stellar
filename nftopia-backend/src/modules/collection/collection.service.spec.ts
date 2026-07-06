@@ -5,6 +5,7 @@ import { User } from '../../users/user.entity';
 import { Nft } from '../nft/entities/nft.entity';
 import { CollectionService } from './collection.service';
 import { Collection } from './entities/collection.entity';
+import { CollectionLike } from './entities/collection-like.entity';
 import { VerificationRequest } from './entities/verification-request.entity';
 
 function makeCollection(overrides: Partial<Collection> = {}): Collection {
@@ -70,6 +71,17 @@ describe('CollectionService', () => {
     createQueryBuilder: jest.fn(() => queryBuilder),
   };
 
+  // Add mock for CollectionLikeRepository
+  const mockCollectionLikeRepository = {
+    findOne: jest.fn(),
+    find: jest.fn(),
+    create: jest.fn(),
+    save: jest.fn(),
+    remove: jest.fn(),
+    count: jest.fn(),
+    createQueryBuilder: jest.fn(() => queryBuilder),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
 
@@ -91,6 +103,10 @@ describe('CollectionService', () => {
         {
           provide: getRepositoryToken(VerificationRequest),
           useValue: mockVerificationRequestRepository,
+        },
+        {
+          provide: getRepositoryToken(CollectionLike),
+          useValue: mockCollectionLikeRepository,
         },
       ],
     }).compile();
@@ -521,6 +537,159 @@ describe('CollectionService', () => {
         ),
       ).rejects.toThrow(BadRequestException);
       expect(mockCollectionRepository.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('likeCollection', () => {
+    it('likes a collection successfully', async () => {
+      const collection = makeCollection();
+      const userId = 'user-1';
+      mockCollectionRepository.findOne.mockResolvedValue(collection);
+      mockCollectionLikeRepository.findOne.mockResolvedValue(null);
+      mockCollectionLikeRepository.create.mockReturnValue({
+        collectionId: collection.id,
+        userId,
+      });
+      mockCollectionLikeRepository.save.mockResolvedValue({
+        collectionId: collection.id,
+        userId,
+      });
+      mockCollectionLikeRepository.count.mockResolvedValue(1);
+
+      const result = await service.likeCollection(collection.id, userId);
+
+      expect(result).toEqual({ likesCount: 1, userLiked: true });
+      expect(mockCollectionLikeRepository.create).toHaveBeenCalledWith({
+        collectionId: collection.id,
+        userId,
+      });
+      expect(mockCollectionLikeRepository.save).toHaveBeenCalled();
+    });
+
+    it('returns existing state if already liked', async () => {
+      const collection = makeCollection();
+      const userId = 'user-1';
+      mockCollectionRepository.findOne.mockResolvedValue(collection);
+      mockCollectionLikeRepository.findOne.mockResolvedValue({
+        collectionId: collection.id,
+        userId,
+      });
+      mockCollectionLikeRepository.count.mockResolvedValue(1);
+
+      const result = await service.likeCollection(collection.id, userId);
+
+      expect(result).toEqual({ likesCount: 1, userLiked: true });
+      expect(mockCollectionLikeRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when collection does not exist', async () => {
+      mockCollectionRepository.findOne.mockResolvedValue(null);
+
+      await expect(service.likeCollection('missing', 'user-1')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('unlikeCollection', () => {
+    it('unlikes a collection successfully', async () => {
+      const collection = makeCollection();
+      const userId = 'user-1';
+      const like = { collectionId: collection.id, userId };
+      mockCollectionRepository.findOne.mockResolvedValue(collection);
+      mockCollectionLikeRepository.findOne.mockResolvedValue(like);
+      mockCollectionLikeRepository.remove.mockResolvedValue(like);
+      mockCollectionLikeRepository.count.mockResolvedValue(0);
+
+      const result = await service.unlikeCollection(collection.id, userId);
+
+      expect(result).toEqual({ likesCount: 0, userLiked: false });
+      expect(mockCollectionLikeRepository.remove).toHaveBeenCalledWith(like);
+    });
+
+    it('does nothing if not liked', async () => {
+      const collection = makeCollection();
+      const userId = 'user-1';
+      mockCollectionRepository.findOne.mockResolvedValue(collection);
+      mockCollectionLikeRepository.findOne.mockResolvedValue(null);
+      mockCollectionLikeRepository.count.mockResolvedValue(0);
+
+      const result = await service.unlikeCollection(collection.id, userId);
+
+      expect(result).toEqual({ likesCount: 0, userLiked: false });
+      expect(mockCollectionLikeRepository.remove).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when collection does not exist', async () => {
+      mockCollectionRepository.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.unlikeCollection('missing', 'user-1'),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('getLikesCount', () => {
+    it('returns the number of likes for a collection', async () => {
+      mockCollectionLikeRepository.count.mockResolvedValue(5);
+
+      const result = await service.getLikesCount('collection-1');
+
+      expect(result).toBe(5);
+      expect(mockCollectionLikeRepository.count).toHaveBeenCalledWith({
+        where: { collectionId: 'collection-1' },
+      });
+    });
+  });
+
+  describe('hasUserLiked', () => {
+    it('returns true when user has liked the collection', async () => {
+      mockCollectionLikeRepository.findOne.mockResolvedValue({
+        collectionId: 'collection-1',
+        userId: 'user-1',
+      });
+
+      const result = await service.hasUserLiked('collection-1', 'user-1');
+
+      expect(result).toBe(true);
+      expect(mockCollectionLikeRepository.findOne).toHaveBeenCalledWith({
+        where: { collectionId: 'collection-1', userId: 'user-1' },
+      });
+    });
+
+    it('returns false when user has not liked the collection', async () => {
+      mockCollectionLikeRepository.findOne.mockResolvedValue(null);
+
+      const result = await service.hasUserLiked('collection-1', 'user-1');
+
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('getUserLikedCollectionIds', () => {
+    it('returns array of liked collection IDs for a user', async () => {
+      const likes = [
+        { collectionId: 'collection-1' },
+        { collectionId: 'collection-2' },
+        { collectionId: 'collection-3' },
+      ];
+      mockCollectionLikeRepository.find.mockResolvedValue(likes);
+
+      const result = await service.getUserLikedCollectionIds('user-1');
+
+      expect(result).toEqual(['collection-1', 'collection-2', 'collection-3']);
+      expect(mockCollectionLikeRepository.find).toHaveBeenCalledWith({
+        where: { userId: 'user-1' },
+        select: ['collectionId'],
+      });
+    });
+
+    it('returns empty array when user has no likes', async () => {
+      mockCollectionLikeRepository.find.mockResolvedValue([]);
+
+      const result = await service.getUserLikedCollectionIds('user-1');
+
+      expect(result).toEqual([]);
     });
   });
 });
