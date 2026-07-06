@@ -55,6 +55,13 @@ pub enum SettlementError {
     InvalidSignature = 602,
     CooldownActive = 603,
     ContractPaused = 604,
+    ModulePaused = 605,
+    PauseTimelockActive = 606,
+    PauseTimelockExpired = 607,
+    PauseAlreadyScheduled = 608,
+    PauseNotScheduled = 609,
+    PauseCancellationNotAllowed = 610,
+    NotPaused = 611,
 
     // Fee errors
     FeeCalculationFailed = 700,
