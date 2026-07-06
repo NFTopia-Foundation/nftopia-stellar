@@ -1,9 +1,9 @@
 export * from './auction.types';
 export * from './collection.types';
 export * from './common.types';
-export { 
-  GraphqlListing, 
-  ListingEdge, 
+export {
+  GraphqlListing,
+  ListingEdge,
   ListingConnection,
 } from './listing.types';
 export * from './nft.types';

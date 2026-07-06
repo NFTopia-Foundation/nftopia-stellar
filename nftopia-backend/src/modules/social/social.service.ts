@@ -2,7 +2,6 @@ import {
   Injectable,
   BadRequestException,
   NotFoundException,
-  UnauthorizedException,
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -10,6 +9,11 @@ import { Repository, In, FindOptionsWhere, LessThan, Not } from 'typeorm';
 import { Follow } from './entities/follow.entity';
 import { Activity, ActivityType } from './entities/activity.entity';
 import { User } from '../../users/user.entity';
+
+interface SecondDegreeResult {
+  id: string;
+  count: string;
+}
 
 @Injectable()
 export class SocialService {
@@ -201,7 +205,7 @@ export class SocialService {
     actorId: string;
     activityType: ActivityType;
     targetId?: string;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
     collectionId?: string;
     nftId?: string;
   }): Promise<Activity> {
@@ -340,7 +344,10 @@ export class SocialService {
   /**
    * Get mutual follows between two users
    */
-  async getMutualFollows(userId: string, otherUserId: string): Promise<{
+  async getMutualFollows(
+    userId: string,
+    otherUserId: string,
+  ): Promise<{
     userFollowsOther: boolean;
     otherFollowsUser: boolean;
   }> {
@@ -358,10 +365,7 @@ export class SocialService {
   /**
    * Get suggested users to follow (users followed by followed users)
    */
-  async getSuggestedUsers(
-    userId: string,
-    limit: number = 10,
-  ): Promise<User[]> {
+  async getSuggestedUsers(userId: string, limit: number = 10): Promise<User[]> {
     // Get users this user follows
     const follows = await this.followRepository.find({
       where: { followerId: userId },
@@ -390,9 +394,9 @@ export class SocialService {
       .groupBy('f.followingId')
       .orderBy('count', 'DESC')
       .limit(limit)
-      .getRawMany();
+      .getRawMany<SecondDegreeResult>();
 
-    const suggestedIds = secondDegree.map((s) => s.id);
+    const suggestedIds = secondDegree.map((s: SecondDegreeResult) => s.id);
 
     if (suggestedIds.length === 0) {
       return this.userRepository.find({

@@ -8,10 +8,17 @@ import {
   UseGuards,
   Request,
   BadRequestException,
-  NotFoundException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { SocialService } from './social.service';
+import { Request as ExpressRequest } from 'express';
+
+interface AuthenticatedRequest extends ExpressRequest {
+  user: {
+    userId: string;
+    [key: string]: unknown;
+  };
+}
 
 @Controller('social')
 @UseGuards(JwtAuthGuard)
@@ -23,7 +30,10 @@ export class SocialController {
    * POST /social/users/:id/follow
    */
   @Post('users/:id/follow')
-  async followUser(@Request() req, @Param('id') followingId: string) {
+  async followUser(
+    @Request() req: AuthenticatedRequest,
+    @Param('id') followingId: string,
+  ) {
     const followerId = req.user.userId;
     const result = await this.socialService.followUser(followerId, followingId);
     return {
@@ -38,7 +48,10 @@ export class SocialController {
    * DELETE /social/users/:id/follow
    */
   @Delete('users/:id/follow')
-  async unfollowUser(@Request() req, @Param('id') followingId: string) {
+  async unfollowUser(
+    @Request() req: AuthenticatedRequest,
+    @Param('id') followingId: string,
+  ) {
     const followerId = req.user.userId;
     await this.socialService.unfollowUser(followerId, followingId);
     return {
@@ -54,13 +67,13 @@ export class SocialController {
   @Get('users/:id/followers')
   async getFollowers(
     @Param('id') userId: string,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
     return this.socialService.getFollowers(
       userId,
-      page ? parseInt(page.toString()) : 1,
-      limit ? parseInt(limit.toString()) : 20,
+      page ? parseInt(page, 10) : 1,
+      limit ? parseInt(limit, 10) : 20,
     );
   }
 
@@ -71,13 +84,13 @@ export class SocialController {
   @Get('users/:id/following')
   async getFollowing(
     @Param('id') userId: string,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
     return this.socialService.getFollowing(
       userId,
-      page ? parseInt(page.toString()) : 1,
-      limit ? parseInt(limit.toString()) : 20,
+      page ? parseInt(page, 10) : 1,
+      limit ? parseInt(limit, 10) : 20,
     );
   }
 
@@ -103,7 +116,10 @@ export class SocialController {
    * GET /social/check-follow/:id
    */
   @Get('check-follow/:id')
-  async checkFollow(@Request() req, @Param('id') followingId: string) {
+  async checkFollow(
+    @Request() req: AuthenticatedRequest,
+    @Param('id') followingId: string,
+  ) {
     const followerId = req.user.userId;
     const isFollowing = await this.socialService.isFollowing(
       followerId,
@@ -117,7 +133,10 @@ export class SocialController {
    * GET /social/mutual/:id
    */
   @Get('mutual/:id')
-  async getMutualFollows(@Request() req, @Param('id') otherUserId: string) {
+  async getMutualFollows(
+    @Request() req: AuthenticatedRequest,
+    @Param('id') otherUserId: string,
+  ) {
     const userId = req.user.userId;
     return this.socialService.getMutualFollows(userId, otherUserId);
   }
@@ -128,22 +147,24 @@ export class SocialController {
    */
   @Get('feed')
   async getFeed(
-    @Request() req,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
+    @Request() req: AuthenticatedRequest,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
     @Query('before') before?: string,
   ) {
     const userId = req.user.userId;
     const beforeDate = before ? new Date(before) : undefined;
 
     if (beforeDate && isNaN(beforeDate.getTime())) {
-      throw new BadRequestException('Invalid date format for "before" parameter');
+      throw new BadRequestException(
+        'Invalid date format for "before" parameter',
+      );
     }
 
     return this.socialService.getFeed(
       userId,
-      page ? parseInt(page.toString()) : 1,
-      limit ? parseInt(limit.toString()) : 20,
+      page ? parseInt(page, 10) : 1,
+      limit ? parseInt(limit, 10) : 20,
       beforeDate,
     );
   }
@@ -155,13 +176,13 @@ export class SocialController {
   @Get('users/:id/activities')
   async getUserActivities(
     @Param('id') userId: string,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
     return this.socialService.getUserActivities(
       userId,
-      page ? parseInt(page.toString()) : 1,
-      limit ? parseInt(limit.toString()) : 20,
+      page ? parseInt(page, 10) : 1,
+      limit ? parseInt(limit, 10) : 20,
     );
   }
 
@@ -171,13 +192,13 @@ export class SocialController {
    */
   @Get('suggestions')
   async getSuggestions(
-    @Request() req,
-    @Query('limit') limit?: number,
+    @Request() req: AuthenticatedRequest,
+    @Query('limit') limit?: string,
   ) {
     const userId = req.user.userId;
     const suggestions = await this.socialService.getSuggestedUsers(
       userId,
-      limit ? parseInt(limit.toString()) : 10,
+      limit ? parseInt(limit, 10) : 10,
     );
     return {
       data: suggestions,

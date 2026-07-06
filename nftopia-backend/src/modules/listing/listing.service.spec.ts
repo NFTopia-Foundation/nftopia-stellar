@@ -518,15 +518,15 @@ describe('ListingService', () => {
     ];
     qb.getMany.mockResolvedValue(expiredListings);
     listingRepo.createQueryBuilder.mockReturnValue(qb);
-    listingRepo.save.mockImplementation((listing: Listing) => 
-      Promise.resolve(listing)
+    listingRepo.save.mockImplementation((listing: Listing) =>
+      Promise.resolve(listing),
     );
 
     await service.expireListings();
 
     expect(listingRepo.save).toHaveBeenCalledTimes(2);
     expect(listingRepo.save).toHaveBeenCalledWith(
-      expect.objectContaining({ status: ListingStatus.EXPIRED })
+      expect.objectContaining({ status: ListingStatus.EXPIRED }),
     );
   });
 

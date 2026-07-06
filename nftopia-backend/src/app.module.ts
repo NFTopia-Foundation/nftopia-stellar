@@ -35,7 +35,6 @@ import { AuditModule } from './common/audit/audit.module';
 import { MetricsModule } from './common/metrics/metrics.module';
 import { SocialModule } from './modules/social/social.module';
 
-
 @Module({
   imports: [
     HealthModule,
@@ -143,7 +142,7 @@ import { SocialModule } from './modules/social/social.module';
     IndexerModule,
     AuditModule,
     MetricsModule,
-    SocialModule
+    SocialModule,
   ],
   controllers: [AppController],
   providers: [

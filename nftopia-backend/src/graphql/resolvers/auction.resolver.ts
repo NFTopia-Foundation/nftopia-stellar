@@ -20,7 +20,6 @@ import {
   GraphqlAuction,
   GraphqlBid,
   AuctionConnection,
-  AuctionStatus,
   TransactionResult,
 } from '../types/auction.types';
 import type { Auction } from '../../modules/auction/entities/auction.entity';
@@ -70,7 +69,8 @@ export class AuctionResolver {
     pagination?: AuctionPaginationInput,
   ): Promise<AuctionConnection> {
     const first = pagination?.first ?? 20;
-    const after = pagination?.after;
+    // `after` is reserved for future cursor-based pagination implementation
+    // const _after = pagination?.after;
 
     // Use existing findAll method with status filter
     const result = await this.auctionService.findAll({
@@ -141,27 +141,31 @@ export class AuctionResolver {
     // Create auction using existing service method
     // Extract nftContractId and nftTokenId from nftId (format: "contractId:tokenId")
     const [nftContractId, nftTokenId] = input.nftId.split(':');
-    
+
     const auctionResult = await this.auctionService.create(
       {
         nftContractId: nftContractId || input.nftId,
         nftTokenId: nftTokenId || '0',
         startPrice: startPrice,
-        reservePrice: input.reservePrice ? parseFloat(input.reservePrice) : undefined,
+        reservePrice: input.reservePrice
+          ? parseFloat(input.reservePrice)
+          : undefined,
         startTime: new Date().toISOString(),
         endTime: input.endTime.toISOString(),
         currency: 'XLM',
       },
-      userId
+      userId,
     );
 
     // Handle both on-chain and legacy responses
     let auction: Auction;
     if ('success' in auctionResult && 'auctionId' in auctionResult) {
       // On-chain auction created, fetch the actual auction
-      auction = await this.auctionService.findOne(String(auctionResult.auctionId));
+      auction = await this.auctionService.findOne(
+        String(auctionResult.auctionId),
+      );
     } else {
-      auction = auctionResult as Auction;
+      auction = auctionResult;
     }
 
     return this.toGraphqlAuction(auction);
@@ -236,7 +240,9 @@ export class AuctionResolver {
 
     // Only seller can cancel
     if (auction.sellerId !== userId) {
-      throw new UnauthorizedException('Only the seller can cancel this auction');
+      throw new UnauthorizedException(
+        'Only the seller can cancel this auction',
+      );
     }
 
     // Cannot cancel completed or settled auctions
@@ -274,7 +280,10 @@ export class AuctionResolver {
     }
 
     // Verify auction is completed or active with expired end time
-    if (auction.status !== AuctionStatusEnum.COMPLETED && auction.status !== AuctionStatusEnum.ACTIVE) {
+    if (
+      auction.status !== AuctionStatusEnum.COMPLETED &&
+      auction.status !== AuctionStatusEnum.ACTIVE
+    ) {
       throw new BadRequestException(
         'Auction must be active or completed before settling',
       );
@@ -292,18 +301,21 @@ export class AuctionResolver {
 
     try {
       const result = await this.auctionService.settleAuction(id, userId);
-      
+
       return {
         success: result.settled || false,
-        transactionHash: result.transactionId ? String(result.transactionId) : undefined,
-        message: result.settled 
-          ? 'Auction settled successfully' 
+        transactionHash: result.transactionId
+          ? String(result.transactionId)
+          : undefined,
+        message: result.settled
+          ? 'Auction settled successfully'
           : result.reason || 'Auction settlement failed',
       };
     } catch (error) {
       return {
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to settle auction',
+        message:
+          error instanceof Error ? error.message : 'Failed to settle auction',
       };
     }
   }

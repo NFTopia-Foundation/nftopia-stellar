@@ -137,8 +137,12 @@ export class SocialResolver {
       followerId: follow.followerId,
       followingId: follow.followingId,
       createdAt: follow.createdAt,
-      follower: follow.follower ? this.toGraphqlUser(follow.follower) : undefined,
-      following: follow.following ? this.toGraphqlUser(follow.following) : undefined,
+      follower: follow.follower
+        ? this.toGraphqlUser(follow.follower)
+        : undefined,
+      following: follow.following
+        ? this.toGraphqlUser(follow.following)
+        : undefined,
     };
   }
 
@@ -150,7 +154,9 @@ export class SocialResolver {
       targetId: activity.targetId || undefined,
       createdAt: activity.createdAt,
       actor: activity.actor ? this.toGraphqlUser(activity.actor) : undefined,
-      metadata: activity.metadata ? JSON.stringify(activity.metadata) : undefined,
+      metadata: activity.metadata
+        ? JSON.stringify(activity.metadata)
+        : undefined,
     };
   }
 }
