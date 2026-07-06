@@ -623,9 +623,9 @@ describe('CollectionService', () => {
     it('throws NotFoundException when collection does not exist', async () => {
       mockCollectionRepository.findOne.mockResolvedValue(null);
 
-      await expect(service.unlikeCollection('missing', 'user-1')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.unlikeCollection('missing', 'user-1'),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -693,4 +693,3 @@ describe('CollectionService', () => {
     });
   });
 });
-

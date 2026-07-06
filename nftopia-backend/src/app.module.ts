@@ -33,6 +33,7 @@ import { OfferModule } from './modules/offer/offer.module';
 import { TransactionModule } from './modules/transaction/transaction.module';
 import { AuditModule } from './common/audit/audit.module';
 import { MetricsModule } from './common/metrics/metrics.module';
+import { SocialModule } from './modules/social/social.module';
 
 @Module({
   imports: [
@@ -141,6 +142,7 @@ import { MetricsModule } from './common/metrics/metrics.module';
     IndexerModule,
     AuditModule,
     MetricsModule,
+    SocialModule,
   ],
   controllers: [AppController],
   providers: [

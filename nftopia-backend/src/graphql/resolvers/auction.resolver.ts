@@ -8,10 +8,20 @@ import {
   ResolveField,
   Resolver,
 } from '@nestjs/graphql';
-import { UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  NotFoundException,
+  UnauthorizedException,
+  UseGuards,
+} from '@nestjs/common';
 import { AuctionService } from '../../modules/auction/auction.service';
 import { BidService } from '../../modules/bid/bid.service';
-import { GraphqlAuction, GraphqlBid } from '../types/auction.types';
+import {
+  GraphqlAuction,
+  GraphqlBid,
+  AuctionConnection,
+  TransactionResult,
+} from '../types/auction.types';
 import type { Auction } from '../../modules/auction/entities/auction.entity';
 import type { Bid } from '../../modules/auction/entities/bid.entity';
 import type { GraphqlContext } from '../context/context.interface';
@@ -19,7 +29,11 @@ import { GraphqlNft } from '../types/nft.types';
 import { GraphqlUserType } from '../types/user.types';
 import type { Nft } from '../../modules/nft/entities/nft.entity';
 import type { User } from '../../users/user.entity';
-import { CreateBidInput } from '../inputs/auction.inputs';
+import {
+  CreateBidInput,
+  CreateAuctionInput,
+  AuctionPaginationInput,
+} from '../inputs/auction.inputs';
 import { GqlAuthGuard } from '../../common/guards/gql-auth.guard';
 import { AuctionStatus as AuctionStatusEnum } from '../../modules/auction/interfaces/auction.interface';
 
@@ -30,6 +44,8 @@ export class AuctionResolver {
     private readonly bidService: BidService,
   ) {}
 
+  // === QUERIES ===
+
   @Query(() => GraphqlAuction, {
     name: 'auction',
     description: 'Fetch a single auction by ID',
@@ -38,6 +54,120 @@ export class AuctionResolver {
     @Args('id', { type: () => ID }) id: string,
   ): Promise<GraphqlAuction> {
     const auction = await this.auctionService.findOne(id);
+    if (!auction) {
+      throw new NotFoundException(`Auction with ID ${id} not found`);
+    }
+    return this.toGraphqlAuction(auction);
+  }
+
+  @Query(() => AuctionConnection, {
+    name: 'activeAuctions',
+    description: 'Fetch active (non-expired) auctions with pagination',
+  })
+  async activeAuctions(
+    @Args('pagination', { type: () => AuctionPaginationInput, nullable: true })
+    pagination?: AuctionPaginationInput,
+  ): Promise<AuctionConnection> {
+    const first = pagination?.first ?? 20;
+    // `after` is reserved for future cursor-based pagination implementation
+    // const _after = pagination?.after;
+
+    // Use existing findAll method with status filter
+    const result = await this.auctionService.findAll({
+      status: AuctionStatusEnum.ACTIVE,
+      page: 1,
+      limit: first,
+    });
+
+    // Extract data and determine if there's a next page
+    const data = result || [];
+    const hasNextPage = data.length > first;
+    const displayData = data.slice(0, first);
+
+    return this.toConnection(displayData, data.length, hasNextPage);
+  }
+
+  @Query(() => [GraphqlBid], {
+    name: 'auctionBids',
+    description: 'Fetch all bids for an auction',
+  })
+  async auctionBids(
+    @Args('auctionId', { type: () => ID }) auctionId: string,
+  ): Promise<GraphqlBid[]> {
+    const bids = await this.auctionService.getBids(auctionId);
+    return bids.map((bid) => this.toGraphqlBid(bid));
+  }
+
+  // === MUTATIONS ===
+
+  /**
+   * Create a new auction
+   * Requires authentication
+   */
+  @UseGuards(GqlAuthGuard)
+  @Mutation(() => GraphqlAuction, {
+    name: 'createAuction',
+    description: 'Create a new auction (authenticated)',
+  })
+  async createAuction(
+    @Args('input', { type: () => CreateAuctionInput })
+    input: CreateAuctionInput,
+    @Context() context: GraphqlContext,
+  ): Promise<GraphqlAuction> {
+    const userId = this.getAuthenticatedUserId(context);
+
+    // Validate end time is in the future
+    const now = new Date();
+    if (input.endTime <= now) {
+      throw new BadRequestException('End time must be in the future');
+    }
+
+    // Validate start price is positive
+    const startPrice = parseFloat(input.startPrice);
+    if (isNaN(startPrice) || startPrice <= 0) {
+      throw new BadRequestException('Start price must be a positive number');
+    }
+
+    // Validate reserve price if provided
+    if (input.reservePrice) {
+      const reservePrice = parseFloat(input.reservePrice);
+      if (isNaN(reservePrice) || reservePrice < startPrice) {
+        throw new BadRequestException(
+          'Reserve price must be greater than or equal to start price',
+        );
+      }
+    }
+
+    // Create auction using existing service method
+    // Extract nftContractId and nftTokenId from nftId (format: "contractId:tokenId")
+    const [nftContractId, nftTokenId] = input.nftId.split(':');
+
+    const auctionResult = await this.auctionService.create(
+      {
+        nftContractId: nftContractId || input.nftId,
+        nftTokenId: nftTokenId || '0',
+        startPrice: startPrice,
+        reservePrice: input.reservePrice
+          ? parseFloat(input.reservePrice)
+          : undefined,
+        startTime: new Date().toISOString(),
+        endTime: input.endTime.toISOString(),
+        currency: 'XLM',
+      },
+      userId,
+    );
+
+    // Handle both on-chain and legacy responses
+    let auction: Auction;
+    if ('success' in auctionResult && 'auctionId' in auctionResult) {
+      // On-chain auction created, fetch the actual auction
+      auction = await this.auctionService.findOne(
+        String(auctionResult.auctionId),
+      );
+    } else {
+      auction = auctionResult;
+    }
+
     return this.toGraphqlAuction(auction);
   }
 
@@ -59,25 +189,26 @@ export class AuctionResolver {
     // Validate auction exists and is active
     const auction = await this.auctionService.findOne(input.auctionId);
     if (!auction) {
-      throw new Error('Auction not found');
+      throw new NotFoundException('Auction not found');
     }
 
     if (auction.status !== AuctionStatusEnum.ACTIVE) {
-      throw new Error('Auction is not active');
+      throw new BadRequestException('Auction is not active');
     }
 
     // Validate bid amount
-    const minBid = Number(auction.currentPrice) + 0.01;
+    const currentPrice = parseFloat(String(auction.currentPrice));
+    const minBid = currentPrice + 0.01;
     if (input.amount < minBid) {
-      throw new Error(`Minimum bid is ${minBid}`);
+      throw new BadRequestException(`Minimum bid is ${minBid}`);
     }
 
     // Validate user is not the seller
     if (auction.sellerId === userId) {
-      throw new Error('You cannot bid on your own auction');
+      throw new BadRequestException('You cannot bid on your own auction');
     }
 
-    // Create bid
+    // Create bid using existing service method
     const bid = await this.bidService.create({
       auctionId: input.auctionId,
       bidderId: userId,
@@ -86,6 +217,110 @@ export class AuctionResolver {
 
     return this.toGraphqlBid(bid);
   }
+
+  /**
+   * Cancel an auction
+   * Requires authentication
+   */
+  @UseGuards(GqlAuthGuard)
+  @Mutation(() => Boolean, {
+    name: 'cancelAuction',
+    description: 'Cancel an auction (authenticated)',
+  })
+  async cancelAuction(
+    @Args('id', { type: () => ID }) id: string,
+    @Context() context: GraphqlContext,
+  ): Promise<boolean> {
+    const userId = this.getAuthenticatedUserId(context);
+
+    const auction = await this.auctionService.findOne(id);
+    if (!auction) {
+      throw new NotFoundException(`Auction with ID ${id} not found`);
+    }
+
+    // Only seller can cancel
+    if (auction.sellerId !== userId) {
+      throw new UnauthorizedException(
+        'Only the seller can cancel this auction',
+      );
+    }
+
+    // Cannot cancel completed or settled auctions
+    if (
+      auction.status === AuctionStatusEnum.COMPLETED ||
+      auction.status === AuctionStatusEnum.SETTLED
+    ) {
+      throw new BadRequestException(
+        'Cannot cancel a completed or settled auction',
+      );
+    }
+
+    await this.auctionService.cancelAuction(id, userId);
+    return true;
+  }
+
+  /**
+   * Settle an auction after completion
+   * Requires authentication
+   */
+  @UseGuards(GqlAuthGuard)
+  @Mutation(() => TransactionResult, {
+    name: 'settleAuction',
+    description: 'Settle an auction after completion (authenticated)',
+  })
+  async settleAuction(
+    @Args('id', { type: () => ID }) id: string,
+    @Context() context: GraphqlContext,
+  ): Promise<TransactionResult> {
+    const userId = this.getAuthenticatedUserId(context);
+
+    const auction = await this.auctionService.findOne(id);
+    if (!auction) {
+      throw new NotFoundException(`Auction with ID ${id} not found`);
+    }
+
+    // Verify auction is completed or active with expired end time
+    if (
+      auction.status !== AuctionStatusEnum.COMPLETED &&
+      auction.status !== AuctionStatusEnum.ACTIVE
+    ) {
+      throw new BadRequestException(
+        'Auction must be active or completed before settling',
+      );
+    }
+
+    // If active, check if end time has passed
+    if (auction.status === AuctionStatusEnum.ACTIVE) {
+      const now = new Date();
+      if (new Date(auction.endTime) > now) {
+        throw new BadRequestException(
+          'Auction must be completed (end time passed) before settling',
+        );
+      }
+    }
+
+    try {
+      const result = await this.auctionService.settleAuction(id, userId);
+
+      return {
+        success: result.settled || false,
+        transactionHash: result.transactionId
+          ? String(result.transactionId)
+          : undefined,
+        message: result.settled
+          ? 'Auction settled successfully'
+          : result.reason || 'Auction settlement failed',
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message:
+          error instanceof Error ? error.message : 'Failed to settle auction',
+      };
+    }
+  }
+
+  // === RESOLVE FIELDS ===
 
   @ResolveField(() => [GraphqlBid], {
     name: 'bids',
@@ -112,7 +347,6 @@ export class AuctionResolver {
     if (!nft) {
       return null;
     }
-
     return this.toGraphqlNft(nft);
   }
 
@@ -129,7 +363,6 @@ export class AuctionResolver {
     if (!seller) {
       return null;
     }
-
     return this.toGraphqlUser(seller);
   }
 
@@ -181,10 +414,12 @@ export class AuctionResolver {
     return this.toGraphqlUser(winner);
   }
 
+  // === HELPER METHODS ===
+
   private getAuthenticatedUserId(context: GraphqlContext): string {
     const userId = context.user?.userId;
     if (!userId) {
-      throw new Error('Authentication is required');
+      throw new UnauthorizedException('Authentication is required');
     }
     return userId;
   }
@@ -247,6 +482,37 @@ export class AuctionResolver {
       stellarAddress: user.walletAddress ?? user.address ?? null,
       avatar: user.avatarUrl ?? null,
     };
+  }
+
+  private toConnection(
+    auctions: Auction[],
+    totalCount: number,
+    hasNextPage: boolean,
+  ): AuctionConnection {
+    const edges = auctions.map((auction) => ({
+      node: this.toGraphqlAuction(auction),
+      cursor: this.encodeCursor(auction),
+    }));
+
+    return {
+      edges,
+      pageInfo: {
+        hasNextPage,
+        startCursor: edges[0]?.cursor || undefined,
+        endCursor: edges.at(-1)?.cursor || undefined,
+      },
+      totalCount,
+    };
+  }
+
+  private encodeCursor(auction: Auction): string {
+    return Buffer.from(
+      JSON.stringify({
+        createdAt: auction.createdAt.toISOString(),
+        id: auction.id,
+      }),
+      'utf8',
+    ).toString('base64url');
   }
 
   private toDecimalString(value: string | number | null | undefined): string {
