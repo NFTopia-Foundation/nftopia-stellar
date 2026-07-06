@@ -9,6 +9,7 @@ import { ChevronRight, RefreshCw } from "lucide-react";
 import { useTranslation } from "@/hooks/useTranslation";
 import { usePopularCollectionsQuery } from "@/hooks/graphql/useCollectionQueries";
 import { Button } from "./ui/button";
+import ErrorBoundary from "./ErrorBoundary";
 
 interface PopularCollectionProps {
   title?: string;
@@ -109,4 +110,22 @@ const PopularCollection: React.FC<PopularCollectionProps> = ({ title }) => {
   );
 };
 
-export default PopularCollection;
+// Wrap with Error Boundary - this is the ONLY change
+// The error boundary catches any rendering errors in the component
+// and displays a friendly fallback UI instead of crashing the page
+export default function PopularCollectionWithErrorBoundary(props: PopularCollectionProps) {
+  return (
+    <ErrorBoundary 
+      componentName="PopularCollection" 
+      showRetry={true}
+      showHome={false} // Hide home button since this is a section component
+      showReport={true}
+      onError={(error, errorInfo) => {
+        // Optional: Log to your telemetry service
+        console.error('PopularCollection crashed:', error, errorInfo);
+      }}
+    >
+      <PopularCollection {...props} />
+    </ErrorBoundary>
+  );
+}
