@@ -22,7 +22,10 @@ import { SorobanService, SorobanContractArg } from './soroban.service';
 
 // Custom error classes for better error discrimination
 export class SorobanContractError extends UnprocessableEntityException {
-  constructor(message: string, public readonly details?: unknown) {
+  constructor(
+    message: string,
+    public readonly details?: unknown,
+  ) {
     super(message);
     this.name = 'ContractError';
   }
@@ -50,7 +53,10 @@ export class InvalidSignatureError extends UnauthorizedException {
 }
 
 export class TransactionFailedError extends BadRequestException {
-  constructor(message: string, public readonly txHash?: string) {
+  constructor(
+    message: string,
+    public readonly txHash?: string,
+  ) {
     super(message);
     this.name = 'TransactionFailedError';
   }
@@ -155,7 +161,10 @@ export class MarketplaceSettlementClient {
     );
 
     // Check for specific error patterns and throw appropriate typed exceptions
-    if (msg.includes('insufficient balance') || msg.includes('insufficient funds')) {
+    if (
+      msg.includes('insufficient balance') ||
+      msg.includes('insufficient funds')
+    ) {
       throw new InsufficientBalanceError(
         'Insufficient balance for contract operation',
       );
@@ -170,14 +179,18 @@ export class MarketplaceSettlementClient {
     }
 
     if (msg.includes('invalid signature') || msg.includes('signature')) {
-      throw new InvalidSignatureError('Invalid signature for contract operation');
+      throw new InvalidSignatureError(
+        'Invalid signature for contract operation',
+      );
     }
 
-    if (msg.includes('contract') && (msg.includes('revert') || msg.includes('failed'))) {
-      throw new SorobanContractError(
-        'Contract execution failed',
-        { originalMessage: msg },
-      );
+    if (
+      msg.includes('contract') &&
+      (msg.includes('revert') || msg.includes('failed'))
+    ) {
+      throw new SorobanContractError('Contract execution failed', {
+        originalMessage: msg,
+      });
     }
 
     if (
