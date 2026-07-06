@@ -5,10 +5,10 @@ import {
   BadRequestException,
   NotFoundException,
   GatewayTimeoutException,
-  PaymentRequiredException,
   UnauthorizedException,
   UnprocessableEntityException,
   InternalServerErrorException,
+  HttpException,
 } from '@nestjs/common';
 import {
   AcceptOfferParams,
@@ -35,9 +35,9 @@ export class SorobanRpcError extends ServiceUnavailableException {
   }
 }
 
-export class InsufficientBalanceError extends PaymentRequiredException {
+export class InsufficientBalanceError extends HttpException {
   constructor(message: string) {
-    super(message);
+    super(message, 402); // Payment Required
     this.name = 'InsufficientBalanceError';
   }
 }
@@ -600,12 +600,3 @@ export class MarketplaceSettlementClient {
     });
   }
 }
-
-// Export error classes for use in other modules
-export {
-  SorobanContractError as ContractError,
-  SorobanRpcError as RpcError,
-  InsufficientBalanceError,
-  InvalidSignatureError,
-  TransactionFailedError,
-};
