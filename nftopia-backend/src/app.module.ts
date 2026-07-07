@@ -34,6 +34,8 @@ import { TransactionModule } from './modules/transaction/transaction.module';
 import { AuditModule } from './common/audit/audit.module';
 import { MetricsModule } from './common/metrics/metrics.module';
 import { SocialModule } from './modules/social/social.module';
+import { PaymentModule } from './modules/payment/payment.module';
+
 
 @Module({
   imports: [
@@ -143,6 +145,7 @@ import { SocialModule } from './modules/social/social.module';
     AuditModule,
     MetricsModule,
     SocialModule,
+    PaymentModule
   ],
   controllers: [AppController],
   providers: [

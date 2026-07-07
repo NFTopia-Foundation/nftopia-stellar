@@ -15,6 +15,7 @@ import { TransactionState } from './enums/transaction-state.enum';
 import { UnauthorizedException } from '@nestjs/common';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { PaymentMethod } from '../payment/enums/payment-method.enum';
 
 describe('TransactionService', () => {
   let service: TransactionService;
@@ -30,6 +31,7 @@ describe('TransactionService', () => {
 
   const listingRepo = {
     findOne: jest.fn(),
+    find: jest.fn(), // Added find method
     save: jest.fn(),
   };
 
@@ -87,6 +89,25 @@ describe('TransactionService', () => {
     del: jest.fn(),
   };
 
+  // Helper to create mock Transaction objects
+  const createMockTransaction = (overrides: Partial<Transaction> = {}): Transaction => {
+    const base: Partial<Transaction> = {
+      id: 1,
+      contractTxId: 'mock',
+      buyerId: 'buyer-1',
+      sellerId: 'seller-1',
+      nftContractId: 'C1',
+      nftTokenId: '1',
+      amount: '100',
+      currency: 'XLM',
+      state: TransactionState.PENDING,
+      contractState: 'pending',
+      metadata: {},
+      createdAt: Math.floor(Date.now() / 1000),
+    };
+    return { ...base, ...overrides } as Transaction;
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
 
@@ -114,7 +135,7 @@ describe('TransactionService', () => {
     txContract.createTransaction.mockResolvedValue(101);
     txContract.addOperation.mockResolvedValue(undefined);
 
-    const created = {
+    const created = createMockTransaction({
       id: 1,
       contractTxId: '101',
       buyerId: 'buyer-1',
@@ -125,7 +146,7 @@ describe('TransactionService', () => {
       currency: 'XLM',
       state: TransactionState.PENDING,
       metadata: {},
-    };
+    });
 
     transactionRepo.create.mockReturnValue(created);
     transactionRepo.save
@@ -144,6 +165,7 @@ describe('TransactionService', () => {
       nftContractId: 'CABC',
       nftTokenId: '1',
       amount: 12.5,
+      paymentMethod: PaymentMethod.XLM,
     });
 
     expect(txContract.createTransaction).toHaveBeenCalled();
@@ -152,13 +174,11 @@ describe('TransactionService', () => {
   });
 
   it('cancels a pending transaction', async () => {
-    const tx = {
+    const tx = createMockTransaction({
       id: 2,
       contractTxId: '202',
-      buyerId: 'buyer-1',
-      sellerId: 'seller-1',
       state: TransactionState.PENDING,
-    } as Transaction;
+    });
 
     transactionRepo.findOne.mockResolvedValue(tx);
     txContract.getTransactionStatus.mockResolvedValue('pending');
@@ -173,22 +193,16 @@ describe('TransactionService', () => {
       reason: 'user_cancel',
     });
 
-    expect(txContract.cancelTransaction).toHaveBeenCalledWith(
-      202,
-      'user_cancel',
-    );
+    expect(txContract.cancelTransaction).toHaveBeenCalledWith(202, 'user_cancel');
     expect(result.state).toBe(TransactionState.CANCELLED);
   });
 
   it('recovers with rollback strategy', async () => {
-    const tx = {
+    const tx = createMockTransaction({
       id: 3,
       contractTxId: '303',
-      buyerId: 'buyer-1',
-      sellerId: 'seller-1',
       state: TransactionState.FAILED,
-      metadata: {},
-    } as Transaction;
+    });
 
     transactionRepo.findOne.mockResolvedValue(tx);
     txContract.getTransactionStatus.mockResolvedValue('failed');
@@ -208,13 +222,11 @@ describe('TransactionService', () => {
   });
 
   it('estimates gas for a transaction', async () => {
-    const tx = {
+    const tx = createMockTransaction({
       id: 4,
       contractTxId: '404',
-      buyerId: 'buyer-1',
-      sellerId: 'seller-1',
       state: TransactionState.PENDING,
-    } as Transaction;
+    });
 
     transactionRepo.findOne.mockResolvedValue(tx);
     txContract.getTransactionStatus.mockResolvedValue('pending');
@@ -227,14 +239,12 @@ describe('TransactionService', () => {
   });
 
   it('adds signatures to operation results', async () => {
-    const tx = {
+    const tx = createMockTransaction({
       id: 5,
       contractTxId: '505',
-      buyerId: 'buyer-1',
-      sellerId: 'seller-1',
       state: TransactionState.PENDING,
       operationResults: {},
-    } as Transaction;
+    });
 
     transactionRepo.findOne.mockResolvedValue(tx);
     txContract.getTransactionStatus.mockResolvedValue('pending');
@@ -261,7 +271,7 @@ describe('TransactionService', () => {
       { contractTxId: '2' },
     ]);
 
-    const result: Transaction[] = await service.batchCreate('admin-1', {
+    const result = await service.batchCreate('admin-1', {
       blueprints: [
         {
           creatorId: 'admin-1',
@@ -304,15 +314,12 @@ describe('TransactionService', () => {
   });
 
   it('returns quick status payload', async () => {
-    const tx = {
+    const tx = createMockTransaction({
       id: 6,
       contractTxId: '606',
-      buyerId: 'buyer-1',
-      sellerId: 'seller-1',
       state: TransactionState.PENDING,
       contractState: 'pending',
-      errorReason: undefined,
-    } as Transaction;
+    });
 
     transactionRepo.findOne.mockResolvedValue(tx);
     txContract.getTransactionStatus.mockResolvedValue('pending');
@@ -341,7 +348,8 @@ describe('TransactionService', () => {
     txContract.getTransactionStatus.mockResolvedValue('pending');
     txContract.getTransactionEvents.mockResolvedValue([]);
     txContract.executeTransaction.mockResolvedValue({ status: 'completed' });
-    const tx = {
+    
+    const tx = createMockTransaction({
       id: 7,
       contractTxId: '707',
       buyerId: 'buyer-1',
@@ -351,8 +359,8 @@ describe('TransactionService', () => {
       amount: '5',
       currency: 'XLM',
       state: TransactionState.PENDING,
-      metadata: {},
-    };
+    });
+    
     transactionRepo.create.mockReturnValue(tx);
     transactionRepo.save.mockResolvedValue({
       ...tx,
@@ -362,7 +370,7 @@ describe('TransactionService', () => {
     usersService.findById.mockResolvedValue({ id: 'buyer-1' });
     nftRepo.findOne.mockResolvedValue(null);
 
-    const result: Transaction = await service.createAndExecuteListingPurchase(
+    const result = await service.createAndExecuteListingPurchase(
       'listing-1',
       'buyer-1',
     );
@@ -383,7 +391,8 @@ describe('TransactionService', () => {
     txContract.getTransactionStatus.mockResolvedValue('pending');
     txContract.getTransactionEvents.mockResolvedValue([]);
     txContract.executeTransaction.mockResolvedValue({ status: 'completed' });
-    const tx = {
+    
+    const tx = createMockTransaction({
       id: 8,
       contractTxId: '808',
       buyerId: 'buyer-2',
@@ -393,8 +402,8 @@ describe('TransactionService', () => {
       amount: '15',
       currency: 'XLM',
       state: TransactionState.PENDING,
-      metadata: {},
-    };
+    });
+    
     transactionRepo.create.mockReturnValue(tx);
     transactionRepo.save
       .mockResolvedValueOnce(tx)
@@ -404,7 +413,7 @@ describe('TransactionService', () => {
     usersService.findById.mockResolvedValue({ id: 'buyer-2' });
     nftRepo.findOne.mockResolvedValue(null);
 
-    const result: Transaction = await service.createAndExecuteAuctionSettlement(
+    const result = await service.createAndExecuteAuctionSettlement(
       'auction-1',
       'buyer-2',
       15,
@@ -415,20 +424,20 @@ describe('TransactionService', () => {
 
   it('executes batch transactions', async () => {
     txContract.batchExecuteTransactions.mockResolvedValue({ success: true });
-    const txA = {
+    const txA = createMockTransaction({
       id: 10,
       contractTxId: '1001',
       buyerId: 'buyer-1',
       sellerId: 'seller-1',
       state: TransactionState.PENDING,
-    } as Transaction;
-    const txB = {
+    });
+    const txB = createMockTransaction({
       id: 11,
       contractTxId: '1002',
       buyerId: 'buyer-1',
       sellerId: 'seller-2',
       state: TransactionState.PENDING,
-    } as Transaction;
+    });
     transactionRepo.find.mockResolvedValue([txA, txB]);
     transactionRepo.save.mockResolvedValue(txA);
 
@@ -448,14 +457,270 @@ describe('TransactionService', () => {
       total: 0,
     });
 
-    const result: {
-      data: Transaction[];
-      page: number;
-      limit: number;
-      total: number;
-    } = await service.getTransactionsForUser('user-1', {});
+    const result = await service.getTransactionsForUser('user-1', {});
 
     expect(result.total).toBe(0);
     expect(transactionRepo.createQueryBuilder).not.toHaveBeenCalled();
+  });
+
+  // New tests for payment methods
+
+  it('creates off-chain payment transaction', async () => {
+    listingRepo.findOne.mockResolvedValue({
+      id: 'listing-1',
+      sellerId: 'seller-1',
+      nftContractId: 'C1',
+      nftTokenId: '10',
+      price: 5,
+      currency: 'USD',
+      status: 'ACTIVE',
+    });
+
+    const tx = createMockTransaction({
+      id: 9,
+      contractTxId: 'offchain_123456_listing-1',
+      buyerId: 'buyer-1',
+      sellerId: 'seller-1',
+      nftContractId: 'C1',
+      nftTokenId: '10',
+      amount: '5',
+      currency: 'USD',
+      state: TransactionState.PENDING,
+      metadata: {
+        listingId: 'listing-1',
+        paymentMethod: PaymentMethod.CREDIT_CARD,
+        stripePaymentIntentId: 'pi_123456789',
+        paymentType: 'offchain',
+      },
+    });
+
+    transactionRepo.create.mockReturnValue(tx);
+    transactionRepo.save.mockResolvedValue(tx);
+
+    const result = await service.createOffchainPaymentTransaction(
+      'listing-1',
+      'buyer-1',
+      {
+        amount: 5,
+        paymentMethod: PaymentMethod.CREDIT_CARD,
+        stripePaymentIntentId: 'pi_123456789',
+      },
+    );
+
+    expect(result.state).toBe(TransactionState.PENDING);
+    expect(result.metadata?.paymentMethod).toBe(PaymentMethod.CREDIT_CARD);
+  });
+
+  it('creates bundle purchase transaction', async () => {
+    listingRepo.findOne.mockResolvedValue({
+      id: 'listing-1',
+      sellerId: 'seller-1',
+      nftContractId: 'C1',
+      nftTokenId: '10',
+      price: 100,
+      currency: 'XLM',
+      status: 'ACTIVE',
+    });
+
+    listingRepo.find.mockResolvedValue([
+      { id: 'item-1', price: 50, status: 'ACTIVE' },
+      { id: 'item-2', price: 50, status: 'ACTIVE' },
+    ]);
+
+    txContract.createTransaction.mockResolvedValue(909);
+    txContract.addOperation.mockResolvedValue(undefined);
+    txContract.getTransactionStatus.mockResolvedValue('pending');
+    txContract.getTransactionEvents.mockResolvedValue([]);
+    txContract.executeTransaction.mockResolvedValue({ status: 'completed' });
+
+    const tx = createMockTransaction({
+      id: 10,
+      contractTxId: '909',
+      buyerId: 'buyer-1',
+      sellerId: 'seller-1',
+      nftContractId: 'C1',
+      nftTokenId: '10',
+      amount: '95',
+      currency: 'XLM',
+      state: TransactionState.PENDING,
+      metadata: {
+        listingId: 'listing-1',
+        bundleItemIds: ['item-1', 'item-2'],
+        discountPercentage: 5,
+        paymentMethod: PaymentMethod.BUNDLE,
+      },
+    });
+
+    transactionRepo.create.mockReturnValue(tx);
+    transactionRepo.save
+      .mockResolvedValueOnce(tx)
+      .mockResolvedValueOnce(tx)
+      .mockResolvedValue({ ...tx, state: TransactionState.COMPLETED });
+    transactionRepo.findOne.mockResolvedValue(tx);
+    usersService.findById.mockResolvedValue({ id: 'buyer-1' });
+    nftRepo.findOne.mockResolvedValue(null);
+
+    const result = await service.createAndExecuteBundlePurchase(
+      'listing-1',
+      'buyer-1',
+      {
+        amount: 95,
+        paymentMethod: PaymentMethod.BUNDLE,
+        bundleItemIds: ['item-1', 'item-2'],
+        discountPercentage: 5,
+      },
+    );
+
+    expect(result.contractTxId).toBe('909');
+  });
+
+  it('confirms off-chain payment successfully', async () => {
+    const tx = createMockTransaction({
+      id: 11,
+      contractTxId: 'offchain_123456_listing-1',
+      buyerId: 'buyer-1',
+      sellerId: 'seller-1',
+      nftContractId: 'C1',
+      nftTokenId: '10',
+      amount: '5',
+      currency: 'USD',
+      state: TransactionState.PENDING,
+      metadata: {
+        listingId: 'listing-1',
+        stripePaymentIntentId: 'pi_123456789',
+        paymentType: 'offchain',
+      },
+    });
+
+    transactionRepo.findOne.mockResolvedValue(tx);
+    txContract.getTransactionStatus.mockResolvedValue('pending');
+    txContract.getTransactionEvents.mockResolvedValue([]);
+    txContract.executeTransaction.mockResolvedValue({ status: 'completed' });
+    transactionRepo.save
+      .mockResolvedValueOnce({ ...tx, state: TransactionState.EXECUTING })
+      .mockResolvedValueOnce({ ...tx, state: TransactionState.EXECUTING })
+      .mockResolvedValue({ ...tx, state: TransactionState.COMPLETED });
+    usersService.findById.mockResolvedValue({ id: 'buyer-1' });
+    nftRepo.findOne.mockResolvedValue(null);
+    listingRepo.findOne.mockResolvedValue({
+      id: 'listing-1',
+      status: 'ACTIVE',
+    });
+    listingRepo.save.mockResolvedValue({ id: 'listing-1', status: 'SOLD' });
+
+    const result = await service.confirmOffchainPayment(
+      'pi_123456789',
+      'succeeded',
+      { paymentConfirmedAt: new Date().toISOString() },
+    );
+
+    expect(result.state).toBe(TransactionState.COMPLETED);
+  });
+
+  it('handles off-chain payment failure', async () => {
+    const tx = createMockTransaction({
+      id: 12,
+      contractTxId: 'offchain_123456_listing-1',
+      buyerId: 'buyer-1',
+      sellerId: 'seller-1',
+      nftContractId: 'C1',
+      nftTokenId: '10',
+      amount: '5',
+      currency: 'USD',
+      state: TransactionState.PENDING,
+      metadata: {
+        listingId: 'listing-1',
+        stripePaymentIntentId: 'pi_123456789',
+        paymentType: 'offchain',
+      },
+    });
+
+    transactionRepo.findOne.mockResolvedValue(tx);
+    transactionRepo.save.mockResolvedValue({
+      ...tx,
+      state: TransactionState.FAILED,
+      errorReason: 'Payment failed or cancelled',
+    });
+
+    const result = await service.confirmOffchainPayment(
+      'pi_123456789',
+      'failed',
+    );
+
+    expect(result.state).toBe(TransactionState.FAILED);
+    expect(result.errorReason).toBe('Payment failed or cancelled');
+  });
+
+  it('creates and executes listing purchase with payment method', async () => {
+    listingRepo.findOne.mockResolvedValue({
+      id: 'listing-1',
+      sellerId: 'seller-1',
+      nftContractId: 'C1',
+      nftTokenId: '10',
+      price: 5,
+      currency: 'XLM',
+      status: 'ACTIVE',
+    });
+
+    txContract.createTransaction.mockResolvedValue(1010);
+    txContract.addOperation.mockResolvedValue(undefined);
+    txContract.getTransactionStatus.mockResolvedValue('pending');
+    txContract.getTransactionEvents.mockResolvedValue([]);
+    txContract.executeTransaction.mockResolvedValue({ status: 'completed' });
+
+    const tx = createMockTransaction({
+      id: 13,
+      contractTxId: '1010',
+      buyerId: 'buyer-1',
+      sellerId: 'seller-1',
+      nftContractId: 'C1',
+      nftTokenId: '10',
+      amount: '5',
+      currency: 'XLM',
+      state: TransactionState.PENDING,
+      metadata: {
+        source: 'listing',
+        paymentMethod: PaymentMethod.XLM,
+      },
+    });
+
+    transactionRepo.create.mockReturnValue(tx);
+    transactionRepo.save
+      .mockResolvedValueOnce(tx)
+      .mockResolvedValueOnce(tx)
+      .mockResolvedValue({ ...tx, state: TransactionState.COMPLETED });
+    transactionRepo.findOne.mockResolvedValue(tx);
+    usersService.findById.mockResolvedValue({ id: 'buyer-1' });
+    nftRepo.findOne.mockResolvedValue(null);
+
+    const result = await service.createAndExecuteListingPurchaseWithPayment(
+      'listing-1',
+      'buyer-1',
+      PaymentMethod.XLM,
+      undefined,
+      1000,
+    );
+
+    expect(result.contractTxId).toBe('1010');
+  });
+
+  it('throws error for off-chain payment with wrong method', async () => {
+    listingRepo.findOne.mockResolvedValue({
+      id: 'listing-1',
+      sellerId: 'seller-1',
+      nftContractId: 'C1',
+      nftTokenId: '10',
+      price: 5,
+      currency: 'XLM',
+      status: 'ACTIVE',
+    });
+
+    await expect(
+      service.createAndExecuteListingPurchaseWithPayment(
+        'listing-1',
+        'buyer-1',
+        PaymentMethod.CREDIT_CARD,
+      ),
+    ).rejects.toThrow('For CREDIT_CARD payments, use createOffchainPaymentTransaction');
   });
 });

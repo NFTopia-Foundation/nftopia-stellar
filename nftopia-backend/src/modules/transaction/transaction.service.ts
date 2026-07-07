@@ -11,7 +11,7 @@ import {
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, Repository } from 'typeorm';
+import { Brackets, In, Repository } from 'typeorm';
 import type { Cache } from 'cache-manager';
 import { Transaction } from './entities/transaction.entity';
 import {
@@ -39,6 +39,7 @@ import { StorageService } from '../../storage/storage.service';
 import { NftService } from '../nft/nft.service';
 import { UsersService } from '../../users/users.service';
 import { UserRole } from '../../common/enums/user-role.enum';
+import { PaymentMethod, OFFCHAIN_PAYMENT_METHODS } from '../payment/enums/payment-method.enum';
 
 type ContractExecutionResult = {
   status?: unknown;
@@ -87,6 +88,8 @@ export class TransactionService {
       nftId: dto.nftId,
       buyerId,
       sellerId: dto.sellerId,
+      paymentMethod: dto.paymentMethod || PaymentMethod.XLM,
+      tokenAddress: dto.tokenAddress,
     };
     const operations = this.buildOperations(dto.operations);
 
@@ -160,8 +163,9 @@ export class TransactionService {
       nftContractId: listing.nftContractId,
       nftTokenId: listing.nftTokenId,
       amount: Number(listing.price),
-      currency: listing.currency,
+      currency: listing.currency || 'XLM',
       listingId,
+      paymentMethod: PaymentMethod.XLM,
       metadata: { source: 'listing', maxGas },
     });
   }
@@ -186,6 +190,7 @@ export class TransactionService {
       amount,
       currency: 'XLM',
       auctionId,
+      paymentMethod: PaymentMethod.XLM,
       metadata: { source: 'auction', maxGas },
     });
   }
@@ -863,5 +868,343 @@ export class TransactionService {
         `tx-history:nft:${transaction.nftContractId}:${transaction.nftTokenId}`,
       ),
     ]);
+  }
+
+  /**
+   * Create an off-chain payment transaction (credit card, Stripe)
+   * Transaction starts in PENDING state and waits for webhook confirmation
+   */
+  async createOffchainPaymentTransaction(
+    listingId: string,
+    buyerId: string,
+    params: {
+      amount: number;
+      paymentMethod: PaymentMethod;
+      stripePaymentIntentId: string;
+      paymentIntentSecret?: string;
+    },
+  ): Promise<Transaction> {
+    const listing = await this.listingRepo.findOne({
+      where: { id: listingId },
+    });
+    if (!listing) {
+      throw new NotFoundException('Listing not found');
+    }
+
+    if (listing.status !== 'ACTIVE') {
+      throw new ConflictException('Listing is not active');
+    }
+
+    // Validate payment method is off-chain
+    if (!(OFFCHAIN_PAYMENT_METHODS as readonly PaymentMethod[]).includes(params.paymentMethod)) {
+      throw new BadRequestException(
+        `Payment method ${params.paymentMethod} is not supported for off-chain payments`,
+      );
+    }
+
+    // Create transaction in PENDING state
+    const transaction = this.transactionRepo.create({
+      contractTxId: `offchain_${Date.now()}_${listingId}`,
+      buyerId,
+      sellerId: listing.sellerId,
+      nftContractId: listing.nftContractId,
+      nftTokenId: listing.nftTokenId,
+      amount: params.amount.toString(),
+      currency: listing.currency || 'USD',
+      state: TransactionState.PENDING,
+      contractState: 'pending_offchain',
+      createdAt: this.getLedgerTimestamp(),
+      metadata: {
+        listingId,
+        paymentMethod: params.paymentMethod,
+        stripePaymentIntentId: params.stripePaymentIntentId,
+        paymentIntentSecret: params.paymentIntentSecret,
+        paymentType: 'offchain',
+        source: 'listing',
+      },
+    });
+
+    const saved = await this.transactionRepo.save(transaction);
+
+    this.logger.log(
+      `Off-chain payment initiated: transaction=${saved.id}, method=${params.paymentMethod}, intent=${params.stripePaymentIntentId}`,
+    );
+
+    await this.invalidateCaches(saved);
+    return saved;
+  }
+
+  /**
+   * Create and execute a bundle purchase with discount logic
+   */
+  async createAndExecuteBundlePurchase(
+    listingId: string,
+    buyerId: string,
+    params: {
+      amount: number;
+      paymentMethod: PaymentMethod;
+      bundleItemIds: string[];
+      discountPercentage: number;
+    },
+  ): Promise<Transaction> {
+    const listing = await this.listingRepo.findOne({
+      where: { id: listingId },
+    });
+    if (!listing) {
+      throw new NotFoundException('Listing not found');
+    }
+
+    if (listing.status !== 'ACTIVE') {
+      throw new ConflictException('Listing is not active');
+    }
+
+    // Validate bundle items exist and are active
+    const bundleListings = await this.listingRepo.find({
+      where: {
+        id: In(params.bundleItemIds),
+        status: ListingStatus.ACTIVE,
+      },
+    });
+
+    if (bundleListings.length !== params.bundleItemIds.length) {
+      throw new BadRequestException(
+        'One or more bundle items are not available',
+      );
+    }
+
+    // Calculate total bundle price with discount
+    const originalTotal = bundleListings.reduce(
+      (sum, item) => sum + Number(item.price),
+      0,
+    );
+    const discountMultiplier = 1 - (params.discountPercentage || 0) / 100;
+    const finalPrice = Math.round(originalTotal * discountMultiplier);
+
+    // Validate the final price matches the expected amount
+    if (Math.abs(finalPrice - params.amount) > 1) {
+      throw new BadRequestException(
+        `Price mismatch: expected ${finalPrice}, got ${params.amount}`,
+      );
+    }
+
+    // Create transaction for the bundle
+    const metadata = {
+      listingId,
+      bundleItemIds: params.bundleItemIds,
+      discountPercentage: params.discountPercentage,
+      originalTotal,
+      paymentMethod: params.paymentMethod,
+      source: 'bundle',
+    };
+
+    const operations = this.buildOperations([
+      {
+        type: 'bundle_purchase',
+        payload: {
+          listingIds: [listingId, ...params.bundleItemIds],
+          discountPercentage: params.discountPercentage,
+          originalTotal,
+        },
+      },
+      {
+        type: 'nft_transfer',
+        payload: {
+          listingIds: [listingId, ...params.bundleItemIds],
+        },
+      },
+      {
+        type: 'payment',
+        payload: {
+          amount: params.amount,
+          currency: listing.currency || 'XLM',
+        },
+      },
+      {
+        type: 'royalty',
+        payload: { validated: true },
+      },
+    ]);
+
+    // Create contract transaction
+    let contractTxId: number;
+    try {
+      contractTxId = await this.txContract.createTransaction(
+        buyerId,
+        metadata,
+        operations,
+      );
+
+      for (const operation of operations) {
+        await this.txContract.addOperation(contractTxId, operation);
+      }
+    } catch (error) {
+      throw this.mapContractError(error);
+    }
+
+    // Create transaction record
+    const transaction = this.transactionRepo.create({
+      contractTxId: String(contractTxId),
+      buyerId,
+      sellerId: listing.sellerId,
+      nftContractId: listing.nftContractId,
+      nftTokenId: listing.nftTokenId,
+      amount: params.amount.toString(),
+      currency: listing.currency || 'XLM',
+      state: TransactionState.PENDING,
+      contractState: 'pending',
+      createdAt: this.getLedgerTimestamp(),
+      metadata,
+    });
+
+    const saved = await this.transactionRepo.save(transaction);
+
+    try {
+      const executed = await this.execute(saved.id, buyerId, {
+        maxGas: this.getGasCeiling(),
+        config: { auto: true },
+      });
+
+      // Update all bundle listings to SOLD
+      for (const bundleItem of bundleListings) {
+        bundleItem.status = ListingStatus.SOLD;
+        await this.listingRepo.save(bundleItem);
+      }
+
+      await this.invalidateCaches(executed);
+      return executed;
+    } catch (error) {
+      this.logger.warn(
+        `Bundle transaction ${saved.id} execution failed: ${(error as Error).message}`,
+      );
+      const fallback = await this.findById(saved.id, buyerId);
+      await this.invalidateCaches(fallback);
+      return fallback;
+    }
+  }
+
+  /**
+   * Confirm an off-chain payment (called by webhook)
+   * Updates transaction from PENDING to COMPLETED
+   */
+  async confirmOffchainPayment(
+    paymentIntentId: string,
+    status: 'succeeded' | 'failed',
+    metadata?: Record<string, unknown>,
+  ): Promise<Transaction> {
+    const transaction = await this.transactionRepo.findOne({
+      where: {
+        metadata: {
+          stripePaymentIntentId: paymentIntentId,
+        },
+      },
+    });
+
+    if (!transaction) {
+      throw new NotFoundException(
+        `Transaction not found for payment intent: ${paymentIntentId}`,
+      );
+    }
+
+    if (transaction.state !== TransactionState.PENDING) {
+      throw new ConflictException(
+        `Transaction ${transaction.id} is already ${transaction.state}`,
+      );
+    }
+
+    if (status === 'failed') {
+      transaction.state = TransactionState.FAILED;
+      transaction.errorReason = 'Payment failed or cancelled';
+      await this.transactionRepo.save(transaction);
+      await this.invalidateCaches(transaction);
+      return transaction;
+    }
+
+    // Payment succeeded - execute the transaction
+    transaction.state = TransactionState.EXECUTING;
+    transaction.contractState = 'executing_offchain';
+    transaction.executedAt = this.getLedgerTimestamp();
+    transaction.metadata = {
+      ...transaction.metadata,
+      confirmedAt: new Date().toISOString(),
+      ...metadata,
+    };
+
+    await this.transactionRepo.save(transaction);
+
+    try {
+      const executed = await this.execute(transaction.id, transaction.buyerId, {
+        maxGas: this.getGasCeiling(),
+        config: { auto: true },
+      });
+
+      // Update listing status
+      const listingId = this.readStringMetadata(transaction, 'listingId');
+      if (listingId) {
+        const listing = await this.listingRepo.findOne({
+          where: { id: listingId },
+        });
+        if (listing) {
+          listing.status = ListingStatus.SOLD;
+          await this.listingRepo.save(listing);
+        }
+      }
+
+      await this.invalidateCaches(executed);
+      return executed;
+    } catch (error) {
+      transaction.state = TransactionState.FAILED;
+      transaction.errorReason = (error as Error).message;
+      const failed = await this.transactionRepo.save(transaction);
+      await this.invalidateCaches(failed);
+      throw this.mapContractError(error);
+    }
+  }
+
+  /**
+   * Create and execute a listing purchase with payment method
+   * Enhanced version of the existing method with payment method support
+   */
+  async createAndExecuteListingPurchaseWithPayment(
+    listingId: string,
+    buyerId: string,
+    paymentMethod: PaymentMethod = PaymentMethod.XLM,
+    tokenAddress?: string,
+    maxGas?: number,
+  ): Promise<Transaction> {
+    const listing = await this.listingRepo.findOne({
+      where: { id: listingId },
+    });
+    if (!listing) {
+      throw new NotFoundException('Listing not found');
+    }
+
+    if (listing.status !== 'ACTIVE') {
+      throw new ConflictException('Listing is not active');
+    }
+
+    // For off-chain payments, use the off-chain method
+    if ((OFFCHAIN_PAYMENT_METHODS as readonly PaymentMethod[]).includes(paymentMethod)) {
+      throw new BadRequestException(
+        `For ${paymentMethod} payments, use createOffchainPaymentTransaction`,
+      );
+    }
+
+    // For native payments (XLM, USDC), use the existing method
+    return this.createAndExecutePurchase(buyerId, {
+      sellerId: listing.sellerId,
+      nftContractId: listing.nftContractId,
+      nftTokenId: listing.nftTokenId,
+      amount: Number(listing.price),
+      currency: paymentMethod === PaymentMethod.XLM ? 'XLM' : 'USDC',
+      listingId,
+      paymentMethod,
+      tokenAddress,
+      metadata: {
+        source: 'listing',
+        maxGas,
+        paymentMethod,
+        tokenAddress,
+      },
+    });
   }
 }

@@ -8,6 +8,7 @@ import {
   UseGuards,
   Req,
   Delete,
+  Request,
 } from '@nestjs/common';
 import { ListingService } from './listing.service';
 import { CreateListingDto } from './dto/create-listing.dto';
@@ -15,6 +16,16 @@ import { ListingQueryDto } from './dto/listing-query.dto';
 import { ListingStatus } from './interfaces/listing.interface';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import type { Request as ExpressRequest } from 'express';
+import { BuyNftDto } from './dto/buy-nft.dto';
+
+// Extend Express Request to include user
+interface RequestWithUser extends ExpressRequest {
+  user?: {
+    userId: string;
+    id?: string;
+    [key: string]: unknown;
+  };
+}
 
 @Controller('listings')
 export class ListingController {
@@ -49,7 +60,7 @@ export class ListingController {
   @Post()
   async create(
     @Body() dto: CreateListingDto,
-    @Req() req: ExpressRequest & { user?: { userId?: string } },
+    @Req() req: RequestWithUser,
   ) {
     const sellerId = req.user?.userId as string;
     return this.listingService.create(dto, sellerId);
@@ -59,7 +70,7 @@ export class ListingController {
   @Delete(':id')
   async cancel(
     @Param('id') id: string,
-    @Req() req: ExpressRequest & { user?: { userId?: string } },
+    @Req() req: RequestWithUser,
   ) {
     const userId = req.user?.userId as string;
     return this.listingService.cancel(id, userId);
@@ -69,9 +80,10 @@ export class ListingController {
   @Post(':id/buy')
   async buy(
     @Param('id') id: string,
-    @Req() req: ExpressRequest & { user?: { userId?: string } },
+    @Body() dto: BuyNftDto,
+    @Request() req: RequestWithUser,
   ) {
     const buyerId = req.user?.userId as string;
-    return this.listingService.buy(id, buyerId);
+    return this.listingService.buy(id, buyerId, dto);
   }
 }
