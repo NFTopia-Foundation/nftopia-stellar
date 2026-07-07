@@ -90,7 +90,9 @@ describe('TransactionService', () => {
   };
 
   // Helper to create mock Transaction objects
-  const createMockTransaction = (overrides: Partial<Transaction> = {}): Transaction => {
+  const createMockTransaction = (
+    overrides: Partial<Transaction> = {},
+  ): Transaction => {
     const base: Partial<Transaction> = {
       id: 1,
       contractTxId: 'mock',
@@ -193,7 +195,10 @@ describe('TransactionService', () => {
       reason: 'user_cancel',
     });
 
-    expect(txContract.cancelTransaction).toHaveBeenCalledWith(202, 'user_cancel');
+    expect(txContract.cancelTransaction).toHaveBeenCalledWith(
+      202,
+      'user_cancel',
+    );
     expect(result.state).toBe(TransactionState.CANCELLED);
   });
 
@@ -348,7 +353,7 @@ describe('TransactionService', () => {
     txContract.getTransactionStatus.mockResolvedValue('pending');
     txContract.getTransactionEvents.mockResolvedValue([]);
     txContract.executeTransaction.mockResolvedValue({ status: 'completed' });
-    
+
     const tx = createMockTransaction({
       id: 7,
       contractTxId: '707',
@@ -360,7 +365,7 @@ describe('TransactionService', () => {
       currency: 'XLM',
       state: TransactionState.PENDING,
     });
-    
+
     transactionRepo.create.mockReturnValue(tx);
     transactionRepo.save.mockResolvedValue({
       ...tx,
@@ -391,7 +396,7 @@ describe('TransactionService', () => {
     txContract.getTransactionStatus.mockResolvedValue('pending');
     txContract.getTransactionEvents.mockResolvedValue([]);
     txContract.executeTransaction.mockResolvedValue({ status: 'completed' });
-    
+
     const tx = createMockTransaction({
       id: 8,
       contractTxId: '808',
@@ -403,7 +408,7 @@ describe('TransactionService', () => {
       currency: 'XLM',
       state: TransactionState.PENDING,
     });
-    
+
     transactionRepo.create.mockReturnValue(tx);
     transactionRepo.save
       .mockResolvedValueOnce(tx)
@@ -721,6 +726,8 @@ describe('TransactionService', () => {
         'buyer-1',
         PaymentMethod.CREDIT_CARD,
       ),
-    ).rejects.toThrow('For CREDIT_CARD payments, use createOffchainPaymentTransaction');
+    ).rejects.toThrow(
+      'For CREDIT_CARD payments, use createOffchainPaymentTransaction',
+    );
   });
 });

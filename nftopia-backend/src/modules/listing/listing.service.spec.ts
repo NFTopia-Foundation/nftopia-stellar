@@ -9,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { CreateListingDto } from './dto/create-listing.dto';
+import { BuyNftDto } from './dto/buy-nft.dto';
 import { Listing } from './entities/listing.entity';
 import { ListingStatus } from './interfaces/listing.interface';
 import { ListingService } from './listing.service';
@@ -16,6 +17,7 @@ import { StellarNft } from '../../nft/entities/stellar-nft.entity';
 import { MarketplaceSettlementClient } from '../stellar/marketplace-settlement.client';
 import { TransactionState } from '../transaction/enums/transaction-state.enum';
 import { TransactionService } from '../transaction/transaction.service';
+import { PaymentMethod } from '../payment/enums/payment-method.enum';
 
 type MockQb = {
   where: jest.Mock;
@@ -86,6 +88,9 @@ describe('ListingService', () => {
 
   const transactionService = {
     createAndExecuteListingPurchase: jest.fn(),
+    createAndExecuteListingPurchaseWithPayment: jest.fn(),
+    createOffchainPaymentTransaction: jest.fn(),
+    createAndExecuteBundlePurchase: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -421,6 +426,219 @@ describe('ListingService', () => {
     expect(listingRepo.save).toHaveBeenCalled();
   });
 
+  it('buy executes transaction and returns completed payload with default payment method', async () => {
+    listingRepo.findOne.mockResolvedValue({
+      id: 'listing-1',
+      status: ListingStatus.ACTIVE,
+      expiresAt: new Date(Date.now() + 60_000),
+      price: 100,
+    });
+    transactionService.createAndExecuteListingPurchaseWithPayment.mockResolvedValue(
+      {
+        id: 99,
+        state: TransactionState.COMPLETED,
+      },
+    );
+
+    const result = await service.buy('listing-1', 'buyer-1');
+
+    expect(result).toEqual({
+      success: true,
+      listingId: 'listing-1',
+      buyer: 'buyer-1',
+      transactionId: 99,
+      transactionState: TransactionState.COMPLETED,
+      paymentMethod: PaymentMethod.XLM,
+      amount: 100,
+    });
+  });
+
+  it('buy returns unsuccessful payload for non-completed transaction state', async () => {
+    listingRepo.findOne.mockResolvedValue({
+      id: 'listing-1',
+      status: ListingStatus.ACTIVE,
+      expiresAt: new Date(Date.now() + 60_000),
+      price: 100,
+    });
+    transactionService.createAndExecuteListingPurchaseWithPayment.mockResolvedValue(
+      {
+        id: 100,
+        state: TransactionState.PENDING,
+      },
+    );
+
+    const result = await service.buy('listing-1', 'buyer-1');
+
+    expect(result.success).toBe(false);
+    expect(result.transactionState).toBe(TransactionState.PENDING);
+    expect(result.amount).toBe(100);
+  });
+
+  it('buy returns unsuccessful payload for non-completed transaction state', async () => {
+    listingRepo.findOne.mockResolvedValue({
+      id: 'listing-1',
+      status: ListingStatus.ACTIVE,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    transactionService.createAndExecuteListingPurchaseWithPayment.mockResolvedValue(
+      {
+        id: 100,
+        state: TransactionState.PENDING,
+      },
+    );
+
+    const result = await service.buy('listing-1', 'buyer-1');
+
+    expect(result.success).toBe(false);
+    expect(result.transactionState).toBe(TransactionState.PENDING);
+  });
+
+  it('buy handles USDC payment with token address', async () => {
+    listingRepo.findOne.mockResolvedValue({
+      id: 'listing-1',
+      status: ListingStatus.ACTIVE,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    transactionService.createAndExecuteListingPurchaseWithPayment.mockResolvedValue(
+      {
+        id: 101,
+        state: TransactionState.COMPLETED,
+      },
+    );
+
+    const dto: BuyNftDto = {
+      paymentMethod: PaymentMethod.USDC,
+      tokenAddress: '0x1234567890abcdef',
+    };
+
+    const result = await service.buy('listing-1', 'buyer-1', dto);
+
+    expect(
+      transactionService.createAndExecuteListingPurchaseWithPayment,
+    ).toHaveBeenCalledWith(
+      'listing-1',
+      'buyer-1',
+      PaymentMethod.USDC,
+      '0x1234567890abcdef',
+      undefined,
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it('buy handles credit card payment with stripe intent', async () => {
+    listingRepo.findOne.mockResolvedValue({
+      id: 'listing-1',
+      status: ListingStatus.ACTIVE,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    transactionService.createOffchainPaymentTransaction.mockResolvedValue({
+      id: 102,
+      state: TransactionState.COMPLETED,
+    });
+
+    const dto: BuyNftDto = {
+      paymentMethod: PaymentMethod.CREDIT_CARD,
+      stripePaymentIntentId: 'pi_123456789',
+    };
+
+    const result = await service.buy('listing-1', 'buyer-1', dto);
+
+    expect(
+      transactionService.createOffchainPaymentTransaction,
+    ).toHaveBeenCalledWith(
+      'listing-1',
+      'buyer-1',
+      expect.objectContaining({
+        paymentMethod: PaymentMethod.CREDIT_CARD,
+        stripePaymentIntentId: 'pi_123456789',
+      }),
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it('buy handles bundle payment with bundle item ids', async () => {
+    listingRepo.findOne.mockResolvedValue({
+      id: 'listing-1',
+      status: ListingStatus.ACTIVE,
+      expiresAt: new Date(Date.now() + 60_000),
+      price: 100,
+    });
+    transactionService.createAndExecuteBundlePurchase.mockResolvedValue({
+      id: 103,
+      state: TransactionState.COMPLETED,
+    });
+
+    const dto: BuyNftDto = {
+      paymentMethod: PaymentMethod.BUNDLE,
+      bundleItemIds: ['item-1', 'item-2'],
+      discountPercentage: 10,
+    };
+
+    const result = await service.buy('listing-1', 'buyer-1', dto);
+
+    expect(
+      transactionService.createAndExecuteBundlePurchase,
+    ).toHaveBeenCalledWith(
+      'listing-1',
+      'buyer-1',
+      expect.objectContaining({
+        paymentMethod: PaymentMethod.BUNDLE,
+        bundleItemIds: ['item-1', 'item-2'],
+        discountPercentage: 10,
+      }),
+    );
+    expect(result.success).toBe(true);
+    expect(result.amount).toBe(90); // 10% discount on 100
+  });
+
+  it('buy throws error for USDC without token address', async () => {
+    listingRepo.findOne.mockResolvedValue({
+      id: 'listing-1',
+      status: ListingStatus.ACTIVE,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+
+    const dto: BuyNftDto = {
+      paymentMethod: PaymentMethod.USDC,
+    };
+
+    await expect(
+      service.buy('listing-1', 'buyer-1', dto),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('buy throws error for credit card without stripe intent', async () => {
+    listingRepo.findOne.mockResolvedValue({
+      id: 'listing-1',
+      status: ListingStatus.ACTIVE,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+
+    const dto: BuyNftDto = {
+      paymentMethod: PaymentMethod.CREDIT_CARD,
+    };
+
+    await expect(
+      service.buy('listing-1', 'buyer-1', dto),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('buy throws error for bundle without bundle item ids', async () => {
+    listingRepo.findOne.mockResolvedValue({
+      id: 'listing-1',
+      status: ListingStatus.ACTIVE,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+
+    const dto: BuyNftDto = {
+      paymentMethod: PaymentMethod.BUNDLE,
+    };
+
+    await expect(
+      service.buy('listing-1', 'buyer-1', dto),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
   it('buy throws 400 when listing is not active', async () => {
     listingRepo.findOne.mockResolvedValue({
       id: 'listing-1',
@@ -444,50 +662,13 @@ describe('ListingService', () => {
     );
   });
 
-  it('buy executes transaction and returns completed payload', async () => {
+  it('buy bubbles conflict errors from transaction flow (409 path)', async () => {
     listingRepo.findOne.mockResolvedValue({
       id: 'listing-1',
       status: ListingStatus.ACTIVE,
       expiresAt: new Date(Date.now() + 60_000),
     });
-    transactionService.createAndExecuteListingPurchase.mockResolvedValue({
-      id: 99,
-      state: TransactionState.COMPLETED,
-    });
-
-    const result = await service.buy('listing-1', 'buyer-1');
-
-    expect(result).toEqual({
-      success: true,
-      listingId: 'listing-1',
-      buyer: 'buyer-1',
-      transactionId: 99,
-      transactionState: TransactionState.COMPLETED,
-    });
-  });
-
-  it('buy returns unsuccessful payload for non-completed transaction state', async () => {
-    listingRepo.findOne.mockResolvedValue({
-      id: 'listing-1',
-      status: ListingStatus.ACTIVE,
-    });
-    transactionService.createAndExecuteListingPurchase.mockResolvedValue({
-      id: 100,
-      state: TransactionState.PENDING,
-    });
-
-    const result = await service.buy('listing-1', 'buyer-1');
-
-    expect(result.success).toBe(false);
-    expect(result.transactionState).toBe(TransactionState.PENDING);
-  });
-
-  it('buy bubbles conflict errors from transaction flow (409 path)', async () => {
-    listingRepo.findOne.mockResolvedValue({
-      id: 'listing-1',
-      status: ListingStatus.ACTIVE,
-    });
-    transactionService.createAndExecuteListingPurchase.mockRejectedValue(
+    transactionService.createAndExecuteListingPurchaseWithPayment.mockRejectedValue(
       new ConflictException('Already finalized'),
     );
 
@@ -500,8 +681,9 @@ describe('ListingService', () => {
     listingRepo.findOne.mockResolvedValue({
       id: 'listing-1',
       status: ListingStatus.ACTIVE,
+      expiresAt: new Date(Date.now() + 60_000),
     });
-    transactionService.createAndExecuteListingPurchase.mockRejectedValue(
+    transactionService.createAndExecuteListingPurchaseWithPayment.mockRejectedValue(
       new UnauthorizedException('Signature missing'),
     );
 

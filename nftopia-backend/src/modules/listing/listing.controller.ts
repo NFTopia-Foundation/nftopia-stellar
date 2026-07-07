@@ -58,20 +58,14 @@ export class ListingController {
 
   @UseGuards(JwtAuthGuard)
   @Post()
-  async create(
-    @Body() dto: CreateListingDto,
-    @Req() req: RequestWithUser,
-  ) {
+  async create(@Body() dto: CreateListingDto, @Req() req: RequestWithUser) {
     const sellerId = req.user?.userId as string;
     return this.listingService.create(dto, sellerId);
   }
 
   @UseGuards(JwtAuthGuard)
   @Delete(':id')
-  async cancel(
-    @Param('id') id: string,
-    @Req() req: RequestWithUser,
-  ) {
+  async cancel(@Param('id') id: string, @Req() req: RequestWithUser) {
     const userId = req.user?.userId as string;
     return this.listingService.cancel(id, userId);
   }

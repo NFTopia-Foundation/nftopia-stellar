@@ -39,7 +39,10 @@ import { StorageService } from '../../storage/storage.service';
 import { NftService } from '../nft/nft.service';
 import { UsersService } from '../../users/users.service';
 import { UserRole } from '../../common/enums/user-role.enum';
-import { PaymentMethod, OFFCHAIN_PAYMENT_METHODS } from '../payment/enums/payment-method.enum';
+import {
+  PaymentMethod,
+  OFFCHAIN_PAYMENT_METHODS,
+} from '../payment/enums/payment-method.enum';
 
 type ContractExecutionResult = {
   status?: unknown;
@@ -896,7 +899,11 @@ export class TransactionService {
     }
 
     // Validate payment method is off-chain
-    if (!(OFFCHAIN_PAYMENT_METHODS as readonly PaymentMethod[]).includes(params.paymentMethod)) {
+    if (
+      !(OFFCHAIN_PAYMENT_METHODS as readonly PaymentMethod[]).includes(
+        params.paymentMethod,
+      )
+    ) {
       throw new BadRequestException(
         `Payment method ${params.paymentMethod} is not supported for off-chain payments`,
       );
@@ -1183,7 +1190,11 @@ export class TransactionService {
     }
 
     // For off-chain payments, use the off-chain method
-    if ((OFFCHAIN_PAYMENT_METHODS as readonly PaymentMethod[]).includes(paymentMethod)) {
+    if (
+      (OFFCHAIN_PAYMENT_METHODS as readonly PaymentMethod[]).includes(
+        paymentMethod,
+      )
+    ) {
       throw new BadRequestException(
         `For ${paymentMethod} payments, use createOffchainPaymentTransaction`,
       );

@@ -37,8 +37,6 @@ import { SocialModule } from './modules/social/social.module';
 import { PaymentModule } from './modules/payment/payment.module';
 // import { CorsConfig } from './config/cors.config';
 
-
-
 @Module({
   imports: [
     HealthModule,
@@ -147,7 +145,7 @@ import { PaymentModule } from './modules/payment/payment.module';
     AuditModule,
     MetricsModule,
     SocialModule,
-    PaymentModule
+    PaymentModule,
   ],
   controllers: [AppController],
   providers: [

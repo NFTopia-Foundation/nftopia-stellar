@@ -18,18 +18,12 @@ import { MarketplaceSettlementClient } from '../stellar/marketplace-settlement.c
 import { CreateSaleParams } from '../shared/contracts/marketplace-settlement.types';
 import { TransactionService } from '../transaction/transaction.service';
 import { TransactionState } from '../transaction/enums/transaction-state.enum';
+import { Transaction } from '../transaction/entities/transaction.entity';
 import { PaymentMethod } from '../payment/enums/payment-method.enum';
 
 type ListingCursorPayload = {
   createdAt: string;
   id: string;
-};
-
-type BuyOptions = {
-  amount?: number;
-  currency?: string;
-  paymentMethod?: PaymentMethod;
-  tokenAddress?: string;
 };
 
 @Injectable()
@@ -372,7 +366,7 @@ export class ListingService {
     this.validatePaymentMethod(paymentMethod, dto);
 
     // Handle different payment methods
-    let transaction;
+    let transaction: Transaction | undefined;
     const tokenAddress = dto?.tokenAddress;
 
     switch (paymentMethod) {
@@ -387,14 +381,15 @@ export class ListingService {
         }
         // Use the existing method with options
         // For XLM/USDC payments
-        transaction = await this.transactionService.createAndExecuteListingPurchaseWithPayment(
-          id,          // listingId
-          buyerId,     // buyerId
-          paymentMethod, // paymentMethod
-          tokenAddress,  // tokenAddress
-          undefined      // maxGas (optional)
-        );
-              break;
+        transaction =
+          await this.transactionService.createAndExecuteListingPurchaseWithPayment(
+            id, // listingId
+            buyerId, // buyerId
+            paymentMethod, // paymentMethod
+            tokenAddress, // tokenAddress
+            undefined, // maxGas (optional)
+          );
+        break;
       }
 
       case PaymentMethod.CREDIT_CARD:
@@ -406,16 +401,17 @@ export class ListingService {
             'stripePaymentIntentId is required for credit card/stripe payments',
           );
         }
-        transaction = await this.transactionService.createOffchainPaymentTransaction(
-          id,
-          buyerId,
-          {
-            amount: finalPrice,
-            paymentMethod,
-            stripePaymentIntentId: dto.stripePaymentIntentId,
-            paymentIntentSecret: dto.paymentIntentSecret,
-          },
-        );
+        transaction =
+          await this.transactionService.createOffchainPaymentTransaction(
+            id,
+            buyerId,
+            {
+              amount: finalPrice,
+              paymentMethod,
+              stripePaymentIntentId: dto.stripePaymentIntentId,
+              paymentIntentSecret: dto.paymentIntentSecret,
+            },
+          );
         break;
       }
 
@@ -426,22 +422,23 @@ export class ListingService {
             'bundleItemIds are required for bundle payments',
           );
         }
-        transaction = await this.transactionService.createAndExecuteBundlePurchase(
-          id,
-          buyerId,
-          {
-            amount: finalPrice,
-            paymentMethod,
-            bundleItemIds: dto.bundleItemIds,
-            discountPercentage: dto.discountPercentage || 0,
-          },
-        );
+        transaction =
+          await this.transactionService.createAndExecuteBundlePurchase(
+            id,
+            buyerId,
+            {
+              amount: finalPrice,
+              paymentMethod,
+              bundleItemIds: dto.bundleItemIds,
+              discountPercentage: dto.discountPercentage || 0,
+            },
+          );
         break;
       }
 
       default:
         throw new BadRequestException(
-          `Unsupported payment method: ${paymentMethod}`,
+          `Unsupported payment method: ${String(paymentMethod)}`,
         );
     }
 
@@ -477,11 +474,14 @@ export class ListingService {
   /**
    * Validate payment method and its required fields
    */
-  private validatePaymentMethod(paymentMethod: PaymentMethod, dto?: BuyNftDto): void {
+  private validatePaymentMethod(
+    paymentMethod: PaymentMethod,
+    dto?: BuyNftDto,
+  ): void {
     const supportedMethods = Object.values(PaymentMethod);
     if (!supportedMethods.includes(paymentMethod)) {
       throw new BadRequestException(
-        `Unsupported payment method: ${paymentMethod}. Supported: ${supportedMethods.join(', ')}`,
+        `Unsupported payment method: ${String(paymentMethod)}. Supported: ${supportedMethods.join(', ')}`,
       );
     }
 

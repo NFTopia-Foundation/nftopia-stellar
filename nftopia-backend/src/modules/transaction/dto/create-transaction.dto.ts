@@ -10,7 +10,10 @@ import {
   IsEnum,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { PaymentMethod, SUPPORTED_PAYMENT_METHODS } from '../../payment/enums/payment-method.enum';
+import {
+  PaymentMethod,
+  SUPPORTED_PAYMENT_METHODS,
+} from '../../payment/enums/payment-method.enum';
 
 export class TransactionOperationDto {
   @IsString()

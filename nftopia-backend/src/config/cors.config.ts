@@ -62,7 +62,11 @@ export function getAllowedOrigins(env: CorsEnvironment): string[] {
   }
 
   // Development environment - permissive
-  const devOrigins = ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5000'];
+  const devOrigins = [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:5000',
+  ];
 
   if (corsOriginDev && corsOriginDev.trim() !== '') {
     try {
@@ -116,7 +120,10 @@ export function createCorsConfig(env: CorsEnvironment): CorsConfig {
 /**
  * Log rejected origins for security auditing
  */
-export function logRejectedOrigin(origin: string | undefined, path: string): void {
+export function logRejectedOrigin(
+  origin: string | undefined,
+  path: string,
+): void {
   const logger = new Logger('CorsSecurity');
   if (origin) {
     logger.warn(
