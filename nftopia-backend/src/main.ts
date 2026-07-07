@@ -31,16 +31,80 @@ import { StellarTransformInterceptor } from './interceptors/stellar-transform.in
 import { SorobanRpcService } from './services/soroban-rpc.service';
 import { StellarAccountService } from './services/stellar-account.service';
 import { MetricsInterceptor } from './common/metrics/metrics.interceptor';
+import { createCorsConfig, logRejectedOrigin } from './config/cors.config';
 
-function createCorsConfig() {
-  const customOrigin = process.env.CORS_ORIGIN;
-  const origins = ['http://localhost:3001', 'http://localhost:5000'];
-  if (customOrigin && !origins.includes(customOrigin)) {
-    origins.push(customOrigin);
-  }
-  return {
-    origin: origins,
-    credentials: true,
+/**
+ * Get CORS configuration based on environment
+ */
+function getCorsConfig() {
+  const nodeEnv = process.env.NODE_ENV || 'development';
+  const corsAllowedOrigins = process.env.CORS_ALLOWED_ORIGINS;
+  const corsOriginDev = process.env.CORS_ORIGIN_DEV;
+
+  return createCorsConfig({
+    nodeEnv,
+    corsAllowedOrigins,
+    corsOriginDev,
+  });
+}
+
+/**
+ * Create CORS middleware with origin logging
+ */
+function createCorsMiddleware() {
+  const config = getCorsConfig();
+  const logger = new NestLogger('CorsMiddleware');
+
+  return (req: Request, res: Response, next: (err?: unknown) => void) => {
+    const origin = req.headers.origin;
+
+    // Allow requests with no origin (same-origin, non-browser clients)
+    if (!origin) {
+      return next();
+    }
+
+    // Check if origin is allowed
+    const isAllowed = config.origins.some((allowed) => {
+      // Allow wildcard subdomains if configured
+      if (allowed.startsWith('*.')) {
+        const domain = allowed.slice(2);
+        return origin.endsWith(domain);
+      }
+      return origin === allowed;
+    });
+
+    if (!isAllowed) {
+      logRejectedOrigin(origin, req.path);
+      return res.status(403).json({
+        statusCode: 403,
+        message: 'CORS origin not allowed',
+        timestamp: new Date().toISOString(),
+        path: req.path,
+      });
+    }
+
+    // Set CORS headers
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader(
+      'Access-Control-Allow-Methods',
+      config.methods.join(', '),
+    );
+    res.setHeader(
+      'Access-Control-Allow-Headers',
+      config.allowedHeaders.join(', '),
+    );
+    res.setHeader(
+      'Access-Control-Expose-Headers',
+      config.exposedHeaders.join(', '),
+    );
+    res.setHeader('Access-Control-Max-Age', String(config.maxAge));
+
+    if (req.method === 'OPTIONS') {
+      return res.status(204).send();
+    }
+
+    return next();
   };
 }
 
@@ -76,7 +140,51 @@ async function bootstrapRestApi() {
     new MetricsInterceptor(),
   );
 
-  app.enableCors(createCorsConfig());
+  // Apply CORS middleware with origin logging
+  app.use(createCorsMiddleware());
+
+  // Also enable Cors for preflight handling
+  app.enableCors({
+    origin: (origin, callback) => {
+      const config = getCorsConfig();
+      if (!origin) {
+        return callback(null, true);
+      }
+      const isAllowed = config.origins.some((allowed) => {
+        if (allowed.startsWith('*.')) {
+          const domain = allowed.slice(2);
+          return origin.endsWith(domain);
+        }
+        return origin === allowed;
+      });
+      if (!isAllowed) {
+        logRejectedOrigin(origin, 'preflight');
+        return callback(new Error('CORS origin not allowed'), false);
+      }
+      return callback(null, true);
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'Accept',
+      'Origin',
+      'X-Requested-With',
+      'X-API-Key',
+      'X-CSRF-Token',
+      'Cache-Control',
+      'Pragma',
+    ],
+    exposedHeaders: [
+      'Content-Length',
+      'X-Content-Type-Options',
+      'X-Frame-Options',
+      'X-XSS-Protection',
+    ],
+    maxAge: 86400,
+  });
+
   app.useGlobalPipes(createValidationPipe());
 
   app.setGlobalPrefix('api/v1');
@@ -109,7 +217,34 @@ async function bootstrapRestApi() {
 
 async function bootstrapGraphqlGateway() {
   const graphqlApp = await NestFactory.create(GraphqlGatewayModule);
-  graphqlApp.enableCors(createCorsConfig());
+  
+  // Apply same CORS configuration to GraphQL gateway
+  const corsConfig = getCorsConfig();
+  graphqlApp.enableCors({
+    origin: (origin, callback) => {
+      if (!origin) {
+        return callback(null, true);
+      }
+      const isAllowed = corsConfig.origins.some((allowed) => {
+        if (allowed.startsWith('*.')) {
+          const domain = allowed.slice(2);
+          return origin.endsWith(domain);
+        }
+        return origin === allowed;
+      });
+      if (!isAllowed) {
+        logRejectedOrigin(origin, 'graphql');
+        return callback(new Error('CORS origin not allowed'), false);
+      }
+      return callback(null, true);
+    },
+    credentials: true,
+    methods: corsConfig.methods,
+    allowedHeaders: corsConfig.allowedHeaders,
+    exposedHeaders: corsConfig.exposedHeaders,
+    maxAge: corsConfig.maxAge,
+  });
+  
   graphqlApp.useGlobalPipes(createValidationPipe());
 
   const graphqlConfig = getGraphqlConfig();
@@ -164,6 +299,17 @@ async function bootstrapGraphqlGateway() {
 }
 
 async function bootstrap() {
+  // Validate CORS configuration on startup
+  try {
+    getCorsConfig();
+  } catch (error) {
+    const logger = new NestLogger('Bootstrap');
+    logger.error(`CORS configuration error: ${(error as Error).message}`);
+    if (process.env.NODE_ENV === 'production') {
+      process.exit(1);
+    }
+  }
+
   await bootstrapRestApi();
   await bootstrapGraphqlGateway();
 }

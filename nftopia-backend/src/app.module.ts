@@ -35,6 +35,8 @@ import { AuditModule } from './common/audit/audit.module';
 import { MetricsModule } from './common/metrics/metrics.module';
 import { SocialModule } from './modules/social/social.module';
 import { PaymentModule } from './modules/payment/payment.module';
+// import { CorsConfig } from './config/cors.config';
+
 
 
 @Module({
