@@ -10,6 +10,7 @@ import { Brackets, Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { Listing } from './entities/listing.entity';
 import { CreateListingDto } from './dto/create-listing.dto';
+import { BuyNftDto } from './dto/buy-nft.dto';
 import { ListingStatus } from './interfaces/listing.interface';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { StellarNft } from '../../nft/entities/stellar-nft.entity';
@@ -17,6 +18,8 @@ import { MarketplaceSettlementClient } from '../stellar/marketplace-settlement.c
 import { CreateSaleParams } from '../shared/contracts/marketplace-settlement.types';
 import { TransactionService } from '../transaction/transaction.service';
 import { TransactionState } from '../transaction/enums/transaction-state.enum';
+import { Transaction } from '../transaction/entities/transaction.entity';
+import { PaymentMethod } from '../payment/enums/payment-method.enum';
 
 type ListingCursorPayload = {
   createdAt: string;
@@ -340,7 +343,14 @@ export class ListingService {
     return this.listingRepo.save(listing);
   }
 
-  async buy(id: string, buyerId: string) {
+  /**
+   * Buy an NFT with payment method support
+   * Handles different payment methods:
+   * - XLM/USDC: On-chain settlement via Soroban
+   * - BUNDLE: Apply bundle discount logic
+   * - CREDIT_CARD/STRIPE: Off-chain payment flow with webhook confirmation
+   */
+  async buy(id: string, buyerId: string, dto?: BuyNftDto) {
     const listing = await this.findOne(id);
     const ls = listing.status as ListingStatus;
     if (ls !== ListingStatus.ACTIVE)
@@ -348,19 +358,160 @@ export class ListingService {
     if (listing.expiresAt && new Date(listing.expiresAt) <= new Date())
       throw new BadRequestException('Listing expired');
 
-    const transaction =
-      await this.transactionService.createAndExecuteListingPurchase(
-        id,
-        buyerId,
-      );
+    // Determine payment method with default
+    const paymentMethod = dto?.paymentMethod || PaymentMethod.XLM;
+    const finalPrice = this.calculateFinalPrice(listing.price, dto);
+
+    // Validate payment method is supported
+    this.validatePaymentMethod(paymentMethod, dto);
+
+    // Handle different payment methods
+    let transaction: Transaction | undefined;
+    const tokenAddress = dto?.tokenAddress;
+
+    switch (paymentMethod) {
+      case PaymentMethod.XLM:
+      case PaymentMethod.USDC: {
+        // On-chain settlement via Soroban
+        // USDC requires token address
+        if (paymentMethod === PaymentMethod.USDC && !tokenAddress) {
+          throw new BadRequestException(
+            'tokenAddress is required for USDC payments',
+          );
+        }
+        // Use the existing method with options
+        // For XLM/USDC payments
+        transaction =
+          await this.transactionService.createAndExecuteListingPurchaseWithPayment(
+            id, // listingId
+            buyerId, // buyerId
+            paymentMethod, // paymentMethod
+            tokenAddress, // tokenAddress
+            undefined, // maxGas (optional)
+          );
+        break;
+      }
+
+      case PaymentMethod.CREDIT_CARD:
+      case PaymentMethod.STRIPE: {
+        // Off-chain payment flow
+        // Create transaction in PENDING state, trigger payment gateway
+        if (!dto?.stripePaymentIntentId) {
+          throw new BadRequestException(
+            'stripePaymentIntentId is required for credit card/stripe payments',
+          );
+        }
+        transaction =
+          await this.transactionService.createOffchainPaymentTransaction(
+            id,
+            buyerId,
+            {
+              amount: finalPrice,
+              paymentMethod,
+              stripePaymentIntentId: dto.stripePaymentIntentId,
+              paymentIntentSecret: dto.paymentIntentSecret,
+            },
+          );
+        break;
+      }
+
+      case PaymentMethod.BUNDLE: {
+        // Bundle discount logic
+        if (!dto?.bundleItemIds || dto.bundleItemIds.length === 0) {
+          throw new BadRequestException(
+            'bundleItemIds are required for bundle payments',
+          );
+        }
+        transaction =
+          await this.transactionService.createAndExecuteBundlePurchase(
+            id,
+            buyerId,
+            {
+              amount: finalPrice,
+              paymentMethod,
+              bundleItemIds: dto.bundleItemIds,
+              discountPercentage: dto.discountPercentage || 0,
+            },
+          );
+        break;
+      }
+
+      default:
+        throw new BadRequestException(
+          `Unsupported payment method: ${String(paymentMethod)}`,
+        );
+    }
+
+    // Update listing status if transaction completed
+    if (transaction?.state === TransactionState.COMPLETED) {
+      listing.status = ListingStatus.SOLD;
+      await this.listingRepo.save(listing);
+    }
 
     return {
-      success: transaction.state === TransactionState.COMPLETED,
+      success: transaction?.state === TransactionState.COMPLETED,
       listingId: id,
       buyer: buyerId,
-      transactionId: transaction.id,
-      transactionState: transaction.state,
+      transactionId: transaction?.id,
+      transactionState: transaction?.state,
+      paymentMethod,
+      amount: finalPrice,
     };
+  }
+
+  /**
+   * Calculate final price with potential bundle discount
+   */
+  private calculateFinalPrice(originalPrice: number, dto?: BuyNftDto): number {
+    if (!dto || !dto.discountPercentage || dto.discountPercentage <= 0) {
+      return originalPrice;
+    }
+
+    const discount = (originalPrice * dto.discountPercentage) / 100;
+    return Math.max(0, originalPrice - discount);
+  }
+
+  /**
+   * Validate payment method and its required fields
+   */
+  private validatePaymentMethod(
+    paymentMethod: PaymentMethod,
+    dto?: BuyNftDto,
+  ): void {
+    const supportedMethods = Object.values(PaymentMethod);
+    if (!supportedMethods.includes(paymentMethod)) {
+      throw new BadRequestException(
+        `Unsupported payment method: ${String(paymentMethod)}. Supported: ${supportedMethods.join(', ')}`,
+      );
+    }
+
+    // Validate USDC requires token address
+    if (paymentMethod === PaymentMethod.USDC && !dto?.tokenAddress) {
+      throw new BadRequestException(
+        'tokenAddress is required for USDC payments',
+      );
+    }
+
+    // Validate credit card requires payment intent
+    if (
+      (paymentMethod === PaymentMethod.CREDIT_CARD ||
+        paymentMethod === PaymentMethod.STRIPE) &&
+      !dto?.stripePaymentIntentId
+    ) {
+      throw new BadRequestException(
+        'stripePaymentIntentId is required for credit card/stripe payments',
+      );
+    }
+
+    // Validate bundle requires bundleItemIds
+    if (
+      paymentMethod === PaymentMethod.BUNDLE &&
+      (!dto?.bundleItemIds || dto.bundleItemIds.length === 0)
+    ) {
+      throw new BadRequestException(
+        'bundleItemIds are required for bundle payments',
+      );
+    }
   }
 
   @Cron(CronExpression.EVERY_MINUTE)

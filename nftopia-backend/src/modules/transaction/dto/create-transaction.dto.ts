@@ -7,8 +7,13 @@ import {
   MaxLength,
   Min,
   ValidateNested,
+  IsEnum,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import {
+  PaymentMethod,
+  SUPPORTED_PAYMENT_METHODS,
+} from '../../payment/enums/payment-method.enum';
 
 export class TransactionOperationDto {
   @IsString()
@@ -60,4 +65,14 @@ export class CreateTransactionDto {
   @IsOptional()
   @IsString()
   auctionId?: string;
+
+  @IsEnum(SUPPORTED_PAYMENT_METHODS, {
+    message: `paymentMethod must be one of: ${SUPPORTED_PAYMENT_METHODS.join(', ')}`,
+  })
+  @IsOptional()
+  paymentMethod?: PaymentMethod = PaymentMethod.XLM;
+
+  @IsOptional()
+  @IsString()
+  tokenAddress?: string;
 }

@@ -8,7 +8,7 @@ import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@apollo/server/express4';
 import { GraphQLSchemaFactory } from '@nestjs/graphql';
 import { json, urlencoded } from 'express';
-import type { Request, Response } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { GraphqlGatewayModule } from './graphql/graphql.module';
 import {
   BaseResolver,
@@ -31,16 +31,117 @@ import { StellarTransformInterceptor } from './interceptors/stellar-transform.in
 import { SorobanRpcService } from './services/soroban-rpc.service';
 import { StellarAccountService } from './services/stellar-account.service';
 import { MetricsInterceptor } from './common/metrics/metrics.interceptor';
+import {
+  createCorsConfig,
+  logRejectedOrigin,
+  CorsConfig,
+} from './config/cors.config';
 
-function createCorsConfig() {
-  const customOrigin = process.env.CORS_ORIGIN;
-  const origins = ['http://localhost:3001', 'http://localhost:5000'];
-  if (customOrigin && !origins.includes(customOrigin)) {
-    origins.push(customOrigin);
-  }
-  return {
-    origin: origins,
-    credentials: true,
+/**
+ * Get CORS configuration based on environment
+ */
+function getCorsConfig(): CorsConfig {
+  const nodeEnv = process.env.NODE_ENV || 'development';
+  const corsAllowedOrigins = process.env.CORS_ALLOWED_ORIGINS;
+  const corsOriginDev = process.env.CORS_ORIGIN_DEV;
+
+  return createCorsConfig({
+    nodeEnv,
+    corsAllowedOrigins,
+    corsOriginDev,
+  });
+}
+
+/**
+ * Check if an origin is allowed by the CORS configuration
+ */
+function isOriginAllowed(origin: string, config: CorsConfig): boolean {
+  return config.origins.some((allowed: string) => {
+    // Allow wildcard subdomains if configured
+    if (allowed.startsWith('*.')) {
+      const domain = allowed.slice(2);
+      return origin.endsWith(domain);
+    }
+    return origin === allowed;
+  });
+}
+
+/**
+ * Create CORS middleware with origin logging
+ */
+function createCorsMiddleware() {
+  const config = getCorsConfig();
+
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const origin = req.headers.origin;
+
+    // Allow requests with no origin (same-origin, non-browser clients)
+    if (!origin) {
+      next();
+      return;
+    }
+
+    // Check if origin is allowed
+    const isAllowed = isOriginAllowed(origin, config);
+
+    if (!isAllowed) {
+      logRejectedOrigin(origin, req.path);
+      res.status(403).json({
+        statusCode: 403,
+        message: 'CORS origin not allowed',
+        timestamp: new Date().toISOString(),
+        path: req.path,
+      });
+      return;
+    }
+
+    // Set CORS headers
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', config.methods.join(', '));
+    res.setHeader(
+      'Access-Control-Allow-Headers',
+      config.allowedHeaders.join(', '),
+    );
+    res.setHeader(
+      'Access-Control-Expose-Headers',
+      config.exposedHeaders.join(', '),
+    );
+    res.setHeader('Access-Control-Max-Age', String(config.maxAge));
+
+    if (req.method === 'OPTIONS') {
+      res.status(204).send();
+      return;
+    }
+
+    next();
+  };
+}
+
+/**
+ * Create CORS origin callback for enableCors
+ */
+function createCorsOriginCallback(context: string) {
+  const config = getCorsConfig();
+
+  return (
+    origin: string | undefined,
+    callback: (err: Error | null, allow?: boolean) => void,
+  ): void => {
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+
+    const isAllowed = isOriginAllowed(origin, config);
+
+    if (!isAllowed) {
+      logRejectedOrigin(origin, context);
+      callback(new Error('CORS origin not allowed'), false);
+      return;
+    }
+
+    callback(null, true);
   };
 }
 
@@ -76,12 +177,39 @@ async function bootstrapRestApi() {
     new MetricsInterceptor(),
   );
 
-  app.enableCors(createCorsConfig());
+  // Apply CORS middleware with origin logging
+  app.use(createCorsMiddleware());
+
+  // Also enable Cors for preflight handling
+  app.enableCors({
+    origin: createCorsOriginCallback('rest'),
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'Accept',
+      'Origin',
+      'X-Requested-With',
+      'X-API-Key',
+      'X-CSRF-Token',
+      'Cache-Control',
+      'Pragma',
+    ],
+    exposedHeaders: [
+      'Content-Length',
+      'X-Content-Type-Options',
+      'X-Frame-Options',
+      'X-XSS-Protection',
+    ],
+    maxAge: 86400,
+  });
+
   app.useGlobalPipes(createValidationPipe());
 
   app.setGlobalPrefix('api/v1');
 
-  const config = new DocumentBuilder()
+  const swaggerConfig = new DocumentBuilder()
     .setTitle('NFTopia API')
     .setDescription('NFTopia Stellar NFT Marketplace API Documentation')
     .setVersion('1.0')
@@ -93,7 +221,7 @@ async function bootstrapRestApi() {
     .addBearerAuth()
     .build();
 
-  const document = SwaggerModule.createDocument(app, config);
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, document);
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
@@ -109,7 +237,32 @@ async function bootstrapRestApi() {
 
 async function bootstrapGraphqlGateway() {
   const graphqlApp = await NestFactory.create(GraphqlGatewayModule);
-  graphqlApp.enableCors(createCorsConfig());
+
+  // Apply same CORS configuration to GraphQL gateway
+  graphqlApp.enableCors({
+    origin: createCorsOriginCallback('graphql'),
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'Accept',
+      'Origin',
+      'X-Requested-With',
+      'X-API-Key',
+      'X-CSRF-Token',
+      'Cache-Control',
+      'Pragma',
+    ],
+    exposedHeaders: [
+      'Content-Length',
+      'X-Content-Type-Options',
+      'X-Frame-Options',
+      'X-XSS-Protection',
+    ],
+    maxAge: 86400,
+  });
+
   graphqlApp.useGlobalPipes(createValidationPipe());
 
   const graphqlConfig = getGraphqlConfig();
@@ -164,9 +317,21 @@ async function bootstrapGraphqlGateway() {
 }
 
 async function bootstrap() {
+  // Validate CORS configuration on startup
+  try {
+    getCorsConfig();
+  } catch (error) {
+    const logger = new NestLogger('Bootstrap');
+    logger.error(`CORS configuration error: ${(error as Error).message}`);
+    if (process.env.NODE_ENV === 'production') {
+      process.exit(1);
+    }
+  }
+
   await bootstrapRestApi();
   await bootstrapGraphqlGateway();
 }
+
 void bootstrap().catch((err) => {
   console.error('Error during bootstrap', err);
 });
