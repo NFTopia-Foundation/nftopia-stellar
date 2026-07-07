@@ -13,7 +13,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { GraphqlContext } from '../context/context.interface';
-import { GraphqlUserType } from '../types/user.types';
+import { DashboardStats, GraphqlUserType } from '../types/user.types';
 import type { User } from '../../users/user.entity';
 import { GqlAuthGuard } from '../../common/guards/gql-auth.guard';
 import { UsersService } from '../../users/users.service';
@@ -28,11 +28,7 @@ import {
   GraphqlListing,
   ListingStatus,
 } from '../types/listing.types';
-import {
-  AuctionConnection,
-  GraphqlAuction,
-  AuctionStatus, // eslint-disable-line @typescript-eslint/no-unused-vars
-} from '../types/auction.types';
+import { AuctionConnection, GraphqlAuction } from '../types/auction.types';
 import { GraphqlOrder, OrderConnection } from '../types/order.types';
 import type { Nft } from '../../modules/nft/entities/nft.entity';
 import type { Listing } from '../../modules/listing/entities/listing.entity';
@@ -83,6 +79,37 @@ export class UserResolver {
     }
 
     return this.toGraphqlUser(user);
+  }
+
+  @Query(() => DashboardStats, {
+    name: 'dashboardStats',
+    description: 'Fetch dashboard stats for the authenticated user',
+  })
+  @UseGuards(GqlAuthGuard)
+  async dashboardStats(
+    @Context() context: GraphqlContext,
+  ): Promise<DashboardStats> {
+    const userId = context.user?.userId;
+    if (!userId) {
+      throw new UnauthorizedException('Authentication is required');
+    }
+
+    const [nfts, orders] = await Promise.all([
+      this.nftService.findByOwner(userId, {}),
+      this.orderService.findAll({ buyerId: userId }),
+    ]);
+
+    // Explicitly cast or stringify the enum status to safely evaluate against a string literal
+    const totalSales = orders
+      .filter((order) => String(order.status) === 'COMPLETED')
+      .reduce((sum, order) => sum + Number(order.price), 0);
+
+    return {
+      nftsCreated: nfts.total,
+      totalSales,
+      totalViews: 0,
+      followers: 0,
+    };
   }
 
   @Query(() => GraphqlUserType, {

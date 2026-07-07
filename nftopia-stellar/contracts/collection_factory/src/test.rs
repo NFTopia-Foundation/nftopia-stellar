@@ -689,7 +689,7 @@ fn test_factory_ownership_validation() {
     factory_client.initialize(&admin, &admin);
 
     // Create a collection through the factory
-    let creator = Address::generate(&env);
+    let _creator = Address::generate(&env);
     let config = CollectionConfig {
         name: String::from_str(&env, "Factory NFT"),
         symbol: String::from_str(&env, "FNFT"),

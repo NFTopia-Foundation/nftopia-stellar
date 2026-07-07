@@ -31,6 +31,9 @@ import { HealthModule } from './health/health.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { OfferModule } from './modules/offer/offer.module';
 import { TransactionModule } from './modules/transaction/transaction.module';
+import { AuditModule } from './common/audit/audit.module';
+import { MetricsModule } from './common/metrics/metrics.module';
+import { SocialModule } from './modules/social/social.module';
 
 @Module({
   imports: [
@@ -137,6 +140,9 @@ import { TransactionModule } from './modules/transaction/transaction.module';
     StellarModule,
     NotificationsModule,
     IndexerModule,
+    AuditModule,
+    MetricsModule,
+    SocialModule,
   ],
   controllers: [AppController],
   providers: [

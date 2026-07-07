@@ -23,12 +23,35 @@ jest.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
+// 💡 Fixed next/link mock to prevent nested <a> tags, merge click handlers, and drop legacyBehavior props safely
 jest.mock("next/link", () => {
   const React = require("react");
 
-  return React.forwardRef(({ href, children, ...props }, ref) =>
-    React.createElement("a", { ref, href, ...props }, children)
-  );
+  return React.forwardRef(({ href, children, legacyBehavior, ...props }, ref) => {
+    const mergeHandlers = (childProps) => {
+      return (e) => {
+        if (props.onClick) props.onClick(e);
+        if (childProps && childProps.onClick) childProps.onClick(e);
+      };
+    };
+
+    // If the child element is already a native link tag (<a>), flatten the tree
+    if (React.isValidElement(children) && children.type === "a") {
+      // Destructure legacyBehavior to prevent it from bleeding down into the cloneElement
+      const { legacyBehavior: _childLegacy, ...cleanedChildProps } = children.props;
+
+      return React.cloneElement(children, {
+        ref,
+        href,
+        ...props,
+        ...cleanedChildProps,
+        onClick: mergeHandlers(children.props),
+      });
+    }
+
+    // Otherwise, fallback to creating a clean single anchor wrapper
+    return React.createElement("a", { ref, href, ...props, onClick: mergeHandlers() }, children);
+  });
 });
 
 // Mock window.matchMedia for all tests (jsdom does not implement it by default)

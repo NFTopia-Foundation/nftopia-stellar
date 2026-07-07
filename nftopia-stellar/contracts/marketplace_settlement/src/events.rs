@@ -90,7 +90,7 @@ pub struct AuctionEndedEvent {
     pub auction_id: u64,
     pub winner: Option<Address>,
     pub final_price: i128,
-    pub reason: Bytes, // "ended", "cancelled", "reserve_not_met"
+    pub reason: Bytes,
     pub timestamp: u64,
 }
 
@@ -221,7 +221,7 @@ pub struct BidRefundedEvent {
     pub auction_id: u64,
     pub bidder: Address,
     pub amount: i128,
-    pub reason: Bytes, // "outbid" | "reserve_not_met" | "cancelled" | "withdraw"
+    pub reason: Bytes,
     pub timestamp: u64,
 }
 
@@ -271,11 +271,51 @@ pub struct EmergencyWithdrawalEvent {
     pub timestamp: u64,
 }
 
-// Pause Events
+// Pause Events - NEW
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ContractPausedEvent {
     pub paused: bool,
+    pub admin: Address,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContractUnpausedEvent {
+    pub admin: Address,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ModulePausedEvent {
+    pub module: Symbol,
+    pub admin: Address,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ModuleUnpausedEvent {
+    pub module: Symbol,
+    pub admin: Address,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PauseScheduledEvent {
+    pub admin: Address,
+    pub execution_at: u64,
+    pub modules: Vec<Symbol>,
+    pub reason: Bytes,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PauseCancelledEvent {
     pub admin: Address,
     pub timestamp: u64,
 }
@@ -318,6 +358,25 @@ pub struct UnauthorizedAccessAttemptEvent {
 pub struct RejectedContractTargetEvent {
     pub contract: Address,
     pub target_type: Bytes,
+    pub timestamp: u64,
+}
+
+// Blocklist Events
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AddressBlockedEvent {
+    pub blocked_address: Address,
+    pub blocked_by: Address,
+    pub reason: u32,
+    pub expires_at: Option<u64>,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AddressUnblockedEvent {
+    pub unblocked_address: Address,
+    pub unblocked_by: Address,
     pub timestamp: u64,
 }
 
@@ -454,10 +513,41 @@ pub fn emit_emergency_withdrawal(env: &Env, event: EmergencyWithdrawalEvent) {
         .publish(("MarketplaceSettlement", symbol_short!("emerg_wd")), event);
 }
 
+// Pause Events - NEW emit functions
 #[allow(deprecated)]
 pub fn emit_contract_paused(env: &Env, event: ContractPausedEvent) {
     env.events()
         .publish(("MarketplaceSettlement", symbol_short!("cont_pas")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_contract_unpaused(env: &Env, event: ContractUnpausedEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("cont_unp")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_module_paused(env: &Env, event: ModulePausedEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("mod_pas")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_module_unpaused(env: &Env, event: ModuleUnpausedEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("mod_unp")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_pause_scheduled(env: &Env, event: PauseScheduledEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("pas_sch")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_pause_cancelled(env: &Env, event: PauseCancelledEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("pas_can")), event);
 }
 
 #[allow(deprecated)]
@@ -512,24 +602,6 @@ pub fn emit_auction_cancelled_with_refunds(env: &Env, event: AuctionCancelledWit
 pub fn emit_bid_below_minimum_increment(env: &Env, event: BidBelowMinimumIncrementEvent) {
     env.events()
         .publish(("MarketplaceSettlement", symbol_short!("bid_min")), event);
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AddressBlockedEvent {
-    pub blocked_address: Address,
-    pub blocked_by: Address,
-    pub reason: u32, // BlockReason as u32
-    pub expires_at: Option<u64>,
-    pub timestamp: u64,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AddressUnblockedEvent {
-    pub unblocked_address: Address,
-    pub unblocked_by: Address,
-    pub timestamp: u64,
 }
 
 #[allow(deprecated)]

@@ -13,7 +13,8 @@ import {
   useCreateListingMutation as useCreateListingMutationGenerated,
 } from "@/hooks/graphql/generated";
 import { PLACE_BID_MUTATION } from "@/lib/graphql/queries/auction.queries";
-import type { PlaceBidMutation, PlaceBidMutationVariables } from "./generated";
+import { BUY_NFT_MUTATION } from "@/lib/graphql/queries/listing.queries";
+import type { PlaceBidMutation, PlaceBidMutationVariables, BuyNftMutation, BuyNftMutationVariables } from "./generated";
 
 export function useGraphQLMutation<
   TData = Record<string, unknown>,
@@ -46,6 +47,21 @@ export function usePlaceBidMutation(
 ) {
   return useMutation<PlaceBidMutation, PlaceBidMutationVariables>(
     PLACE_BID_MUTATION,
+    options,
+  );
+}
+
+/**
+ * Hook to buy an NFT directly (fixed price listing)
+ */
+export function useBuyNFTMutation(
+  options?: MutationHookOptions<
+    BuyNftMutation,
+    BuyNftMutationVariables
+  >
+) {
+  return useMutation<BuyNftMutation, BuyNftMutationVariables>(
+    BUY_NFT_MUTATION,
     options,
   );
 }
