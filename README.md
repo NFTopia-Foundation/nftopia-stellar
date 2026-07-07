@@ -4,7 +4,7 @@
 
 # NFTopia
 **Stellar NFT Marketplace Monorepo**
-//WIP
+
 ![Next.js](https://img.shields.io/badge/Next.js-Web-black)
 ![NestJS](https://img.shields.io/badge/NestJS-API-e0234e)
 ![Expo](https://img.shields.io/badge/Expo-Mobile-1b1f23)
