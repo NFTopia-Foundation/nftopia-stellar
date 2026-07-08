@@ -16,6 +16,7 @@ pub mod storage;
 pub mod test;
 pub mod types;
 pub mod utils;
+pub mod version;
 
 // Re-exports for convenience
 pub use settlement_core::MarketplaceSettlement;
