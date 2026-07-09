@@ -34,7 +34,7 @@ describe('CorrelationIdMiddleware', () => {
     const correlationId = mockRequest.correlationId;
     expect(correlationId).toBeDefined();
     expect(typeof correlationId).toBe('string');
-    expect(correlationId.length).toBe(36); // UUID length
+    expect(correlationId!.length).toBe(36); // UUID length
 
     expect(mockRequest.headers['x-correlation-id']).toBe(correlationId);
     expect(mockResponse.setHeader).toHaveBeenCalledWith(

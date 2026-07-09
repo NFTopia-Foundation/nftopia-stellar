@@ -84,9 +84,16 @@ export function getLoggerConfig(env: NodeJS.ProcessEnv = process.env): Params {
               typeof errorVal.constructor === 'function' &&
               errorVal.constructor.name
                 ? errorVal.constructor.name
-                : typeof errorVal.type === 'string'
-                  ? errorVal.type
-                  : 'Error',
+                : errorVal.constructor &&
+                    typeof errorVal.constructor === 'object' &&
+                    'name' in errorVal.constructor &&
+                    typeof (errorVal.constructor as Record<string, unknown>)
+                      .name === 'string'
+                  ? ((errorVal.constructor as Record<string, unknown>)
+                      .name as string)
+                  : typeof errorVal.type === 'string'
+                    ? errorVal.type
+                    : 'Error',
             message:
               typeof errorVal.message === 'string'
                 ? errorVal.message
