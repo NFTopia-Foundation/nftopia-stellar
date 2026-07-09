@@ -424,8 +424,7 @@ export class CollectionResolver {
 
   private encodeCursor(
     collection:
-      | Pick<Collection, 'createdAt' | 'id'>
-      | Pick<Nft, 'createdAt' | 'id'>,
+      Pick<Collection, 'createdAt' | 'id'> | Pick<Nft, 'createdAt' | 'id'>,
   ): string {
     return Buffer.from(
       JSON.stringify({

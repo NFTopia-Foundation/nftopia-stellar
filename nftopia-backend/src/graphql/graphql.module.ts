@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { CacheModule } from '@nestjs/cache-manager';
 import { ConfigModule } from '@nestjs/config';
 import { ConfigService } from '@nestjs/config';
@@ -7,6 +7,7 @@ import { PassportModule } from '@nestjs/passport';
 import { GraphQLSchemaBuilderModule } from '@nestjs/graphql';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { LoggerModule } from 'nestjs-pino';
 import { JwtStrategy } from '../auth/jwt.strategy';
 import { GqlAuthGuard } from '../common/guards/gql-auth.guard';
 import { CollectionModule } from '../modules/collection/collection.module';
@@ -21,6 +22,8 @@ import { GraphqlContextFactory } from './context/context.factory';
 import { GraphqlAuthMiddleware } from './middleware/auth.middleware';
 import { GraphqlLoggingMiddleware } from './middleware/logging.middleware';
 import { graphqlResolvers, graphqlScalarClasses } from './resolvers';
+import { getLoggerConfig } from '../config/logger.config';
+import { CorrelationIdMiddleware } from '../common/middleware/correlation-id.middleware';
 
 const jwtAccessExpiresInSeconds = parseInt(
   process.env.JWT_EXPIRES_IN_SECONDS || '900',
@@ -30,6 +33,10 @@ const jwtAccessExpiresInSeconds = parseInt(
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    LoggerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: () => getLoggerConfig(process.env),
+    }),
     CacheModule.registerAsync({
       isGlobal: true,
       inject: [ConfigService],
@@ -92,4 +99,8 @@ const jwtAccessExpiresInSeconds = parseInt(
     ...graphqlScalarClasses,
   ],
 })
-export class GraphqlGatewayModule {}
+export class GraphqlGatewayModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(CorrelationIdMiddleware).forRoutes('*');
+  }
+}
