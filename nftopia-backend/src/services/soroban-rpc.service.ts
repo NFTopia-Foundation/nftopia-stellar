@@ -1,4 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   getStellarConfig,
@@ -200,10 +205,26 @@ export async function retrySorobanRpcCall<T>(
 }
 
 @Injectable()
-export class SorobanRpcService {
+export class SorobanRpcService implements OnModuleInit {
   private readonly logger = new Logger(SorobanRpcService.name);
 
   constructor(private readonly configService: ConfigService) {}
+
+  async onModuleInit(): Promise<void> {
+    const config = this.getRuntimeConfig();
+
+    if (config.horizonUrlIsFallback) {
+      this.logger.warn(
+        `STELLAR_HORIZON_URL is not set. Falling back to default Horizon URL: ${config.horizonUrl}`,
+      );
+    }
+
+    this.logger.log(
+      `Stellar network: ${config.network.toUpperCase()} | Horizon URL: ${config.horizonUrl} | Soroban RPC: ${config.sorobanRpcUrl}`,
+    );
+
+    await this.healthCheckHorizon(config);
+  }
 
   getRuntimeConfig(): StellarRuntimeConfig {
     return getStellarConfig({
@@ -310,5 +331,48 @@ export class SorobanRpcService {
     }
 
     return 'default' as const;
+  }
+
+  private async healthCheckHorizon(
+    config: StellarRuntimeConfig,
+  ): Promise<void> {
+    if (process.env.STELLAR_HORIZON_HEALTH_CHECK === 'false') {
+      this.logger.warn(
+        'Horizon health check skipped (STELLAR_HORIZON_HEALTH_CHECK=false).',
+      );
+      return;
+    }
+
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10_000);
+
+      const response = await fetch(`${config.horizonUrl}/`, {
+        method: 'GET',
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        throw new Error(
+          `Horizon returned HTTP ${response.status} ${response.statusText}`,
+        );
+      }
+
+      this.logger.log(
+        `Horizon health check passed: ${config.horizonUrl} is reachable.`,
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unknown reachability error';
+      const errorMessage = `Horizon health check failed for ${config.horizonUrl}: ${message}`;
+
+      this.logger.error(errorMessage);
+
+      if (process.env.NODE_ENV === 'production') {
+        throw new ServiceUnavailableException(errorMessage);
+      }
+    }
   }
 }

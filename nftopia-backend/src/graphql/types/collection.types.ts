@@ -52,6 +52,12 @@ export class GraphqlCollection {
     description: 'NFTs that belong to this collection',
   })
   nfts?: NFTConnection;
+
+  @Field(() => Int, { nullable: true, defaultValue: 0 })
+  likes?: number;
+
+  @Field(() => Boolean, { nullable: true, defaultValue: false })
+  isVerified?: boolean;
 }
 
 @ObjectType()
@@ -88,4 +94,50 @@ export class CollectionStats {
 
   @Field(() => Int)
   ownerCount: number;
+}
+
+// NEW: Like-related types
+@ObjectType()
+export class LikeCollectionResult {
+  @Field(() => Boolean)
+  success: boolean;
+
+  @Field(() => ID)
+  collectionId: string;
+
+  @Field(() => Int)
+  likesCount: number;
+
+  @Field(() => Boolean)
+  userLiked: boolean;
+
+  @Field(() => String, { nullable: true })
+  message?: string;
+}
+
+@ObjectType()
+export class UnlikeCollectionResult {
+  @Field(() => Boolean)
+  success: boolean;
+
+  @Field(() => ID)
+  collectionId: string;
+
+  @Field(() => Int)
+  likesCount: number;
+
+  @Field(() => Boolean)
+  userLiked: boolean;
+
+  @Field(() => String, { nullable: true })
+  message?: string;
+}
+
+@ObjectType()
+export class CollectionLikesInfo {
+  @Field(() => Int)
+  count: number;
+
+  @Field(() => Boolean)
+  isLiked: boolean;
 }

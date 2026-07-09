@@ -3,10 +3,10 @@ use crate::auction_engine::AuctionEngine;
 use crate::dispute_resolution::DisputeResolutionManager;
 use crate::error::SettlementError;
 use crate::events::{
-    emit_address_blocked, emit_address_unblocked, emit_contract_paused, AddressBlockedEvent,
-    AddressUnblockedEvent, ContractPausedEvent,
+    emit_address_blocked, emit_address_unblocked, AddressBlockedEvent, AddressUnblockedEvent,
 };
 use crate::fee_manager::FeeManager;
+use crate::pause_manager::{ModuleType, PauseManager};
 use crate::royalty_distributor::RoyaltyDistributor;
 use crate::security::reentrancy_guard::ReentrancyGuard;
 use crate::storage::{
@@ -20,7 +20,8 @@ use crate::types::{
     FeeConfig, SaleTransaction, TradeTransaction,
 };
 use crate::utils::{asset_utils, time_utils};
-use soroban_sdk::{contract, contractimpl, symbol_short, Address, Bytes, Env, Symbol, Vec};
+use crate::version;
+use soroban_sdk::{contract, contractimpl, symbol_short, Address, Bytes, Env, String, Symbol, Vec};
 
 /// Marketplace Settlement Contract
 #[contract]
@@ -30,6 +31,14 @@ pub struct MarketplaceSettlement;
 #[allow(clippy::too_many_arguments)]
 #[contractimpl]
 impl MarketplaceSettlement {
+    // === HELPER FUNCTIONS ===
+
+    fn supported_assets_key(env: &Env) -> Symbol {
+        Symbol::new(env, "supported_assets")
+    }
+
+    // === INITIALIZATION ===
+
     /// Initialize the contract with admin configuration and explicit fee parameters.
     ///
     /// `fee_config` must be provided with deployment-appropriate values; there
@@ -66,8 +75,269 @@ impl MarketplaceSettlement {
         let dispute_config = crate::dispute_resolution::DisputeConfig::default();
         DisputeResolutionManager::update_dispute_config(&env, &dispute_config, &admin)?;
 
+        // Initialize with empty supported assets list
+        let empty_assets: Vec<Asset> = Vec::new(&env);
+        env.storage()
+            .persistent()
+            .set(&Self::supported_assets_key(&env), &empty_assets);
+
         Ok(())
     }
+
+    // === ASSET WHITELIST FUNCTIONS ===
+
+    /// Get the list of supported assets (view function)
+    pub fn get_supported_assets(env: Env) -> Vec<Asset> {
+        env.storage()
+            .persistent()
+            .get(&Self::supported_assets_key(&env))
+            .unwrap_or_else(|| Vec::new(&env))
+    }
+
+    /// Add a supported asset (admin only)
+    pub fn add_supported_asset(
+        env: Env,
+        admin: Address,
+        asset: Asset,
+    ) -> Result<(), SettlementError> {
+        admin.require_auth();
+
+        // Check admin permissions
+        let admin_config: AdminConfig = env
+            .storage()
+            .instance()
+            .get(&symbol_short!("admin_cfg"))
+            .ok_or(SettlementError::Unauthorized)?;
+
+        if admin_config.admin != admin {
+            return Err(SettlementError::Unauthorized);
+        }
+
+        let supported = Self::get_supported_assets(env.clone());
+
+        // Check if asset already exists
+        for i in 0..supported.len() {
+            if asset_utils::assets_equal(&asset, &supported.get(i).unwrap()) {
+                return Err(SettlementError::AlreadyExists);
+            }
+        }
+
+        let mut new_list = supported;
+        new_list.push_back(asset);
+        env.storage()
+            .persistent()
+            .set(&Self::supported_assets_key(&env), &new_list);
+
+        Ok(())
+    }
+
+    /// Remove a supported asset (admin only)
+    pub fn remove_supported_asset(
+        env: Env,
+        admin: Address,
+        asset: Asset,
+    ) -> Result<(), SettlementError> {
+        admin.require_auth();
+
+        // Check admin permissions
+        let admin_config: AdminConfig = env
+            .storage()
+            .instance()
+            .get(&symbol_short!("admin_cfg"))
+            .ok_or(SettlementError::Unauthorized)?;
+
+        if admin_config.admin != admin {
+            return Err(SettlementError::Unauthorized);
+        }
+
+        let supported = Self::get_supported_assets(env.clone());
+
+        let mut found = false;
+        let mut new_list: Vec<Asset> = Vec::new(&env);
+        for i in 0..supported.len() {
+            let existing = supported.get(i).unwrap();
+            if asset_utils::assets_equal(&asset, &existing) {
+                found = true;
+            } else {
+                new_list.push_back(existing);
+            }
+        }
+
+        if !found {
+            return Err(SettlementError::NotFound);
+        }
+
+        env.storage()
+            .persistent()
+            .set(&Self::supported_assets_key(&env), &new_list);
+
+        Ok(())
+    }
+
+    // === PAUSE FUNCTIONS ===
+
+    /// Pause the contract (admin only) - emergency circuit breaker
+    pub fn pause_contract(
+        env: Env,
+        admin: Address,
+        reason: Option<Bytes>,
+        modules: Option<Vec<Symbol>>,
+    ) -> Result<(), SettlementError> {
+        admin.require_auth();
+        let admin_config: AdminConfig = env
+            .storage()
+            .instance()
+            .get(&symbol_short!("admin_cfg"))
+            .ok_or(SettlementError::Unauthorized)?;
+        if admin_config.admin != admin {
+            return Err(SettlementError::Unauthorized);
+        }
+        PauseManager::pause(&env, &admin, reason, modules)
+    }
+
+    /// Unpause the contract (admin only)
+    pub fn unpause_contract(
+        env: Env,
+        admin: Address,
+        reason: Option<Bytes>,
+    ) -> Result<(), SettlementError> {
+        admin.require_auth();
+        let admin_config: AdminConfig = env
+            .storage()
+            .instance()
+            .get(&symbol_short!("admin_cfg"))
+            .ok_or(SettlementError::Unauthorized)?;
+        if admin_config.admin != admin {
+            return Err(SettlementError::Unauthorized);
+        }
+        PauseManager::unpause(&env, &admin, reason)
+    }
+
+    /// Schedule a pause with timelock (admin only)
+    pub fn schedule_pause(
+        env: Env,
+        admin: Address,
+        delay_seconds: u64,
+        modules: Vec<Symbol>,
+        reason: Bytes,
+    ) -> Result<(), SettlementError> {
+        admin.require_auth();
+        let admin_config: AdminConfig = env
+            .storage()
+            .instance()
+            .get(&symbol_short!("admin_cfg"))
+            .ok_or(SettlementError::Unauthorized)?;
+        if admin_config.admin != admin {
+            return Err(SettlementError::Unauthorized);
+        }
+        PauseManager::schedule_pause(&env, &admin, delay_seconds, modules, reason)
+    }
+
+    /// Cancel scheduled pause (admin only)
+    pub fn cancel_scheduled_pause(env: Env, admin: Address) -> Result<(), SettlementError> {
+        admin.require_auth();
+        let admin_config: AdminConfig = env
+            .storage()
+            .instance()
+            .get(&symbol_short!("admin_cfg"))
+            .ok_or(SettlementError::Unauthorized)?;
+        if admin_config.admin != admin {
+            return Err(SettlementError::Unauthorized);
+        }
+        PauseManager::cancel_scheduled_pause(&env, &admin)
+    }
+
+    /// Execute scheduled pause (admin only)
+    pub fn execute_scheduled_pause(env: Env, admin: Address) -> Result<(), SettlementError> {
+        admin.require_auth();
+        let admin_config: AdminConfig = env
+            .storage()
+            .instance()
+            .get(&symbol_short!("admin_cfg"))
+            .ok_or(SettlementError::Unauthorized)?;
+        if admin_config.admin != admin {
+            return Err(SettlementError::Unauthorized);
+        }
+        PauseManager::execute_scheduled_pause(&env, &admin)
+    }
+
+    /// Check if contract is paused (view function)
+    pub fn is_paused(env: Env) -> bool {
+        PauseManager::is_paused(&env)
+    }
+
+    /// Check if module is paused (view function)
+    pub fn is_module_paused(env: Env, module: Symbol) -> bool {
+        let module_type = if module == Symbol::new(&env, "sales") {
+            ModuleType::Sales
+        } else if module == Symbol::new(&env, "auctions") {
+            ModuleType::Auctions
+        } else if module == Symbol::new(&env, "trades") {
+            ModuleType::Trades
+        } else if module == Symbol::new(&env, "bundles") {
+            ModuleType::Bundles
+        } else if module == Symbol::new(&env, "disputes") {
+            ModuleType::Disputes
+        } else if module == Symbol::new(&env, "withdrawals") {
+            ModuleType::Withdrawals
+        } else {
+            ModuleType::All
+        };
+        PauseManager::is_module_paused(&env, module_type)
+    }
+
+    /// Get pause state (view function)
+    pub fn get_pause_state(
+        env: Env,
+    ) -> (
+        bool,
+        Option<u64>,
+        Option<Address>,
+        Option<Bytes>,
+        Vec<Symbol>,
+    ) {
+        if let Some(info) = PauseManager::get_pause_info(&env) {
+            return (
+                info.paused,
+                Some(info.paused_at),
+                Some(info.paused_by),
+                info.reason,
+                info.modules_paused,
+            );
+        }
+        (false, None, None, None, Vec::new(&env))
+    }
+
+    /// Get scheduled pause info (view function)
+    pub fn get_scheduled_pause_info(env: Env) -> Option<(u64, u64, Vec<Symbol>, Bytes, Address)> {
+        if let Some(scheduled) = PauseManager::get_scheduled_pause(&env) {
+            return Some((
+                scheduled.scheduled_at,
+                scheduled.execution_at,
+                scheduled.modules,
+                scheduled.reason,
+                scheduled.scheduled_by,
+            ));
+        }
+        None
+    }
+
+    /// Check if timelock is active (view function)
+    pub fn is_timelock_active(env: Env) -> bool {
+        PauseManager::is_timelock_active(&env)
+    }
+
+    /// Get time until timelock executes (view function)
+    pub fn get_timelock_remaining(env: Env) -> Option<u64> {
+        PauseManager::get_timelock_remaining(&env)
+    }
+
+    /// Get paused modules (view function)
+    pub fn get_paused_modules(env: Env) -> Vec<Symbol> {
+        PauseManager::get_paused_modules(&env)
+    }
+
+    // === TRANSACTION FUNCTIONS ===
 
     /// Create a fixed-price sale
     pub fn create_sale(
@@ -81,10 +351,8 @@ impl MarketplaceSettlement {
     ) -> Result<u64, SettlementError> {
         seller.require_auth();
 
-        // Check if contract is paused
-        if Self::is_paused(env.clone()) {
-            return Err(SettlementError::ContractPaused);
-        }
+        // Check if sales module is paused
+        PauseManager::check_module_not_paused(&env, ModuleType::Sales)?;
 
         // Check if seller is blocked
         if BlocklistStore::is_blocked(&env, &seller) {
@@ -98,8 +366,11 @@ impl MarketplaceSettlement {
                 &Symbol::new(&env, "create_sale"),
             )?;
 
+            // Get supported assets from storage
+            let supported_assets = Self::get_supported_assets(env.clone());
+
             // Validate inputs
-            asset_utils::validate_asset(&currency, &Vec::new(&env), &env)?;
+            asset_utils::validate_asset(&currency, &supported_assets, &env)?;
             asset_utils::validate_nft_contract(&nft_address, &env)?;
             time_utils::validate_transaction_timing(
                 env.ledger().timestamp(),
@@ -170,10 +441,8 @@ impl MarketplaceSettlement {
     ) -> Result<ExecutionResult, SettlementError> {
         buyer.require_auth();
 
-        // Check if contract is paused
-        if Self::is_paused(env.clone()) {
-            return Err(SettlementError::ContractPaused);
-        }
+        // Check if sales module is paused
+        PauseManager::check_module_not_paused(&env, ModuleType::Sales)?;
 
         // Check if buyer is blocked
         if BlocklistStore::is_blocked(&env, &buyer) {
@@ -248,10 +517,8 @@ impl MarketplaceSettlement {
     ) -> Result<u64, SettlementError> {
         seller.require_auth();
 
-        // Check if contract is paused
-        if Self::is_paused(env.clone()) {
-            return Err(SettlementError::ContractPaused);
-        }
+        // Check if auctions module is paused
+        PauseManager::check_module_not_paused(&env, ModuleType::Auctions)?;
 
         // Check if seller is blocked
         if BlocklistStore::is_blocked(&env, &seller) {
@@ -264,6 +531,12 @@ impl MarketplaceSettlement {
                 &seller,
                 &Symbol::new(&env, "create_auction"),
             )?;
+
+            // Get supported assets from storage
+            let supported_assets = Self::get_supported_assets(env.clone());
+
+            // Validate asset
+            asset_utils::validate_asset(&currency, &supported_assets, &env)?;
 
             AuctionEngine::create_auction(
                 &env,
@@ -290,10 +563,8 @@ impl MarketplaceSettlement {
     ) -> Result<(), SettlementError> {
         bidder.require_auth();
 
-        // Check if contract is paused
-        if Self::is_paused(env.clone()) {
-            return Err(SettlementError::ContractPaused);
-        }
+        // Check if auctions module is paused
+        PauseManager::check_module_not_paused(&env, ModuleType::Auctions)?;
 
         // Check if bidder is blocked
         if BlocklistStore::is_blocked(&env, &bidder) {
@@ -321,14 +592,12 @@ impl MarketplaceSettlement {
     ) -> Result<(), SettlementError> {
         bidder.require_auth();
 
+        // Check if auctions module is paused
+        PauseManager::check_module_not_paused(&env, ModuleType::Auctions)?;
+
         // Check if bidder is blocked
         if BlocklistStore::is_blocked(&env, &bidder) {
             return Err(SettlementError::AddressBlocked);
-        }
-
-        // Check if contract is paused
-        if Self::is_paused(env.clone()) {
-            return Err(SettlementError::ContractPaused);
         }
 
         ReentrancyGuard::execute(&env, &bidder, "reveal_bid", || {
@@ -346,10 +615,8 @@ impl MarketplaceSettlement {
     pub fn end_auction(env: Env, auction_id: u64, caller: Address) -> Result<(), SettlementError> {
         caller.require_auth();
 
-        // Check if contract is paused
-        if Self::is_paused(env.clone()) {
-            return Err(SettlementError::ContractPaused);
-        }
+        // Check if auctions module is paused
+        PauseManager::check_module_not_paused(&env, ModuleType::Auctions)?;
 
         ReentrancyGuard::execute(&env, &caller, "end_auction", || {
             AuctionEngine::end_auction(&env, auction_id, &caller)
@@ -364,10 +631,8 @@ impl MarketplaceSettlement {
     ) -> Result<(), SettlementError> {
         canceller.require_auth();
 
-        // Check if contract is paused
-        if Self::is_paused(env.clone()) {
-            return Err(SettlementError::ContractPaused);
-        }
+        // Check if auctions module is paused
+        PauseManager::check_module_not_paused(&env, ModuleType::Auctions)?;
 
         ReentrancyGuard::execute(&env, &canceller, "cancel_auction_with_refund", || {
             AuctionEngine::cancel_auction_with_refund(&env, auction_id, &canceller)
@@ -382,10 +647,8 @@ impl MarketplaceSettlement {
     ) -> Result<(), SettlementError> {
         bidder.require_auth();
 
-        // Check if contract is paused
-        if Self::is_paused(env.clone()) {
-            return Err(SettlementError::ContractPaused);
-        }
+        // Check if auctions module is paused
+        PauseManager::check_module_not_paused(&env, ModuleType::Auctions)?;
 
         ReentrancyGuard::execute(&env, &bidder, "withdraw_losing_bid", || {
             AuctionEngine::withdraw_losing_bid(&env, auction_id, &bidder)
@@ -403,14 +666,12 @@ impl MarketplaceSettlement {
     ) -> Result<u64, SettlementError> {
         initiator.require_auth();
 
+        // Check if trades module is paused
+        PauseManager::check_module_not_paused(&env, ModuleType::Trades)?;
+
         // Check if initiator is blocked
         if BlocklistStore::is_blocked(&env, &initiator) {
             return Err(SettlementError::AddressBlocked);
-        }
-
-        // Check if contract is paused
-        if Self::is_paused(env.clone()) {
-            return Err(SettlementError::ContractPaused);
         }
 
         ReentrancyGuard::execute(&env, &initiator, "create_trade", || {
@@ -448,14 +709,12 @@ impl MarketplaceSettlement {
     pub fn accept_trade(env: Env, trade_id: u64, acceptor: Address) -> Result<(), SettlementError> {
         acceptor.require_auth();
 
+        // Check if trades module is paused
+        PauseManager::check_module_not_paused(&env, ModuleType::Trades)?;
+
         // Check if acceptor is blocked
         if BlocklistStore::is_blocked(&env, &acceptor) {
             return Err(SettlementError::AddressBlocked);
-        }
-
-        // Check if contract is paused
-        if Self::is_paused(env.clone()) {
-            return Err(SettlementError::ContractPaused);
         }
 
         ReentrancyGuard::execute(&env, &acceptor.clone(), "accept_trade", || {
@@ -491,14 +750,12 @@ impl MarketplaceSettlement {
     ) -> Result<(), SettlementError> {
         executor.require_auth();
 
+        // Check if trades module is paused
+        PauseManager::check_module_not_paused(&env, ModuleType::Trades)?;
+
         // Check if executor is blocked
         if BlocklistStore::is_blocked(&env, &executor) {
             return Err(SettlementError::AddressBlocked);
-        }
-
-        // Check if contract is paused
-        if Self::is_paused(env.clone()) {
-            return Err(SettlementError::ContractPaused);
         }
 
         ReentrancyGuard::execute(&env, &executor, "execute_trade", || {
@@ -534,15 +791,19 @@ impl MarketplaceSettlement {
     ) -> Result<u64, SettlementError> {
         seller.require_auth();
 
-        // Check if contract is paused
-        if Self::is_paused(env.clone()) {
-            return Err(SettlementError::ContractPaused);
-        }
+        // Check if bundles module is paused
+        PauseManager::check_module_not_paused(&env, ModuleType::Bundles)?;
 
         ReentrancyGuard::execute(&env, &seller, "create_bundle", || {
             if items.is_empty() {
                 return Err(SettlementError::InvalidAmount);
             }
+
+            // Get supported assets from storage
+            let supported_assets = Self::get_supported_assets(env.clone());
+
+            // Validate asset
+            asset_utils::validate_asset(&currency, &supported_assets, &env)?;
 
             let bundle_id = BundleTransactionStore::next_id(&env);
 
@@ -573,10 +834,8 @@ impl MarketplaceSettlement {
     ) -> Result<(), SettlementError> {
         canceller.require_auth();
 
-        // Check if contract is paused
-        if Self::is_paused(env.clone()) {
-            return Err(SettlementError::ContractPaused);
-        }
+        // Check if contract is paused (global check for cancel)
+        PauseManager::check_not_paused(&env)?;
 
         ReentrancyGuard::execute(&env, &canceller, "cancel_transaction", || {
             if transaction_type == Symbol::new(&env, "sale") {
@@ -606,10 +865,8 @@ impl MarketplaceSettlement {
     ) -> Result<u64, SettlementError> {
         initiator.require_auth();
 
-        // Check if contract is paused
-        if Self::is_paused(env.clone()) {
-            return Err(SettlementError::ContractPaused);
-        }
+        // Check if disputes module is paused
+        PauseManager::check_module_not_paused(&env, ModuleType::Disputes)?;
 
         ReentrancyGuard::execute(&env, &initiator, "initiate_dispute", || {
             DisputeResolutionManager::initiate_dispute(
@@ -632,10 +889,8 @@ impl MarketplaceSettlement {
     ) -> Result<(), SettlementError> {
         arbitrator.require_auth();
 
-        // Check if contract is paused
-        if Self::is_paused(env.clone()) {
-            return Err(SettlementError::ContractPaused);
-        }
+        // Check if disputes module is paused
+        PauseManager::check_module_not_paused(&env, ModuleType::Disputes)?;
 
         ReentrancyGuard::execute(&env, &arbitrator, "vote_on_dispute", || {
             DisputeResolutionManager::vote_on_dispute(&env, dispute_id, &arbitrator, vote)
@@ -650,17 +905,15 @@ impl MarketplaceSettlement {
     ) -> Result<(), SettlementError> {
         executor.require_auth();
 
-        // Check if contract is paused
-        if Self::is_paused(env.clone()) {
-            return Err(SettlementError::ContractPaused);
-        }
+        // Check if disputes module is paused
+        PauseManager::check_module_not_paused(&env, ModuleType::Disputes)?;
 
         ReentrancyGuard::execute(&env, &executor, "execute_dispute_resolution", || {
             DisputeResolutionManager::execute_dispute_resolution(&env, dispute_id, &executor)
         })
     }
 
-    /// Emergency withdrawal (admin only)
+    /// Emergency withdrawal (admin only) - NOT paused
     pub fn emergency_withdraw(
         env: Env,
         transaction_id: u64,
@@ -858,6 +1111,25 @@ impl MarketplaceSettlement {
         Ok(())
     }
 
+    /// Remove allowed token contract (admin only)
+    pub fn remove_allowed_token_contract(
+        env: Env,
+        admin: Address,
+        contract: Address,
+    ) -> Result<(), SettlementError> {
+        admin.require_auth();
+        let admin_config: AdminConfig = env
+            .storage()
+            .instance()
+            .get(&symbol_short!("admin_cfg"))
+            .ok_or(SettlementError::Unauthorized)?;
+        if admin_config.admin != admin {
+            return Err(SettlementError::Unauthorized);
+        }
+        AllowlistStore::set_token_allowed(&env, &contract, false);
+        Ok(())
+    }
+
     /// Block an address (admin only)
     pub fn block_address(
         env: Env,
@@ -1006,62 +1278,18 @@ impl MarketplaceSettlement {
         crate::storage::blocklist_store::BlocklistStore::get_block_record(&env, &address)
     }
 
-    /// Set contract pause state (admin only) - emergency circuit breaker
-    pub fn set_pause(env: Env, admin: Address, paused: bool) -> Result<(), SettlementError> {
-        admin.require_auth();
-        // Check admin permissions
-        let admin_config: AdminConfig = env
-            .storage()
-            .instance()
-            .get(&symbol_short!("admin_cfg"))
-            .ok_or(SettlementError::Unauthorized)?;
+    // -------------------------------------------------------------------------
+    // Versioning
+    // -------------------------------------------------------------------------
 
-        if admin_config.admin != admin {
-            return Err(SettlementError::Unauthorized);
-        }
-
-        env.storage()
-            .instance()
-            .set(&symbol_short!("is_paused"), &paused);
-
-        if paused {
-            emit_contract_paused(
-                &env,
-                ContractPausedEvent {
-                    paused: true,
-                    admin,
-                    timestamp: env.ledger().timestamp(),
-                },
-            );
-        }
-
-        Ok(())
+    /// Returns the semver string with embedded git commit: "0.1.0+abc1234"
+    pub fn version(env: Env) -> String {
+        version::version(&env)
     }
 
-    /// Check if contract is paused (view function)
-    pub fn is_paused(env: Env) -> bool {
-        env.storage()
-            .instance()
-            .get(&symbol_short!("is_paused"))
-            .unwrap_or(false)
-    }
-
-    /// Remove allowed token contract (admin only)
-    pub fn remove_allowed_token_contract(
-        env: Env,
-        admin: Address,
-        contract: Address,
-    ) -> Result<(), SettlementError> {
-        admin.require_auth();
-        let admin_config: AdminConfig = env
-            .storage()
-            .instance()
-            .get(&symbol_short!("admin_cfg"))
-            .ok_or(SettlementError::Unauthorized)?;
-        if admin_config.admin != admin {
-            return Err(SettlementError::Unauthorized);
-        }
-        AllowlistStore::set_token_allowed(&env, &contract, false);
-        Ok(())
+    /// Returns full build metadata for incident response:
+    /// "version=0.1.0;git=abc1234;ts=1700000000;rustc=rustc 1.x.y"
+    pub fn get_version(env: Env) -> String {
+        version::get_version(&env)
     }
 }

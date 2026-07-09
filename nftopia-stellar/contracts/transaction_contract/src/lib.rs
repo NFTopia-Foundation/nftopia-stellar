@@ -16,6 +16,7 @@ pub mod transaction_core;
 pub mod tx_storage;
 pub mod types;
 pub mod utils;
+pub mod version;
 
 pub use error::TransactionError;
 pub use transaction_core::TransactionContract;

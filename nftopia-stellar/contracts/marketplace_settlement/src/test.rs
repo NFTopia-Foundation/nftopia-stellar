@@ -463,10 +463,18 @@ fn test_create_trade_empty_nfts_fails() {
 #[test]
 fn test_create_bundle_success() {
     use crate::types::{NFTItem, RoyaltyDistribution};
-    let (env, _cid, client, _admin) = new_env();
-    let _asset = mk_asset(&env);
+    let (env, cid, client, admin) = new_env();
+    let asset = mk_asset(&env);
     let seller = Address::generate(&env);
     let creator = Address::generate(&env);
+    let nft = Address::generate(&env);
+
+    // Register NFT contract and add asset to whitelist
+    reg(&env, &cid, &nft, &creator, &admin, &asset);
+
+    // Add the asset to supported assets list
+    client.add_supported_asset(&admin, &asset);
+
     let dummy = RoyaltyDistribution {
         creator_address: creator.clone(),
         creator_percentage: 500,
@@ -479,11 +487,11 @@ fn test_create_bundle_success() {
     };
     let mut items = soroban_sdk::Vec::new(&env);
     items.push_back(NFTItem {
-        nft_address: Address::generate(&env),
+        nft_address: nft,
         token_id: 1,
         royalty_info: dummy,
     });
-    let id = client.create_bundle(&seller, &items, &500_000i128, &_asset, &86400u64);
+    let id = client.create_bundle(&seller, &items, &500_000i128, &asset, &86400u64);
     assert!(id > 0);
 }
 

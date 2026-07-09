@@ -63,3 +63,17 @@ export class CreateCollectionInput {
   @Length(1, 500)
   bannerImage?: string;
 }
+
+@InputType()
+export class LikeCollectionInput {
+  @Field(() => ID)
+  @IsUUID()
+  collectionId: string;
+}
+
+@InputType()
+export class UnlikeCollectionInput {
+  @Field(() => ID)
+  @IsUUID()
+  collectionId: string;
+}
