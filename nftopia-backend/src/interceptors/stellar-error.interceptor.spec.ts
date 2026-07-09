@@ -37,7 +37,10 @@ describe('StellarErrorInterceptor', () => {
 
     interceptor.intercept(context, next).subscribe({
       error: (error: unknown) => {
-        expect(error).toBeInstanceOf(HttpException);
+        expect(error instanceof Error).toBe(true);
+        const constructorName = (error as { constructor?: { name?: string } })
+          ?.constructor?.name;
+        expect(constructorName).toBe('HttpException');
         const httpError = error as HttpException;
         expect(httpError.getStatus()).toBe(HttpStatus.PAYMENT_REQUIRED);
 

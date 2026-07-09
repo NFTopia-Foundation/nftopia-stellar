@@ -1,5 +1,6 @@
 import { Params } from 'nestjs-pino';
 import * as crypto from 'crypto';
+import { IncomingMessage } from 'http';
 
 export function getLoggerConfig(env: NodeJS.ProcessEnv = process.env): Params {
   const isProduction = env.NODE_ENV === 'production';
@@ -45,11 +46,16 @@ export function getLoggerConfig(env: NodeJS.ProcessEnv = process.env): Params {
         ],
         censor: '[REDACTED]',
       },
-      genReqId: (req) => {
+      genReqId: (req: IncomingMessage) => {
+        const headers = req.headers;
+        const correlationId =
+          headers['x-correlation-id'] || headers['x-request-id'];
+        const reqRecord = req as unknown as Record<string, unknown>;
         const id =
-          req.headers['x-correlation-id'] ||
-          req.headers['x-request-id'] ||
-          req['correlationId'] ||
+          (Array.isArray(correlationId) ? correlationId[0] : correlationId) ||
+          (typeof reqRecord.correlationId === 'string'
+            ? reqRecord.correlationId
+            : undefined) ||
           crypto.randomUUID();
         return id;
       },
@@ -70,14 +76,27 @@ export function getLoggerConfig(env: NodeJS.ProcessEnv = process.env): Params {
         return 'info';
       },
       serializers: {
-        err: (err) => {
+        err: (err: unknown) => {
           if (!err) return err;
+          const errorVal = err as Record<string, unknown>;
           const serialized = {
-            type: err.constructor?.name || err.type || 'Error',
-            message: err.message,
-            stack: err.stack,
+            type:
+              typeof errorVal.constructor === 'function' &&
+              errorVal.constructor.name
+                ? errorVal.constructor.name
+                : typeof errorVal.type === 'string'
+                  ? errorVal.type
+                  : 'Error',
+            message:
+              typeof errorVal.message === 'string'
+                ? errorVal.message
+                : err instanceof Error
+                  ? err.message
+                  : 'Unknown error',
+            stack:
+              typeof errorVal.stack === 'string' ? errorVal.stack : undefined,
           };
-          if (serialized.stack && typeof serialized.stack === 'string') {
+          if (serialized.stack) {
             const lines = serialized.stack.split('\n');
             serialized.stack = lines.slice(0, 10).join('\n'); // Truncate to first 10 lines
           }
@@ -85,9 +104,12 @@ export function getLoggerConfig(env: NodeJS.ProcessEnv = process.env): Params {
         },
       },
       formatters: {
-        log: (object: Record<string, any>) => {
-          if (object.req && object.req.id) {
-            object.requestId = object.req.id;
+        log: (object: Record<string, unknown>) => {
+          if (object.req && typeof object.req === 'object') {
+            const req = object.req as Record<string, unknown>;
+            if (req.id && typeof req.id === 'string') {
+              object.requestId = req.id;
+            }
           }
           return object;
         },

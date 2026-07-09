@@ -15,8 +15,16 @@ describe('CorrelationIdInterceptor', () => {
   });
 
   describe('HTTP context', () => {
-    let mockRequest: any;
-    let mockResponse: any;
+    let mockRequest: {
+      headers: Record<string, string | undefined>;
+      correlationId?: string;
+      id?: string;
+    };
+    let mockResponse: {
+      headersSent: boolean;
+      setHeader: jest.Mock;
+      getHeader: jest.Mock;
+    };
 
     beforeEach(() => {
       mockRequest = {
@@ -116,8 +124,16 @@ describe('CorrelationIdInterceptor', () => {
   });
 
   describe('GraphQL context', () => {
-    let mockGqlReq: any;
-    let mockGqlRes: any;
+    let mockGqlReq: {
+      headers: Record<string, string | undefined>;
+      correlationId?: string;
+      id?: string;
+    };
+    let mockGqlRes: {
+      headersSent: boolean;
+      setHeader: jest.Mock;
+      getHeader: jest.Mock;
+    };
 
     beforeEach(() => {
       mockGqlReq = {
@@ -131,7 +147,7 @@ describe('CorrelationIdInterceptor', () => {
 
       mockExecutionContext = {
         getType: jest.fn().mockReturnValue('graphql'),
-        getArgByIndex: jest.fn().mockImplementation((index) => {
+        getArgByIndex: jest.fn().mockImplementation((index: number) => {
           if (index === 2) {
             return { req: mockGqlReq, res: mockGqlRes };
           }

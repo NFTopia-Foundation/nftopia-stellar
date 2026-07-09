@@ -3,7 +3,11 @@ import type { Request, Response } from 'express';
 
 describe('CorrelationIdMiddleware', () => {
   let middleware: CorrelationIdMiddleware;
-  let mockRequest: any;
+  let mockRequest: {
+    headers: Record<string, string | undefined>;
+    id?: string;
+    correlationId?: string;
+  };
   let mockResponse: Partial<Response>;
   let nextFunction: jest.Mock;
 
@@ -22,12 +26,12 @@ describe('CorrelationIdMiddleware', () => {
 
   it('should generate a new UUID and set it if no correlation ID exists', () => {
     middleware.use(
-      mockRequest as Request,
+      mockRequest as unknown as Request,
       mockResponse as Response,
       nextFunction,
     );
 
-    const correlationId = mockRequest['correlationId'];
+    const correlationId = mockRequest.correlationId;
     expect(correlationId).toBeDefined();
     expect(typeof correlationId).toBe('string');
     expect(correlationId.length).toBe(36); // UUID length
@@ -45,12 +49,12 @@ describe('CorrelationIdMiddleware', () => {
     mockRequest.headers['x-correlation-id'] = existingId;
 
     middleware.use(
-      mockRequest as Request,
+      mockRequest as unknown as Request,
       mockResponse as Response,
       nextFunction,
     );
 
-    expect(mockRequest['correlationId']).toBe(existingId);
+    expect(mockRequest.correlationId).toBe(existingId);
     expect(mockRequest.headers['x-correlation-id']).toBe(existingId);
     expect(mockResponse.setHeader).toHaveBeenCalledWith(
       'x-correlation-id',
@@ -64,12 +68,12 @@ describe('CorrelationIdMiddleware', () => {
     mockRequest.headers['x-request-id'] = existingId;
 
     middleware.use(
-      mockRequest as Request,
+      mockRequest as unknown as Request,
       mockResponse as Response,
       nextFunction,
     );
 
-    expect(mockRequest['correlationId']).toBe(existingId);
+    expect(mockRequest.correlationId).toBe(existingId);
     expect(mockRequest.headers['x-correlation-id']).toBe(existingId);
     expect(mockResponse.setHeader).toHaveBeenCalledWith(
       'x-correlation-id',
@@ -83,12 +87,12 @@ describe('CorrelationIdMiddleware', () => {
     mockRequest.id = existingId;
 
     middleware.use(
-      mockRequest as Request,
+      mockRequest as unknown as Request,
       mockResponse as Response,
       nextFunction,
     );
 
-    expect(mockRequest['correlationId']).toBe(existingId);
+    expect(mockRequest.correlationId).toBe(existingId);
     expect(mockRequest.headers['x-correlation-id']).toBe(existingId);
     expect(mockResponse.setHeader).toHaveBeenCalledWith(
       'x-correlation-id',
@@ -101,7 +105,7 @@ describe('CorrelationIdMiddleware', () => {
     mockResponse.headersSent = true;
 
     middleware.use(
-      mockRequest as Request,
+      mockRequest as unknown as Request,
       mockResponse as Response,
       nextFunction,
     );

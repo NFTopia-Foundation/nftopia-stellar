@@ -12,7 +12,7 @@ import type {
 
 @Injectable()
 export class CorrelationIdInterceptor implements NestInterceptor {
-  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const type = context.getType();
 
     if (type === 'http') {
@@ -37,7 +37,24 @@ export class CorrelationIdInterceptor implements NestInterceptor {
       }
     } else if ((type as string) === 'graphql') {
       // In GraphQL, context is typically the 3rd argument (info, args, context, info)
-      const gqlContext = context.getArgByIndex(2);
+      const gqlContext = context.getArgByIndex<
+        | {
+            req?: {
+              headers?: Record<string, string | string[] | undefined>;
+              correlationId?: string;
+              id?: string;
+            };
+            res?: {
+              headersSent?: boolean;
+              setHeader?: (name: string, value: string) => void;
+              getHeader?: (
+                name: string,
+              ) => string | string[] | number | undefined;
+            };
+          }
+        | undefined
+      >(2);
+
       const req = gqlContext?.req;
       const res = gqlContext?.res;
 
@@ -45,14 +62,14 @@ export class CorrelationIdInterceptor implements NestInterceptor {
         const correlationId =
           (req.headers?.['x-correlation-id'] as string) ||
           (req.headers?.['x-request-id'] as string) ||
-          req['correlationId'] ||
+          req.correlationId ||
           req.id;
 
         if (correlationId) {
           if (
             typeof res.setHeader === 'function' &&
             !res.headersSent &&
-            !res.getHeader('x-correlation-id')
+            !res.getHeader?.('x-correlation-id')
           ) {
             res.setHeader('x-correlation-id', correlationId);
           }
