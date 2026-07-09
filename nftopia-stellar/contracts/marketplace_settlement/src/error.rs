@@ -1,5 +1,6 @@
 use soroban_sdk::{contracterror, contracttype};
 
+// Primary error enum - keep under the limit
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 pub enum SettlementError {
@@ -71,6 +72,34 @@ pub enum SettlementError {
     Overflow = 900,
     Underflow = 901,
     DivisionByZero = 902,
+}
+
+// Separate enum for pause errors
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+pub enum PauseError {
+    ModulePaused = 1,
+    PauseTimelockActive = 2,
+    PauseTimelockExpired = 3,
+    PauseAlreadyScheduled = 4,
+    PauseNotScheduled = 5,
+    PauseCancellationNotAllowed = 6,
+    NotPaused = 7,
+}
+
+// Helper to convert PauseError to SettlementError
+impl From<PauseError> for SettlementError {
+    fn from(err: PauseError) -> Self {
+        match err {
+            PauseError::ModulePaused => SettlementError::ContractPaused,
+            PauseError::PauseTimelockActive => SettlementError::ContractPaused,
+            PauseError::PauseTimelockExpired => SettlementError::ContractPaused,
+            PauseError::PauseAlreadyScheduled => SettlementError::ContractPaused,
+            PauseError::PauseNotScheduled => SettlementError::ContractPaused,
+            PauseError::PauseCancellationNotAllowed => SettlementError::ContractPaused,
+            PauseError::NotPaused => SettlementError::ContractPaused,
+        }
+    }
 }
 
 #[contracttype]

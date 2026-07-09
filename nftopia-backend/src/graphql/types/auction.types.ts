@@ -115,3 +115,15 @@ export class AuctionConnection {
   @Field(() => Int)
   totalCount: number;
 }
+
+@ObjectType('TransactionResult')
+export class TransactionResult {
+  @Field()
+  success: boolean;
+
+  @Field({ nullable: true })
+  transactionHash?: string;
+
+  @Field({ nullable: true })
+  message?: string;
+}

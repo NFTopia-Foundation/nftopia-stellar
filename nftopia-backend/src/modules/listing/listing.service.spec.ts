@@ -9,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { CreateListingDto } from './dto/create-listing.dto';
+import { BuyNftDto } from './dto/buy-nft.dto';
 import { Listing } from './entities/listing.entity';
 import { ListingStatus } from './interfaces/listing.interface';
 import { ListingService } from './listing.service';
@@ -16,6 +17,7 @@ import { StellarNft } from '../../nft/entities/stellar-nft.entity';
 import { MarketplaceSettlementClient } from '../stellar/marketplace-settlement.client';
 import { TransactionState } from '../transaction/enums/transaction-state.enum';
 import { TransactionService } from '../transaction/transaction.service';
+import { PaymentMethod } from '../payment/enums/payment-method.enum';
 
 type MockQb = {
   where: jest.Mock;
@@ -27,6 +29,7 @@ type MockQb = {
   take: jest.Mock;
   getMany: jest.Mock;
   getCount: jest.Mock;
+  leftJoinAndSelect: jest.Mock;
 };
 
 const makeQb = (): MockQb => {
@@ -54,6 +57,7 @@ const makeQb = (): MockQb => {
   qb.take = jest.fn().mockReturnValue(qb);
   qb.getMany = jest.fn().mockResolvedValue([]);
   qb.getCount = jest.fn().mockResolvedValue(0);
+  qb.leftJoinAndSelect = jest.fn().mockReturnValue(qb);
   return qb as MockQb;
 };
 
@@ -84,6 +88,9 @@ describe('ListingService', () => {
 
   const transactionService = {
     createAndExecuteListingPurchase: jest.fn(),
+    createAndExecuteListingPurchaseWithPayment: jest.fn(),
+    createOffchainPaymentTransaction: jest.fn(),
+    createAndExecuteBundlePurchase: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -268,7 +275,14 @@ describe('ListingService', () => {
   it('findConnection returns page data and hasNextPage', async () => {
     const mainQb = makeQb();
     const totalQb = makeQb();
-    mainQb.getMany.mockResolvedValue([{ id: '3' }, { id: '2' }, { id: '1' }]);
+    // Service fetches first + 1 items to determine hasNextPage
+    // For first=2, it fetches 3 items
+    const listings = [
+      { id: 'listing-1', status: ListingStatus.ACTIVE },
+      { id: 'listing-2', status: ListingStatus.ACTIVE },
+      { id: 'listing-3', status: ListingStatus.ACTIVE }, // Extra item for hasNextPage
+    ];
+    mainQb.getMany.mockResolvedValue(listings);
     totalQb.getCount.mockResolvedValue(7);
 
     listingRepo.createQueryBuilder
@@ -281,15 +295,19 @@ describe('ListingService', () => {
       sellerId: 'seller-1',
     });
 
+    // Should only return first 2 items
     expect(result.data).toHaveLength(2);
     expect(result.total).toBe(7);
     expect(result.hasNextPage).toBe(true);
+    expect(mainQb.leftJoinAndSelect).toHaveBeenCalled();
   });
 
   it('findConnection handles cursor and hasNextPage false', async () => {
     const mainQb = makeQb();
     const totalQb = makeQb();
-    mainQb.getMany.mockResolvedValue([{ id: '3' }]);
+    // Only 1 item returned, so hasNextPage should be false
+    const listings = [{ id: 'listing-1', status: ListingStatus.ACTIVE }];
+    mainQb.getMany.mockResolvedValue(listings);
     totalQb.getCount.mockResolvedValue(1);
 
     listingRepo.createQueryBuilder
@@ -303,9 +321,12 @@ describe('ListingService', () => {
       nftTokenId: '1',
     });
 
+    // Should return 1 item (less than first, so hasNextPage false)
+    expect(result.data).toHaveLength(1);
     expect(result.total).toBe(1);
     expect(result.hasNextPage).toBe(false);
     expect(mainQb.andWhere).toHaveBeenCalled();
+    expect(mainQb.leftJoinAndSelect).toHaveBeenCalled();
   });
 
   it('findOne returns listing when found', async () => {
@@ -347,15 +368,20 @@ describe('ListingService', () => {
 
   it('findByNFTIds queries active non-expired listings', async () => {
     const qb = makeQb();
-    qb.getMany.mockResolvedValue([{ id: 'listing-1' }]);
+    const listings = [{ id: 'listing-1' }];
+    qb.getMany.mockResolvedValue(listings);
     listingRepo.createQueryBuilder.mockReturnValue(qb);
 
     const result = await service.findByNFTIds(['C1:1', 'C2:2', 'C1:1']);
 
-    expect(result).toEqual([{ id: 'listing-1' }]);
+    expect(result).toEqual(listings);
     expect(qb.andWhere).toHaveBeenCalledWith('l.status = :status', {
       status: ListingStatus.ACTIVE,
     });
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('l.expiresAt IS NULL OR l.expiresAt > :now'),
+      expect.any(Object),
+    );
   });
 
   it('cancel throws 403 when non-seller attempts cancellation', async () => {
@@ -400,6 +426,219 @@ describe('ListingService', () => {
     expect(listingRepo.save).toHaveBeenCalled();
   });
 
+  it('buy executes transaction and returns completed payload with default payment method', async () => {
+    listingRepo.findOne.mockResolvedValue({
+      id: 'listing-1',
+      status: ListingStatus.ACTIVE,
+      expiresAt: new Date(Date.now() + 60_000),
+      price: 100,
+    });
+    transactionService.createAndExecuteListingPurchaseWithPayment.mockResolvedValue(
+      {
+        id: 99,
+        state: TransactionState.COMPLETED,
+      },
+    );
+
+    const result = await service.buy('listing-1', 'buyer-1');
+
+    expect(result).toEqual({
+      success: true,
+      listingId: 'listing-1',
+      buyer: 'buyer-1',
+      transactionId: 99,
+      transactionState: TransactionState.COMPLETED,
+      paymentMethod: PaymentMethod.XLM,
+      amount: 100,
+    });
+  });
+
+  it('buy returns unsuccessful payload for non-completed transaction state', async () => {
+    listingRepo.findOne.mockResolvedValue({
+      id: 'listing-1',
+      status: ListingStatus.ACTIVE,
+      expiresAt: new Date(Date.now() + 60_000),
+      price: 100,
+    });
+    transactionService.createAndExecuteListingPurchaseWithPayment.mockResolvedValue(
+      {
+        id: 100,
+        state: TransactionState.PENDING,
+      },
+    );
+
+    const result = await service.buy('listing-1', 'buyer-1');
+
+    expect(result.success).toBe(false);
+    expect(result.transactionState).toBe(TransactionState.PENDING);
+    expect(result.amount).toBe(100);
+  });
+
+  it('buy returns unsuccessful payload for non-completed transaction state', async () => {
+    listingRepo.findOne.mockResolvedValue({
+      id: 'listing-1',
+      status: ListingStatus.ACTIVE,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    transactionService.createAndExecuteListingPurchaseWithPayment.mockResolvedValue(
+      {
+        id: 100,
+        state: TransactionState.PENDING,
+      },
+    );
+
+    const result = await service.buy('listing-1', 'buyer-1');
+
+    expect(result.success).toBe(false);
+    expect(result.transactionState).toBe(TransactionState.PENDING);
+  });
+
+  it('buy handles USDC payment with token address', async () => {
+    listingRepo.findOne.mockResolvedValue({
+      id: 'listing-1',
+      status: ListingStatus.ACTIVE,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    transactionService.createAndExecuteListingPurchaseWithPayment.mockResolvedValue(
+      {
+        id: 101,
+        state: TransactionState.COMPLETED,
+      },
+    );
+
+    const dto: BuyNftDto = {
+      paymentMethod: PaymentMethod.USDC,
+      tokenAddress: '0x1234567890abcdef',
+    };
+
+    const result = await service.buy('listing-1', 'buyer-1', dto);
+
+    expect(
+      transactionService.createAndExecuteListingPurchaseWithPayment,
+    ).toHaveBeenCalledWith(
+      'listing-1',
+      'buyer-1',
+      PaymentMethod.USDC,
+      '0x1234567890abcdef',
+      undefined,
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it('buy handles credit card payment with stripe intent', async () => {
+    listingRepo.findOne.mockResolvedValue({
+      id: 'listing-1',
+      status: ListingStatus.ACTIVE,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    transactionService.createOffchainPaymentTransaction.mockResolvedValue({
+      id: 102,
+      state: TransactionState.COMPLETED,
+    });
+
+    const dto: BuyNftDto = {
+      paymentMethod: PaymentMethod.CREDIT_CARD,
+      stripePaymentIntentId: 'pi_123456789',
+    };
+
+    const result = await service.buy('listing-1', 'buyer-1', dto);
+
+    expect(
+      transactionService.createOffchainPaymentTransaction,
+    ).toHaveBeenCalledWith(
+      'listing-1',
+      'buyer-1',
+      expect.objectContaining({
+        paymentMethod: PaymentMethod.CREDIT_CARD,
+        stripePaymentIntentId: 'pi_123456789',
+      }),
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it('buy handles bundle payment with bundle item ids', async () => {
+    listingRepo.findOne.mockResolvedValue({
+      id: 'listing-1',
+      status: ListingStatus.ACTIVE,
+      expiresAt: new Date(Date.now() + 60_000),
+      price: 100,
+    });
+    transactionService.createAndExecuteBundlePurchase.mockResolvedValue({
+      id: 103,
+      state: TransactionState.COMPLETED,
+    });
+
+    const dto: BuyNftDto = {
+      paymentMethod: PaymentMethod.BUNDLE,
+      bundleItemIds: ['item-1', 'item-2'],
+      discountPercentage: 10,
+    };
+
+    const result = await service.buy('listing-1', 'buyer-1', dto);
+
+    expect(
+      transactionService.createAndExecuteBundlePurchase,
+    ).toHaveBeenCalledWith(
+      'listing-1',
+      'buyer-1',
+      expect.objectContaining({
+        paymentMethod: PaymentMethod.BUNDLE,
+        bundleItemIds: ['item-1', 'item-2'],
+        discountPercentage: 10,
+      }),
+    );
+    expect(result.success).toBe(true);
+    expect(result.amount).toBe(90); // 10% discount on 100
+  });
+
+  it('buy throws error for USDC without token address', async () => {
+    listingRepo.findOne.mockResolvedValue({
+      id: 'listing-1',
+      status: ListingStatus.ACTIVE,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+
+    const dto: BuyNftDto = {
+      paymentMethod: PaymentMethod.USDC,
+    };
+
+    await expect(
+      service.buy('listing-1', 'buyer-1', dto),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('buy throws error for credit card without stripe intent', async () => {
+    listingRepo.findOne.mockResolvedValue({
+      id: 'listing-1',
+      status: ListingStatus.ACTIVE,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+
+    const dto: BuyNftDto = {
+      paymentMethod: PaymentMethod.CREDIT_CARD,
+    };
+
+    await expect(
+      service.buy('listing-1', 'buyer-1', dto),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('buy throws error for bundle without bundle item ids', async () => {
+    listingRepo.findOne.mockResolvedValue({
+      id: 'listing-1',
+      status: ListingStatus.ACTIVE,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+
+    const dto: BuyNftDto = {
+      paymentMethod: PaymentMethod.BUNDLE,
+    };
+
+    await expect(
+      service.buy('listing-1', 'buyer-1', dto),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
   it('buy throws 400 when listing is not active', async () => {
     listingRepo.findOne.mockResolvedValue({
       id: 'listing-1',
@@ -423,50 +662,13 @@ describe('ListingService', () => {
     );
   });
 
-  it('buy executes transaction and returns completed payload', async () => {
+  it('buy bubbles conflict errors from transaction flow (409 path)', async () => {
     listingRepo.findOne.mockResolvedValue({
       id: 'listing-1',
       status: ListingStatus.ACTIVE,
       expiresAt: new Date(Date.now() + 60_000),
     });
-    transactionService.createAndExecuteListingPurchase.mockResolvedValue({
-      id: 99,
-      state: TransactionState.COMPLETED,
-    });
-
-    const result = await service.buy('listing-1', 'buyer-1');
-
-    expect(result).toEqual({
-      success: true,
-      listingId: 'listing-1',
-      buyer: 'buyer-1',
-      transactionId: 99,
-      transactionState: TransactionState.COMPLETED,
-    });
-  });
-
-  it('buy returns unsuccessful payload for non-completed transaction state', async () => {
-    listingRepo.findOne.mockResolvedValue({
-      id: 'listing-1',
-      status: ListingStatus.ACTIVE,
-    });
-    transactionService.createAndExecuteListingPurchase.mockResolvedValue({
-      id: 100,
-      state: TransactionState.PENDING,
-    });
-
-    const result = await service.buy('listing-1', 'buyer-1');
-
-    expect(result.success).toBe(false);
-    expect(result.transactionState).toBe(TransactionState.PENDING);
-  });
-
-  it('buy bubbles conflict errors from transaction flow (409 path)', async () => {
-    listingRepo.findOne.mockResolvedValue({
-      id: 'listing-1',
-      status: ListingStatus.ACTIVE,
-    });
-    transactionService.createAndExecuteListingPurchase.mockRejectedValue(
+    transactionService.createAndExecuteListingPurchaseWithPayment.mockRejectedValue(
       new ConflictException('Already finalized'),
     );
 
@@ -479,8 +681,9 @@ describe('ListingService', () => {
     listingRepo.findOne.mockResolvedValue({
       id: 'listing-1',
       status: ListingStatus.ACTIVE,
+      expiresAt: new Date(Date.now() + 60_000),
     });
-    transactionService.createAndExecuteListingPurchase.mockRejectedValue(
+    transactionService.createAndExecuteListingPurchaseWithPayment.mockRejectedValue(
       new UnauthorizedException('Signature missing'),
     );
 
@@ -491,21 +694,28 @@ describe('ListingService', () => {
 
   it('expireListings marks active expired listings', async () => {
     const qb = makeQb();
-    qb.getMany.mockResolvedValue([
+    const expiredListings = [
       { id: 'l1', status: ListingStatus.ACTIVE },
       { id: 'l2', status: ListingStatus.ACTIVE },
-    ]);
+    ];
+    qb.getMany.mockResolvedValue(expiredListings);
     listingRepo.createQueryBuilder.mockReturnValue(qb);
-    listingRepo.save.mockResolvedValue(undefined);
+    listingRepo.save.mockImplementation((listing: Listing) =>
+      Promise.resolve(listing),
+    );
 
     await service.expireListings();
 
     expect(listingRepo.save).toHaveBeenCalledTimes(2);
+    expect(listingRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({ status: ListingStatus.EXPIRED }),
+    );
   });
 
   it('expireListings continues and logs when save fails', async () => {
     const qb = makeQb();
-    qb.getMany.mockResolvedValue([{ id: 'l1', status: ListingStatus.ACTIVE }]);
+    const expiredListings = [{ id: 'l1', status: ListingStatus.ACTIVE }];
+    qb.getMany.mockResolvedValue(expiredListings);
     listingRepo.createQueryBuilder.mockReturnValue(qb);
     listingRepo.save.mockRejectedValue(new Error('db failed'));
     const loggerHost = service as unknown as {
@@ -516,5 +726,15 @@ describe('ListingService', () => {
     await service.expireListings();
 
     expect(errorSpy).toHaveBeenCalled();
+  });
+
+  it('expireListings handles empty expired listings gracefully', async () => {
+    const qb = makeQb();
+    qb.getMany.mockResolvedValue([]);
+    listingRepo.createQueryBuilder.mockReturnValue(qb);
+
+    await service.expireListings();
+
+    expect(listingRepo.save).not.toHaveBeenCalled();
   });
 });
