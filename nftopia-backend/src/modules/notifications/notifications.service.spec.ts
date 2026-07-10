@@ -51,7 +51,9 @@ describe('NotificationsService', () => {
       sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined),
       sendBidNotificationEmail: jest.fn().mockResolvedValue(undefined),
       sendAuctionWonEmail: jest.fn().mockResolvedValue(undefined),
-      sendAsync: jest.fn((fn: () => Promise<void>) => { fn().catch(() => {}); }),
+      sendAsync: jest.fn((fn: () => Promise<void>) => {
+        fn().catch(() => {});
+      }),
     } as unknown as jest.Mocked<EmailService>;
 
     const module: TestingModule = await Test.createTestingModule({
@@ -258,7 +260,12 @@ describe('NotificationsService', () => {
 
   describe('notifyAuctionWonEmail', () => {
     it('calls emailService.sendAsync with auction won notification', async () => {
-      service.notifyAuctionWonEmail('winner@example.com', 'auction-3', 'Cool NFT', 'Bob');
+      service.notifyAuctionWonEmail(
+        'winner@example.com',
+        'auction-3',
+        'Cool NFT',
+        'Bob',
+      );
       expect(mockEmailService.sendAsync).toHaveBeenCalledTimes(1);
       await new Promise<void>((r) => setTimeout(r, 10));
       expect(mockEmailService.sendAuctionWonEmail).toHaveBeenCalledWith(
@@ -270,7 +277,11 @@ describe('NotificationsService', () => {
     });
 
     it('works without optional username', async () => {
-      service.notifyAuctionWonEmail('winner@example.com', 'auction-4', 'Rare NFT');
+      service.notifyAuctionWonEmail(
+        'winner@example.com',
+        'auction-4',
+        'Rare NFT',
+      );
       expect(mockEmailService.sendAsync).toHaveBeenCalledTimes(1);
       await new Promise<void>((r) => setTimeout(r, 10));
       expect(mockEmailService.sendAuctionWonEmail).toHaveBeenCalledWith(

@@ -52,7 +52,11 @@ export class EmailService implements OnModuleInit {
       verificationUrl,
       year: new Date().getFullYear(),
     });
-    await this.sendWithRetry({ to, subject: 'Verify your NFTopia account', html });
+    await this.sendWithRetry({
+      to,
+      subject: 'Verify your NFTopia account',
+      html,
+    });
   }
 
   async sendPasswordResetEmail(
@@ -66,7 +70,11 @@ export class EmailService implements OnModuleInit {
       resetUrl,
       year: new Date().getFullYear(),
     });
-    await this.sendWithRetry({ to, subject: 'Reset your NFTopia password', html });
+    await this.sendWithRetry({
+      to,
+      subject: 'Reset your NFTopia password',
+      html,
+    });
   }
 
   async sendBidNotificationEmail(
@@ -83,7 +91,11 @@ export class EmailService implements OnModuleInit {
       auctionUrl,
       year: new Date().getFullYear(),
     });
-    await this.sendWithRetry({ to, subject: 'New bid on your NFT auction', html });
+    await this.sendWithRetry({
+      to,
+      subject: 'New bid on your NFT auction',
+      html,
+    });
   }
 
   async sendAuctionWonEmail(
@@ -109,7 +121,10 @@ export class EmailService implements OnModuleInit {
 
   sendAsync(fn: () => Promise<void>): void {
     fn().catch((err) =>
-      this.logger.error('Async email delivery failed', err instanceof Error ? err.stack : String(err)),
+      this.logger.error(
+        'Async email delivery failed',
+        err instanceof Error ? err.stack : String(err),
+      ),
     );
   }
 
@@ -140,7 +155,9 @@ export class EmailService implements OnModuleInit {
     } else if (this.provider === 'resend') {
       this.logger.log('Email provider: Resend (HTTP API)');
     } else {
-      this.logger.warn(`Unknown EMAIL_PROVIDER "${this.provider}". Email sending is disabled.`);
+      this.logger.warn(
+        `Unknown EMAIL_PROVIDER "${this.provider}". Email sending is disabled.`,
+      );
     }
   }
 
@@ -195,7 +212,9 @@ export class EmailService implements OnModuleInit {
       return this.sendViaResend(options);
     }
     if (!this.transporter) {
-      throw new Error(`Email transporter not configured (provider: ${this.provider})`);
+      throw new Error(
+        `Email transporter not configured (provider: ${this.provider})`,
+      );
     }
     await this.transporter.sendMail({
       from: `"${this.fromName}" <${this.fromAddress}>`,
@@ -234,12 +253,14 @@ export class EmailService implements OnModuleInit {
           let data = '';
           res.on('data', (chunk: Buffer) => (data += chunk.toString()));
           res.on('end', () => {
-            if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+            if (
+              res.statusCode &&
+              res.statusCode >= 200 &&
+              res.statusCode < 300
+            ) {
               resolve();
             } else {
-              reject(
-                new Error(`Resend API error ${res.statusCode}: ${data}`),
-              );
+              reject(new Error(`Resend API error ${res.statusCode}: ${data}`));
             }
           });
         },
