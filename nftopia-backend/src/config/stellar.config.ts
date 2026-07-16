@@ -1,6 +1,8 @@
 export type StellarRuntimeConfig = {
   network: 'testnet' | 'mainnet';
   horizonUrl: string;
+  /** True when horizonUrl came from the built-in default rather than STELLAR_HORIZON_URL. */
+  horizonUrlIsFallback: boolean;
   sorobanRpcUrl: string;
   /** True when sorobanRpcUrl came from the built-in default rather than SOROBAN_RPC_URL. */
   sorobanRpcUrlIsFallback: boolean;
@@ -27,6 +29,76 @@ function asBool(value: string | undefined, fallback: boolean): boolean {
   }
 
   return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
+}
+
+function isLocalhost(hostname: string): boolean {
+  const local = hostname.toLowerCase();
+  return (
+    local === 'localhost' ||
+    local === '127.0.0.1' ||
+    local === '::1' ||
+    local.startsWith('127.') ||
+    local.startsWith('0.0.0.')
+  );
+}
+
+export function normalizeHorizonUrl(url: string): string {
+  return url.replace(/\/$/, '');
+}
+
+export function validateHorizonUrl(
+  horizonUrl: string,
+  network: 'testnet' | 'mainnet',
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  if (!horizonUrl) {
+    throw new Error('STELLAR_HORIZON_URL is required but was not provided.');
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(horizonUrl);
+  } catch {
+    throw new Error(
+      `STELLAR_HORIZON_URL is not a valid URL: ${horizonUrl}. Expected format: https://horizon.stellar.org`,
+    );
+  }
+
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error(
+      `STELLAR_HORIZON_URL must use http or https protocol. Received: ${parsed.protocol}`,
+    );
+  }
+
+  if (!parsed.hostname) {
+    throw new Error(
+      `STELLAR_HORIZON_URL must include a valid hostname. Received: ${horizonUrl}`,
+    );
+  }
+
+  if (env.NODE_ENV === 'production' && isLocalhost(parsed.hostname)) {
+    throw new Error(
+      `STELLAR_HORIZON_URL cannot point to localhost in production. Received: ${horizonUrl}`,
+    );
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+  const looksLikeTestnet = hostname.includes('testnet');
+  const looksLikeMainnet = hostname === 'horizon.stellar.org';
+
+  if (network === 'mainnet' && looksLikeTestnet) {
+    throw new Error(
+      `Network mismatch: STELLAR_HORIZON_URL (${horizonUrl}) points to testnet but STELLAR_NETWORK is mainnet.`,
+    );
+  }
+
+  if (network === 'testnet' && looksLikeMainnet) {
+    throw new Error(
+      `Network mismatch: STELLAR_HORIZON_URL (${horizonUrl}) points to mainnet but STELLAR_NETWORK is testnet.`,
+    );
+  }
+
+  return normalizeHorizonUrl(horizonUrl);
 }
 
 /**
@@ -85,11 +157,6 @@ export function validateAndNormalizeSorobanRpcUrl(
     );
   }
 
-  const isLocalhost =
-    parsed.hostname === 'localhost' ||
-    parsed.hostname === '127.0.0.1' ||
-    parsed.hostname === '::1';
-
   if (isProduction) {
     if (parsed.protocol !== 'https:') {
       throw new Error(
@@ -97,7 +164,7 @@ export function validateAndNormalizeSorobanRpcUrl(
       );
     }
 
-    if (isLocalhost) {
+    if (isLocalhost(parsed.hostname)) {
       throw new Error(
         `SOROBAN_RPC_URL points to localhost ("${candidate}") in production. ` +
           'Configure a reachable Soroban RPC endpoint.',
@@ -114,8 +181,40 @@ export function validateAndNormalizeSorobanRpcUrl(
 export function getStellarConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): StellarRuntimeConfig {
-  const network = env.STELLAR_NETWORK === 'mainnet' ? 'mainnet' : 'testnet';
+  const network =
+    env.STELLAR_NETWORK?.toLowerCase() === 'mainnet' ? 'mainnet' : 'testnet';
   const isMainnet = network === 'mainnet';
+  const isProduction = env.NODE_ENV === 'production';
+
+  const rawHorizonUrl = env.STELLAR_HORIZON_URL;
+
+  if (isProduction && !isMainnet) {
+    throw new Error(
+      'STELLAR_NETWORK must be set to mainnet in production. Testnet is not allowed.',
+    );
+  }
+
+  if (isProduction && !rawHorizonUrl) {
+    throw new Error(
+      'STELLAR_HORIZON_URL is required in production. Set it to a mainnet Horizon endpoint such as https://horizon.stellar.org',
+    );
+  }
+
+  const horizonUrlFallback = isMainnet
+    ? 'https://horizon.stellar.org'
+    : 'https://horizon-testnet.stellar.org';
+
+  const horizonUrl = validateHorizonUrl(
+    rawHorizonUrl || horizonUrlFallback,
+    network,
+    env,
+  );
+
+  if (isProduction && horizonUrl.includes('testnet')) {
+    throw new Error(
+      'STELLAR_HORIZON_URL must point to a mainnet Horizon endpoint in production. Testnet URLs are not allowed.',
+    );
+  }
 
   const sorobanRpcFallback = isMainnet
     ? 'https://mainnet.sorobanrpc.com'
@@ -129,11 +228,8 @@ export function getStellarConfig(
 
   return {
     network,
-    horizonUrl:
-      env.STELLAR_HORIZON_URL ||
-      (isMainnet
-        ? 'https://horizon.stellar.org'
-        : 'https://horizon-testnet.stellar.org'),
+    horizonUrl,
+    horizonUrlIsFallback: !env.STELLAR_HORIZON_URL?.trim(),
     sorobanRpcUrl,
     sorobanRpcUrlIsFallback: !env.SOROBAN_RPC_URL?.trim(),
     networkPassphrase:

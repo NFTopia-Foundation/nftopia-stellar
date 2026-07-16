@@ -26,6 +26,33 @@ export class ListingFilterInput {
   @IsOptional()
   @IsString()
   sellerId?: string;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @Field(() => Float, { nullable: true })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  minPrice?: number;
+
+  @Field(() => Float, { nullable: true })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  maxPrice?: number;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  sortBy?: string;
 }
 
 @InputType()

@@ -7,6 +7,7 @@ export type GraphqlUser = {
   email?: string;
   walletAddress?: string;
   tokenType?: string;
+  role?: string;
 };
 
 export interface GraphqlContext {

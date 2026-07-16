@@ -2,8 +2,10 @@ use crate::error::ContractError;
 use crate::events;
 use crate::storage::DataKey;
 use crate::types::{CollectionConfig, CollectionInfo};
+use crate::version;
 use soroban_sdk::{
-    Address, BytesN, Env, IntoVal, Val, Vec, contract, contractimpl, panic_with_error, token,
+    Address, BytesN, Env, IntoVal, String, Val, Vec, contract, contractimpl, panic_with_error,
+    token,
 };
 
 #[contract]
@@ -305,5 +307,20 @@ impl CollectionFactory {
         }
 
         Ok(())
+    }
+
+    // -------------------------------------------------------------------------
+    // Versioning
+    // -------------------------------------------------------------------------
+
+    /// Returns the semver string with embedded git commit: "0.1.0+abc1234"
+    pub fn version(env: Env) -> String {
+        version::version(&env)
+    }
+
+    /// Returns full build metadata for incident response:
+    /// "version=0.1.0;git=abc1234;ts=1700000000;rustc=rustc 1.x.y"
+    pub fn get_version(env: Env) -> String {
+        version::get_version(&env)
     }
 }

@@ -25,11 +25,16 @@ import { NFTFilterInput, PaginationInput } from '../inputs/nft.inputs';
 import {
   CollectionFilterInput,
   CreateCollectionInput,
+  LikeCollectionInput,
+  UnlikeCollectionInput,
 } from '../inputs/collection.inputs';
 import {
   CollectionConnection,
   CollectionStats,
   GraphqlCollection,
+  LikeCollectionResult,
+  UnlikeCollectionResult,
+  CollectionLikesInfo,
 } from '../types/collection.types';
 import { GraphqlNft, NFTConnection } from '../types/nft.types';
 import { GraphqlUserType } from '../types/user.types';
@@ -186,6 +191,120 @@ export class CollectionResolver {
     return this.toNftConnection(result.data, result.total, result.hasNextPage);
   }
 
+  // NEW: Resolve field for likes - now using real database data
+  @ResolveField(() => Int, {
+    name: 'likes',
+    nullable: true,
+    description: 'Number of likes for this collection',
+  })
+  async likes(
+    @Parent() collection: GraphqlCollection,
+    // @Context() context: GraphqlContext,
+  ): Promise<number> {
+    return this.collectionService.getLikesCount(collection.id);
+  }
+
+  // NEW: Query to get likes info for a collection
+  @Query(() => CollectionLikesInfo, {
+    name: 'collectionLikes',
+    description: 'Get likes info for a collection',
+  })
+  async collectionLikes(
+    @Args('collectionId', { type: () => ID }) collectionId: string,
+    @Context() context: GraphqlContext,
+  ): Promise<CollectionLikesInfo> {
+    const count = await this.collectionService.getLikesCount(collectionId);
+
+    let isLiked = false;
+    if (context.user?.userId) {
+      isLiked = await this.collectionService.hasUserLiked(
+        collectionId,
+        context.user.userId,
+      );
+    }
+
+    return {
+      count,
+      isLiked,
+    };
+  }
+
+  // NEW: Mutation to like a collection
+  @UseGuards(GqlAuthGuard)
+  @Mutation(() => LikeCollectionResult, {
+    name: 'likeCollection',
+    description: 'Like a collection',
+  })
+  async likeCollection(
+    @Args('input', { type: () => LikeCollectionInput })
+    input: LikeCollectionInput,
+    @Context() context: GraphqlContext,
+  ): Promise<LikeCollectionResult> {
+    const userId = this.getAuthenticatedUserId(context);
+
+    try {
+      const result = await this.collectionService.likeCollection(
+        input.collectionId,
+        userId,
+      );
+
+      return {
+        success: true,
+        collectionId: input.collectionId,
+        likesCount: result.likesCount,
+        userLiked: result.userLiked,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        collectionId: input.collectionId,
+        likesCount: 0,
+        userLiked: false,
+        message:
+          error instanceof Error ? error.message : 'Failed to like collection',
+      };
+    }
+  }
+
+  // NEW: Mutation to unlike a collection
+  @UseGuards(GqlAuthGuard)
+  @Mutation(() => UnlikeCollectionResult, {
+    name: 'unlikeCollection',
+    description: 'Unlike a collection',
+  })
+  async unlikeCollection(
+    @Args('input', { type: () => UnlikeCollectionInput })
+    input: UnlikeCollectionInput,
+    @Context() context: GraphqlContext,
+  ): Promise<UnlikeCollectionResult> {
+    const userId = this.getAuthenticatedUserId(context);
+
+    try {
+      const result = await this.collectionService.unlikeCollection(
+        input.collectionId,
+        userId,
+      );
+
+      return {
+        success: true,
+        collectionId: input.collectionId,
+        likesCount: result.likesCount,
+        userLiked: result.userLiked,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        collectionId: input.collectionId,
+        likesCount: 0,
+        userLiked: false,
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Failed to unlike collection',
+      };
+    }
+  }
+
   private getAuthenticatedUserId(context: GraphqlContext): string {
     const userId = context.user?.userId;
     if (!userId) {
@@ -244,13 +363,15 @@ export class CollectionResolver {
       name: collection.name,
       symbol: collection.symbol,
       description: collection.description ?? null,
-      image: collection.imageUrl,
+      image: collection.imageUrl || '/images/fallbacks/collection-fallback.svg',
       creatorId: collection.creatorId,
       totalVolume: this.toDecimalString(collection.totalVolume),
       floorPrice: this.toDecimalString(collection.floorPrice),
       totalSupply: collection.totalSupply,
       createdAt: collection.createdAt,
+      isVerified: collection.isVerified || false,
       nfts: undefined,
+      likes: undefined, // Will be resolved by the @ResolveField
     };
   }
 
@@ -261,7 +382,7 @@ export class CollectionResolver {
       contractAddress: nft.contractAddress,
       name: nft.name,
       description: nft.description ?? null,
-      image: nft.imageUrl ?? null,
+      image: nft.imageUrl ?? '/images/fallbacks/nft-fallback.svg',
       attributes: (nft.attributes ?? []).map((attribute) => ({
         traitType: attribute.traitType,
         value: attribute.value,
@@ -284,7 +405,7 @@ export class CollectionResolver {
       email: user.email ?? null,
       walletAddress: user.walletAddress ?? user.address ?? null,
       stellarAddress: user.walletAddress ?? user.address ?? null,
-      avatar: user.avatarUrl ?? null,
+      avatar: user.avatarUrl ?? '/images/fallbacks/avatar-fallback.svg',
     };
   }
 
@@ -303,8 +424,7 @@ export class CollectionResolver {
 
   private encodeCursor(
     collection:
-      | Pick<Collection, 'createdAt' | 'id'>
-      | Pick<Nft, 'createdAt' | 'id'>,
+      Pick<Collection, 'createdAt' | 'id'> | Pick<Nft, 'createdAt' | 'id'>,
   ): string {
     return Buffer.from(
       JSON.stringify({
