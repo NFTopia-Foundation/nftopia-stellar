@@ -4,12 +4,22 @@ import {
   DEFAULT_ARWEAVE_MAX_FILE_SIZE_BYTES,
   DEFAULT_ARWEAVE_RETRY_ATTEMPTS,
   DEFAULT_ARWEAVE_RETRY_BACKOFF_MS,
+  DEFAULT_CLAMAV_HOST,
+  DEFAULT_CLAMAV_PORT,
   DEFAULT_FALLBACK_ENABLED,
   DEFAULT_IPFS_GATEWAY_URL,
   DEFAULT_IPFS_MAX_FILE_SIZE_BYTES,
   DEFAULT_IPFS_PROVIDER,
   DEFAULT_IPFS_RETRY_ATTEMPTS,
   DEFAULT_IPFS_RETRY_BACKOFF_MS,
+  DEFAULT_MALWARE_SCAN_ENABLED,
+  DEFAULT_RESCAN_BATCH_SIZE,
+  DEFAULT_RESCAN_STALE_AFTER_MS,
+  DEFAULT_SCAN_ASYNC_THRESHOLD_BYTES,
+  DEFAULT_SCAN_FAIL_CLOSED,
+  DEFAULT_SCAN_RETRY_ATTEMPTS,
+  DEFAULT_SCAN_RETRY_BACKOFF_MS,
+  DEFAULT_SCAN_TIMEOUT_MS,
 } from './storage.constants';
 import type { IpfsProvider, StorageConfig } from './storage.types';
 
@@ -100,6 +110,46 @@ export const getStorageConfig = (
     retryBackoffMs: toNumber(
       configService.get<string>('ARWEAVE_RETRY_BACKOFF_MS'),
       DEFAULT_ARWEAVE_RETRY_BACKOFF_MS,
+    ),
+  },
+  scanning: {
+    enabled: toBoolean(
+      configService.get<string>('MALWARE_SCAN_ENABLED'),
+      DEFAULT_MALWARE_SCAN_ENABLED,
+    ),
+    clamavHost: configService.get<string>('CLAMAV_HOST') || DEFAULT_CLAMAV_HOST,
+    clamavPort: toNumber(
+      configService.get<string>('CLAMAV_PORT'),
+      DEFAULT_CLAMAV_PORT,
+    ),
+    timeoutMs: toNumber(
+      configService.get<string>('SCAN_TIMEOUT_MS'),
+      DEFAULT_SCAN_TIMEOUT_MS,
+    ),
+    retryAttempts: toNumber(
+      configService.get<string>('SCAN_RETRY_ATTEMPTS'),
+      DEFAULT_SCAN_RETRY_ATTEMPTS,
+    ),
+    retryBackoffMs: toNumber(
+      configService.get<string>('SCAN_RETRY_BACKOFF_MS'),
+      DEFAULT_SCAN_RETRY_BACKOFF_MS,
+    ),
+    asyncThresholdBytes: toNumber(
+      configService.get<string>('SCAN_ASYNC_THRESHOLD_BYTES'),
+      DEFAULT_SCAN_ASYNC_THRESHOLD_BYTES,
+    ),
+    failClosed: toBoolean(
+      configService.get<string>('SCAN_FAIL_CLOSED'),
+      DEFAULT_SCAN_FAIL_CLOSED,
+    ),
+    webhookUrl: configService.get<string>('STORAGE_MALWARE_WEBHOOK_URL'),
+    rescanBatchSize: toNumber(
+      configService.get<string>('SCAN_RESCAN_BATCH_SIZE'),
+      DEFAULT_RESCAN_BATCH_SIZE,
+    ),
+    rescanStaleAfterMs: toNumber(
+      configService.get<string>('SCAN_RESCAN_STALE_AFTER_MS'),
+      DEFAULT_RESCAN_STALE_AFTER_MS,
     ),
   },
 });

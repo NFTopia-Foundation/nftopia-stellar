@@ -66,6 +66,19 @@ export interface StorageConfig {
     retryAttempts: number;
     retryBackoffMs: number;
   };
+  scanning: {
+    enabled: boolean;
+    clamavHost: string;
+    clamavPort: number;
+    timeoutMs: number;
+    retryAttempts: number;
+    retryBackoffMs: number;
+    asyncThresholdBytes: number;
+    failClosed: boolean;
+    webhookUrl?: string;
+    rescanBatchSize: number;
+    rescanStaleAfterMs: number;
+  };
 }
 
 export interface RetryQueueEntry {

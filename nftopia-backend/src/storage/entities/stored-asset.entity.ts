@@ -7,11 +7,13 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import type { PrimaryStorage } from '../storage.types';
+import type { ScanResult, ScanStatus } from '../scanning/scan.types';
 
 @Entity('stored_assets')
 @Index('idx_stored_assets_file_hash', ['fileHash'], { unique: true })
 @Index('idx_stored_assets_primary_storage', ['primaryStorage'])
 @Index('idx_stored_assets_uploaded_by', ['uploadedBy'])
+@Index('idx_stored_assets_scan_status', ['scanStatus'])
 export class StoredAsset {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -47,6 +49,23 @@ export class StoredAsset {
 
   @Column({ name: 'metadata', type: 'jsonb', nullable: true })
   metadata: Record<string, unknown> | null;
+
+  @Column({
+    name: 'scan_status',
+    type: 'varchar',
+    length: 16,
+    default: 'pending',
+  })
+  scanStatus: ScanStatus;
+
+  @Column({ name: 'scan_result', type: 'jsonb', nullable: true })
+  scanResult: ScanResult | null;
+
+  @Column({ name: 'quarantined', type: 'boolean', default: false })
+  quarantined: boolean;
+
+  @Column({ name: 'scanned_at', type: 'timestamptz', nullable: true })
+  scannedAt: Date | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
