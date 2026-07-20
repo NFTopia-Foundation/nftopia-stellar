@@ -5,6 +5,11 @@ import NFTDetailPage, { generateMetadata } from "../app/[locale]/marketplace/[nf
 import NFTDetailClient from "../app/[locale]/marketplace/[nftId]/NFTDetailClient";
 import { getApolloClient } from "@/lib/graphql/client";
 
+// Mock next/navigation notFound to avoid throwing during tests
+jest.mock("next/navigation", () => ({
+  notFound: jest.fn(),
+}));
+
 // Mock next-intl
 jest.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
