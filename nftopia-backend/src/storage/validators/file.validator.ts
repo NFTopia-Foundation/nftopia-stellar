@@ -3,6 +3,18 @@ import { createHash } from 'crypto';
 import { ALLOWED_MIME_TYPES } from '../storage.constants';
 import type { StorageConfig, UploadedFile } from '../storage.types';
 
+export const assertAllowedMimeType = (mimeType: string | null): string => {
+  if (!mimeType || !ALLOWED_MIME_TYPES.has(mimeType)) {
+    throw new BadRequestException(
+      `File content does not match an allowed, verifiable MIME type${
+        mimeType ? ` (detected: ${mimeType})` : ''
+      }`,
+    );
+  }
+
+  return mimeType;
+};
+
 export interface FileValidationResult {
   ipfsEligible: boolean;
 }
