@@ -25,6 +25,7 @@ import { SorobanService } from '../../nft/soroban.service';
 import { User } from '../../users/user.entity';
 import { PrometheusService } from '../../common/metrics/prometheus';
 import { NftTransferEvent } from '../../jobs/entities/nft-transfer-event.entity';
+import { NftMediaService } from './nft-media.service';
 
 @Injectable()
 export class NftService {
@@ -40,6 +41,7 @@ export class NftService {
     private readonly sorobanService: SorobanService,
     private readonly eventEmitter: EventEmitter2,
     private readonly prometheusService: PrometheusService,
+    private readonly nftMediaService: NftMediaService,
     @InjectRepository(NftTransferEvent)
     private readonly transferEventRepo: Repository<NftTransferEvent>,
   ) {}
@@ -55,13 +57,13 @@ export class NftService {
 
     const [data, total] = await qb.getManyAndCount();
 
-    return {
+    return this.nftMediaService.enrichQueryResult({
       data,
       page,
       limit,
       total,
       totalPages: Math.ceil(total / limit),
-    };
+    });
   }
 
   async findConnection(
@@ -75,7 +77,9 @@ export class NftService {
     ]);
 
     return {
-      data: rows.slice(0, first),
+      data: rows
+        .slice(0, first)
+        .map((nft) => this.nftMediaService.enrichNft(nft)),
       total,
       hasNextPage: rows.length > first,
     };
@@ -91,7 +95,7 @@ export class NftService {
       throw new NotFoundException('NFT not found');
     }
 
-    return nft;
+    return this.nftMediaService.enrichNft(nft);
   }
 
   async findByIds(ids: string[]): Promise<Nft[]> {
@@ -143,7 +147,7 @@ export class NftService {
       throw new NotFoundException('NFT not found');
     }
 
-    return nft;
+    return this.nftMediaService.enrichNft(nft);
   }
 
   async findByOwner(
@@ -215,6 +219,7 @@ export class NftService {
     const indexedNft = await this.findById(savedNft.id);
     this.emitSearchEvent('search.nft.upsert', { nftId: indexedNft.id });
     this.prometheusService.incrementNftMint(dto.collectionId);
+    this.nftMediaService.pregenerateVariants(savedNft);
     return indexedNft;
   }
 
@@ -270,6 +275,7 @@ export class NftService {
 
     const indexedNft = await this.findById(nft.id);
     this.emitSearchEvent('search.nft.upsert', { nftId: indexedNft.id });
+    this.nftMediaService.pregenerateVariants(nft);
     return indexedNft;
   }
 
@@ -320,7 +326,7 @@ export class NftService {
 
     const saved = await this.nftRepository.save(nft);
     this.emitSearchEvent('search.nft.upsert', { nftId: saved.id });
-    return saved;
+    return this.nftMediaService.enrichNft(saved);
   }
 
   async getAttributes(id: string): Promise<NftMetadata[]> {

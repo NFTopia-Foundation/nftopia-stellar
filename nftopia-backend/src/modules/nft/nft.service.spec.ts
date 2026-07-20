@@ -9,6 +9,8 @@ import { SorobanService } from '../../nft/soroban.service';
 import { User } from '../../users/user.entity';
 import { NftTransferEvent } from '../../jobs/entities/nft-transfer-event.entity';
 import { PrometheusService } from '../../common/metrics/prometheus';
+import { NftMediaService } from './nft-media.service';
+import type { NftQueryResult } from './interfaces/nft.interface';
 
 // Mock PrometheusService
 const mockPrometheusService = {
@@ -90,6 +92,14 @@ const mockEventEmitter = {
   emit: jest.fn(),
 };
 
+const mockNftMediaService = {
+  enrichQueryResult: jest.fn(
+    (result: NftQueryResult<Nft>): NftQueryResult<Nft> => result,
+  ),
+  enrichNft: jest.fn((nft: Nft): Nft => nft),
+  pregenerateVariants: jest.fn(),
+};
+
 describe('NftService', () => {
   let service: NftService;
 
@@ -110,6 +120,7 @@ describe('NftService', () => {
         { provide: SorobanService, useValue: mockSorobanService },
         { provide: EventEmitter2, useValue: mockEventEmitter },
         { provide: PrometheusService, useValue: mockPrometheusService },
+        { provide: NftMediaService, useValue: mockNftMediaService },
       ],
     }).compile();
 
@@ -148,6 +159,7 @@ describe('NftService', () => {
     expect(mockMetadataRepo.save).toHaveBeenCalled();
     expect(mockSorobanService.getLatestLedger).toHaveBeenCalled();
     expect(mockPrometheusService.incrementNftMint).toHaveBeenCalled();
+    expect(mockNftMediaService.pregenerateVariants).toHaveBeenCalled();
   });
 
   it('rejects mint when caller is not owner or creator', async () => {

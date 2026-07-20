@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NftController } from './nft.controller';
+import { NftMediaService } from './nft-media.service';
 import { NftService } from './nft.service';
 import type { Request as ExpressRequest } from 'express';
 
@@ -30,6 +31,26 @@ const mockNftService = {
   getAttributes: jest.fn().mockResolvedValue([]),
 };
 
+const mockNftMediaService = {
+  getOptimizedImage: jest.fn().mockResolvedValue({
+    buffer: Buffer.from('optimized'),
+    contentType: 'image/webp',
+    cacheControl: 'public, max-age=31536000, immutable',
+    originalBytes: 1000,
+    optimizedBytes: 100,
+  }),
+};
+
+const createMockResponse = () => {
+  const res = {
+    setHeader: jest.fn(),
+    redirect: jest.fn(),
+    send: jest.fn(),
+  };
+
+  return res;
+};
+
 describe('NftController', () => {
   let controller: NftController;
 
@@ -40,6 +61,10 @@ describe('NftController', () => {
         {
           provide: NftService,
           useValue: mockNftService,
+        },
+        {
+          provide: NftMediaService,
+          useValue: mockNftMediaService,
         },
       ],
     }).compile();
@@ -72,6 +97,25 @@ describe('NftController', () => {
   it('gets nft attributes', async () => {
     await controller.getAttributes('nft-1');
     expect(mockNftService.getAttributes).toHaveBeenCalledWith('nft-1');
+  });
+
+  it('streams optimized nft image', async () => {
+    const res = createMockResponse();
+
+    await controller.getImage(
+      'nft-1',
+      { width: 100, height: 100, format: 'webp' },
+      { headers: { accept: 'image/webp' } } as ExpressRequest,
+      res as never,
+    );
+
+    expect(mockNftMediaService.getOptimizedImage).toHaveBeenCalledWith(
+      'nft-1',
+      { width: 100, height: 100, format: 'webp' },
+      'image/webp',
+    );
+    expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'image/webp');
+    expect(res.send).toHaveBeenCalledWith(Buffer.from('optimized'));
   });
 
   it('mints nft for authenticated caller', async () => {
