@@ -299,4 +299,12 @@ export const TELEMETRY_EVENT_CATALOG: Record<TelemetryEventName, TelemetryEventC
     owner: "creator",
     status: "active",
   },
+  page_not_found: {
+    name: EVENT_NAMES.pageNotFound,
+    category: "navigation",
+    description: "User visited a page that returned a 404 not-found response",
+    version: 1,
+    owner: "navigation",
+    status: "active",
+  },
 };
