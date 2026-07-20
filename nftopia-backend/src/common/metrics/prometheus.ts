@@ -67,6 +67,24 @@ const businessTransactionsSettledTotal = new Counter({
   registers: [registry],
 });
 
+const nftImageOptimizationBytes = new Histogram({
+  name: 'nft_image_optimization_bytes',
+  help: 'Original and optimized NFT image byte sizes',
+  labelNames: ['format', 'stage'],
+  buckets: [
+    1_000, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000,
+    5_000_000, 10_000_000,
+  ],
+  registers: [registry],
+});
+
+const nftImageOptimizationFallbacksTotal = new Counter({
+  name: 'nft_image_optimization_fallbacks_total',
+  help: 'Total NFT image optimization requests that fell back to originals',
+  labelNames: ['format'],
+  registers: [registry],
+});
+
 @Injectable()
 export class PrometheusService {
   private readonly logger = new Logger(PrometheusService.name);
@@ -163,6 +181,35 @@ export class PrometheusService {
     } catch (error) {
       this.logger.warn(
         `Failed to increment transactions_settled_total: ${error}`,
+      );
+    }
+  }
+
+  observeNftImageOptimization(
+    format: string,
+    originalBytes: number,
+    optimizedBytes: number,
+  ): void {
+    try {
+      nftImageOptimizationBytes.observe(
+        { format, stage: 'original' },
+        originalBytes,
+      );
+      nftImageOptimizationBytes.observe(
+        { format, stage: 'optimized' },
+        optimizedBytes,
+      );
+    } catch (error) {
+      this.logger.warn(`Failed to observe NFT image optimization: ${error}`);
+    }
+  }
+
+  incrementNftImageOptimizationFallback(format: string): void {
+    try {
+      nftImageOptimizationFallbacksTotal.inc({ format });
+    } catch (error) {
+      this.logger.warn(
+        `Failed to increment nft_image_optimization_fallbacks_total: ${error}`,
       );
     }
   }

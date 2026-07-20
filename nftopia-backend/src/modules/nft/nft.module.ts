@@ -9,6 +9,7 @@ import { User } from '../../users/user.entity';
 import { SorobanService } from '../../nft/soroban.service';
 import { NftTransferEvent } from '../../jobs/entities/nft-transfer-event.entity';
 import { MetricsModule } from '../../common/metrics/metrics.module';
+import { NftMediaService } from './nft-media.service';
 
 @Module({
   imports: [
@@ -17,7 +18,7 @@ import { MetricsModule } from '../../common/metrics/metrics.module';
     MetricsModule,
   ],
   controllers: [NftController],
-  providers: [NftService, SorobanService],
+  providers: [NftService, NftMediaService, SorobanService],
   exports: [NftService],
 })
 export class NftModule {}

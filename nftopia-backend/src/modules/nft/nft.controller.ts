@@ -8,6 +8,7 @@ import {
   Put,
   Query,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -18,16 +19,22 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import type { Request as ExpressRequest } from 'express';
+import type { Response as ExpressResponse } from 'express';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { CreateNftDto } from './dto/create-nft.dto';
+import { NftImageQueryDto } from './dto/nft-image-query.dto';
 import { NftQueryDto } from './dto/nft-query.dto';
 import { UpdateNftDto } from './dto/update-nft.dto';
+import { NftMediaService } from './nft-media.service';
 import { NftService } from './nft.service';
 
 @ApiTags('nft')
 @Controller('nfts')
 export class NftController {
-  constructor(private readonly nftService: NftService) {}
+  constructor(
+    private readonly nftService: NftService,
+    private readonly nftMediaService: NftMediaService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'List NFTs with pagination and filters' })
@@ -67,6 +74,42 @@ export class NftController {
   @ApiParam({ name: 'id', description: 'NFT ID' })
   async getAttributes(@Param('id') id: string) {
     return this.nftService.getAttributes(id);
+  }
+
+  @Get(':id/image')
+  @ApiOperation({ summary: 'Get optimized NFT image variant' })
+  @ApiParam({ name: 'id', description: 'NFT ID' })
+  @ApiQuery({ name: 'width', required: false, example: 400 })
+  @ApiQuery({ name: 'height', required: false, example: 400 })
+  @ApiQuery({ name: 'quality', required: false, example: 82 })
+  @ApiQuery({
+    name: 'format',
+    required: false,
+    enum: ['auto', 'webp', 'avif', 'jpeg', 'png', 'original'],
+  })
+  async getImage(
+    @Param('id') id: string,
+    @Query() query: NftImageQueryDto,
+    @Req() req: ExpressRequest,
+    @Res() res: ExpressResponse,
+  ) {
+    const result = await this.nftMediaService.getOptimizedImage(
+      id,
+      query,
+      req.headers.accept,
+    );
+
+    res.setHeader('Cache-Control', result.cacheControl);
+
+    if ('redirectUrl' in result) {
+      return res.redirect(302, result.redirectUrl);
+    }
+
+    res.setHeader('Content-Type', result.contentType);
+    res.setHeader('Content-Length', result.buffer.length);
+    res.setHeader('X-Original-Bytes', result.originalBytes);
+    res.setHeader('X-Optimized-Bytes', result.optimizedBytes);
+    return res.send(result.buffer);
   }
 
   @Get(':id')
