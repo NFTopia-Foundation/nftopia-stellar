@@ -1,5 +1,10 @@
 export type ScanStatus =
-  'pending' | 'clean' | 'infected' | 'suspicious' | 'failed' | 'skipped';
+  | 'pending'
+  | 'clean'
+  | 'infected'
+  | 'suspicious'
+  | 'failed'
+  | 'skipped';
 
 export interface ScanResult {
   status: ScanStatus;
