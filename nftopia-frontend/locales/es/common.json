@@ -231,7 +231,22 @@
       "title": "¡Oops!",
       "message": "No podemos encontrar la página que buscas.",
       "errorCode": "Código de error: 404",
-      "backToHome": "Volver al inicio"
+      "backToHome": "Volver al inicio",
+      "nft": {
+        "title": "NFT no encontrado",
+        "message": "El NFT que buscas no existe o ha sido eliminado.",
+        "backToMarketplace": "Ir al Marketplace"
+      },
+      "collection": {
+        "title": "Colección no encontrada",
+        "message": "La colección que buscas no existe o ha sido eliminada.",
+        "backToMarketplace": "Ir al Marketplace"
+      },
+      "auction": {
+        "title": "Subasta no encontrada",
+        "message": "La subasta que buscas no existe o ha finalizado.",
+        "backToAuctions": "Volver a subastas"
+      }
     },
     "connectWallet": {
       "connect": "Conectar billetera",

@@ -1,6 +1,8 @@
 import { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { getApolloClient } from "@/lib/graphql/client";
 import { GET_NFT_BY_ID_QUERY } from "@/lib/graphql/queries/nft.queries";
+import { isValidNFTId } from "@/utils/id-validation";
 import NFTDetailClient from "./NFTDetailClient";
 
 // Localized fallbacks for metadata
@@ -58,6 +60,7 @@ export async function generateMetadata({
     return {
       title: tFallback.notFoundTitle,
       description: tFallback.notFoundDesc,
+      robots: { index: false, follow: false },
     };
   }
 
@@ -103,36 +106,41 @@ export default async function NFTDetailPage({
   params: { nftId: string; locale: string };
 }) {
   const { nftId, locale } = params;
+
+  if (!isValidNFTId(nftId)) {
+    notFound();
+  }
+
   const nft = await fetchNFT(nftId);
 
+  if (!nft) {
+    notFound();
+  }
+
   // Structured Data (JSON-LD Product Schema)
-  const jsonLd = nft
-    ? {
-        "@context": "https://schema.org",
-        "@type": "Product",
-        "name": nft.name,
-        "image": nft.image,
-        "description": nft.description || undefined,
-        "sku": nft.tokenId,
-        "offers": nft.lastPrice
-          ? {
-              "@type": "Offer",
-              "price": nft.lastPrice,
-              "priceCurrency": "XLM",
-              "availability": "https://schema.org/InStock",
-            }
-          : undefined,
-      }
-    : null;
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "name": nft.name,
+    "image": nft.image,
+    "description": nft.description || undefined,
+    "sku": nft.tokenId,
+    "offers": nft.lastPrice
+      ? {
+          "@type": "Offer",
+          "price": nft.lastPrice,
+          "priceCurrency": "XLM",
+          "availability": "https://schema.org/InStock",
+        }
+      : undefined,
+  };
 
   return (
     <>
-      {jsonLd && (
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-        />
-      )}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <NFTDetailClient nftId={nftId} initialNft={nft} />
     </>
   );

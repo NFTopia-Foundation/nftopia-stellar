@@ -38,6 +38,7 @@ export const EVENT_NAMES = {
   experimentConversion: "experiment_conversion",
   experimentAssignmentInfo: "experiment_assignment_info",
   creatorDashboardError: "creator_dashboard_error",
+  pageNotFound: "page_not_found",
 } as const;
 
 export type TelemetryEventName = (typeof EVENT_NAMES)[keyof typeof EVENT_NAMES];

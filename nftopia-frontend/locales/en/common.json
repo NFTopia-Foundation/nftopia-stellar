@@ -328,7 +328,22 @@
     "title": "Oops!",
     "message": "We can't seem to find the page you're looking for.",
     "errorCode": "Error code: 404",
-    "backToHome": "Back to Homepage"
+    "backToHome": "Back to Homepage",
+    "nft": {
+      "title": "NFT Not Found",
+      "message": "The NFT you're looking for doesn't exist or has been removed.",
+      "backToMarketplace": "Go to Marketplace"
+    },
+    "collection": {
+      "title": "Collection Not Found",
+      "message": "The collection you're looking for doesn't exist or has been removed.",
+      "backToMarketplace": "Go to Marketplace"
+    },
+    "auction": {
+      "title": "Auction Not Found",
+      "message": "The auction you're looking for doesn't exist or has ended.",
+      "backToAuctions": "Back to Auctions"
+    }
   },
   "connectWallet": {
     "connect": "Connect Wallet",

@@ -231,7 +231,22 @@
     "title": "Oups !",
     "message": "Nous ne trouvons pas la page que vous recherchez.",
     "errorCode": "Code d'erreur : 404",
-    "backToHome": "Retour à l'accueil"
+    "backToHome": "Retour à l'accueil",
+    "nft": {
+      "title": "NFT introuvable",
+      "message": "Le NFT que vous recherchez n'existe pas ou a été supprimé.",
+      "backToMarketplace": "Aller au Marketplace"
+    },
+    "collection": {
+      "title": "Collection introuvable",
+      "message": "La collection que vous recherchez n'existe pas ou a été supprimée.",
+      "backToMarketplace": "Aller au Marketplace"
+    },
+    "auction": {
+      "title": "Enchère introuvable",
+      "message": "L'enchère que vous recherchez n'existe pas ou est terminée.",
+      "backToAuctions": "Retour aux enchères"
+    }
   },
   "connectWallet": {
     "connect": "Connecter le portefeuille",

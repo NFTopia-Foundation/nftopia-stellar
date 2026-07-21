@@ -2,7 +2,6 @@
 
 import LottiePlayer from "@/components/animations/LottiePlayer";
 import Link from "next/link";
-import React from "react";
 import { useMobile } from "@/hooks";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/navbar";
@@ -13,7 +12,7 @@ import { StoreProvider } from "@/lib/stores/store-provider";
 import { Toast } from "@/components/ui/toast";
 import { useTranslation } from "@/hooks/useTranslation";
 
-const NotFound = () => {
+export default function NotFound() {
   const isMobile = useMobile();
   const { t } = useTranslation();
 
@@ -85,6 +84,4 @@ const NotFound = () => {
       </StoreProvider>
     </div>
   );
-};
-
-export default NotFound;
+}

@@ -231,7 +231,22 @@
       "title": "Hoppla!",
       "message": "Die von Ihnen gesuchte Seite konnte nicht gefunden werden.",
       "errorCode": "Fehlercode: 404",
-      "backToHome": "Zurück zur Startseite"
+      "backToHome": "Zurück zur Startseite",
+      "nft": {
+        "title": "NFT nicht gefunden",
+        "message": "Das von Ihnen gesuchte NFT existiert nicht oder wurde entfernt.",
+        "backToMarketplace": "Zum Marketplace"
+      },
+      "collection": {
+        "title": "Sammlung nicht gefunden",
+        "message": "Die von Ihnen gesuchte Sammlung existiert nicht oder wurde entfernt.",
+        "backToMarketplace": "Zum Marketplace"
+      },
+      "auction": {
+        "title": "Auktion nicht gefunden",
+        "message": "Die von Ihnen gesuchte Auktion existiert nicht oder ist beendet.",
+        "backToAuctions": "Zurück zu Auktionen"
+      }
     },
     "connectWallet": {
       "connect": "Wallet verbinden",
