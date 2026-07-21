@@ -5,10 +5,11 @@ import Link from "next/link";
 import { emitCtaClicked, CTA_IDS, CTA_PLACEMENTS, normalizeRoute } from "@/lib/telemetry/navigation-instrumentation";
 import CollectionCard from "./CollectionCard";
 import { Collection } from "@/types";
-import { ChevronRight, RefreshCw } from "lucide-react";
+import { ChevronRight, RefreshCw, Package } from "lucide-react";
 import { useTranslation } from "@/hooks/useTranslation";
 import { usePopularCollectionsQuery } from "@/hooks/graphql/useCollectionQueries";
 import { Button } from "./ui/button";
+import { EmptyState } from "./ui/empty-state";
 import ErrorBoundary from "./ErrorBoundary";
 
 interface PopularCollectionProps {
@@ -92,11 +93,13 @@ const PopularCollection: React.FC<PopularCollectionProps> = ({ title }) => {
             ))}
           </div>
         ) : collections.length === 0 ? (
-          // Empty State
-          <div className="text-center py-20 bg-[#1E1A45] rounded-2xl border border-purple-900/30">
-            <h3 className="text-xl text-gray-300 font-semibold mb-2">No popular collections found</h3>
-            <p className="text-gray-400 text-sm">Check back later for new collections</p>
-          </div>
+          <EmptyState
+            icon={<Package className="h-12 w-12" />}
+            title="No popular collections found"
+            description="Check back later for new collections"
+            actionLabel="Refresh"
+            onAction={() => refetch()}
+          />
         ) : (
           // Success State - Render Collections
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6 md:gap-8">
