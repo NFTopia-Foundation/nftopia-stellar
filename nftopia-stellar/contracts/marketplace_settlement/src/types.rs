@@ -218,11 +218,14 @@ pub struct DutchAuctionData {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AdminConfig {
     pub admin: Address,
+    pub admin_list: Vec<Address>,
+    pub oracle_address: Option<Address>,
     pub emergency_withdrawal_enabled: bool,
     pub max_transaction_duration: u64,
     pub max_auction_duration: u64,
-    pub min_bid_increment_bps: u64, // Minimum bid increment in basis points
-    pub max_royalty_percentage: u64, // Maximum royalty percentage
-    pub dispute_cooling_period: u64, // Cooling period before dispute resolution
-    pub arbitration_quorum: u64,    // Required votes for arbitration
+    pub min_bid_increment_bps: u64,
+    pub max_royalty_percentage: u64,
+    pub dispute_cooling_period: u64,
+    pub arbitration_quorum: u64,
+    pub force_resolve_min_signatures: u64,
 }

@@ -205,6 +205,70 @@ pub struct DisputeResolvedEvent {
     pub timestamp: u64,
 }
 
+// Dispute Fund Movement Events
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RefundBuyerEvent {
+    pub dispute_id: u64,
+    pub transaction_id: u64,
+    pub buyer: Address,
+    pub amount: i128,
+    pub currency: Asset,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ReleaseToSellerEvent {
+    pub dispute_id: u64,
+    pub transaction_id: u64,
+    pub seller: Address,
+    pub amount: i128,
+    pub currency: Asset,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SplitFundsEvent {
+    pub dispute_id: u64,
+    pub transaction_id: u64,
+    pub buyer_amount: i128,
+    pub seller_amount: i128,
+    pub currency: Asset,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CancelTransactionEvent {
+    pub dispute_id: u64,
+    pub transaction_id: u64,
+    pub refunded_to: Address,
+    pub amount: i128,
+    pub currency: Asset,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ArbitrationTimeoutEvent {
+    pub dispute_id: u64,
+    pub transaction_id: u64,
+    pub default_resolution: u64,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OracleResolutionEvent {
+    pub dispute_id: u64,
+    pub transaction_id: u64,
+    pub oracle: Address,
+    pub resolution: u64,
+    pub timestamp: u64,
+}
+
 // Bid Escrow / Refund Events
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -487,6 +551,42 @@ pub fn emit_dispute_vote(env: &Env, event: DisputeVoteEvent) {
 pub fn emit_dispute_resolved(env: &Env, event: DisputeResolvedEvent) {
     env.events()
         .publish(("MarketplaceSettlement", symbol_short!("dsp_rslv")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_refund_buyer(env: &Env, event: RefundBuyerEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("ref_buyr")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_release_to_seller(env: &Env, event: ReleaseToSellerEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("rel_sell")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_split_funds(env: &Env, event: SplitFundsEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("splt_fnd")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_cancel_transaction(env: &Env, event: CancelTransactionEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("cncl_tx")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_arbitration_timeout(env: &Env, event: ArbitrationTimeoutEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("arb_tout")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_oracle_resolution(env: &Env, event: OracleResolutionEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("orc_rslv")), event);
 }
 
 #[allow(deprecated)]
