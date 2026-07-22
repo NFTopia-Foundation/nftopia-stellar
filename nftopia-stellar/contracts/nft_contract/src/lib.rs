@@ -173,11 +173,7 @@ impl NftContract {
     /// - `new_max` must be > 0 and <= MAX_SUPPLY_HARD_CAP.
     /// - `new_max` must be < current `max_supply` (can only decrease, never increase).
     /// - `new_max` must be >= current `total_supply` (cannot set below already-minted count).
-    pub fn update_max_supply(
-        env: Env,
-        caller: Address,
-        new_max: u64,
-    ) -> Result<(), ContractError> {
+    pub fn update_max_supply(env: Env, caller: Address, new_max: u64) -> Result<(), ContractError> {
         caller.require_auth();
         ac::require_admin_or_owner(&env, &caller);
 
