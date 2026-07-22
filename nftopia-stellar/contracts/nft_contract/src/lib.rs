@@ -14,7 +14,7 @@ pub mod version;
 
 use crate::access_control as ac;
 use crate::error::ContractError;
-use crate::storage::DataKey;
+use crate::storage::{DataKey, MAX_SUPPLY_HARD_CAP};
 use crate::types::{CollectionConfig, RoyaltyInfo, TokenAttribute, TokenData};
 use soroban_sdk::{Address, Env, String, Vec, contract, contractimpl, panic_with_error};
 
@@ -37,6 +37,11 @@ impl NftContract {
             panic_with_error!(&env, ContractError::AlreadyInitialized);
         }
         admin.require_auth();
+
+        // Validate max_supply: must be > 0 and <= MAX_SUPPLY_HARD_CAP
+        if config.max_supply == 0 || config.max_supply > MAX_SUPPLY_HARD_CAP {
+            return Err(ContractError::InvalidMaxSupply);
+        }
 
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage()
@@ -154,6 +159,62 @@ impl NftContract {
 
     pub fn total_supply(env: Env) -> u64 {
         token::total_supply(&env)
+    }
+
+    /// Returns how many tokens can still be minted before the collection cap.
+    pub fn remaining_supply(env: Env) -> Result<u64, ContractError> {
+        token::remaining_supply(&env)
+    }
+
+    /// Allows the admin/owner to lower the supply cap.
+    ///
+    /// Rules:
+    /// - Caller must be admin or owner.
+    /// - `new_max` must be > 0 and <= MAX_SUPPLY_HARD_CAP.
+    /// - `new_max` must be < current `max_supply` (can only decrease, never increase).
+    /// - `new_max` must be >= current `total_supply` (cannot set below already-minted count).
+    pub fn update_max_supply(
+        env: Env,
+        caller: Address,
+        new_max: u64,
+    ) -> Result<(), ContractError> {
+        caller.require_auth();
+        ac::require_admin_or_owner(&env, &caller);
+
+        if new_max == 0 || new_max > MAX_SUPPLY_HARD_CAP {
+            return Err(ContractError::InvalidMaxSupply);
+        }
+
+        let mut config: CollectionConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::CollectionConfig)
+            .ok_or(ContractError::NotFound)?;
+
+        // Can only lower the cap, never raise it
+        if new_max >= config.max_supply {
+            return Err(ContractError::InvalidMaxSupply);
+        }
+
+        let total: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::TotalSupply)
+            .unwrap_or(0);
+
+        // Cannot set below current total supply
+        if new_max < total {
+            return Err(ContractError::InvalidMaxSupply);
+        }
+
+        let old_max = config.max_supply;
+        config.max_supply = new_max;
+        env.storage()
+            .instance()
+            .set(&DataKey::CollectionConfig, &config);
+
+        crate::events::emit_max_supply_updated(&env, old_max, new_max);
+        Ok(())
     }
 
     pub fn approve(

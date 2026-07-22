@@ -109,3 +109,29 @@ pub fn emit_royalty_update(env: &Env, recipient: Address, percentage: u32) {
     }
     .publish(env);
 }
+
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct SupplyCapReached {
+    pub max_supply: u64,
+    pub total_supply: u64,
+}
+
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct MaxSupplyUpdated {
+    pub old_max: u64,
+    pub new_max: u64,
+}
+
+pub fn emit_supply_cap_reached(env: &Env, max_supply: u64, total_supply: u64) {
+    SupplyCapReached {
+        max_supply,
+        total_supply,
+    }
+    .publish(env);
+}
+
+pub fn emit_max_supply_updated(env: &Env, old_max: u64, new_max: u64) {
+    MaxSupplyUpdated { old_max, new_max }.publish(env);
+}

@@ -7,7 +7,7 @@ fn make_config(env: &Env) -> CollectionConfig {
         name: String::from_str(env, "NFTopia"),
         symbol: String::from_str(env, "NFTP"),
         base_uri: String::from_str(env, ""),
-        max_supply: Some(1000),
+        max_supply: 1000,
         mint_price: None,
         is_revealed: true,
         metadata_is_frozen: false,
@@ -258,7 +258,7 @@ fn test_supply_limit() {
         name: String::from_str(&env, "Limited"),
         symbol: String::from_str(&env, "LTD"),
         base_uri: String::from_str(&env, ""),
-        max_supply: Some(2),
+        max_supply: 2,
         mint_price: None,
         is_revealed: true,
         metadata_is_frozen: false,
@@ -736,4 +736,298 @@ fn test_batch_burn_with_non_existent_token_fails() {
     // First token should still exist (atomicity)
     assert_eq!(client.total_supply(), 1);
     assert_eq!(client.owner_of(&id1), owner);
+}
+
+// ─── Supply cap tests ─────────────────────────────────────────────────────────
+
+/// initialize() must reject max_supply = 0
+#[test]
+fn test_initialize_zero_max_supply_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let contract_id = env.register(NftContract, ());
+    let client = NftContractClient::new(&env, &contract_id);
+
+    let config = CollectionConfig {
+        name: String::from_str(&env, "Bad"),
+        symbol: String::from_str(&env, "BAD"),
+        base_uri: String::from_str(&env, ""),
+        max_supply: 0,
+        mint_price: None,
+        is_revealed: true,
+        metadata_is_frozen: false,
+    };
+    let result = client.try_initialize(&admin, &config, &None);
+    assert!(result.is_err());
+}
+
+/// initialize() must reject max_supply > MAX_SUPPLY_HARD_CAP (1_000_000)
+#[test]
+fn test_initialize_exceeds_hard_cap_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let contract_id = env.register(NftContract, ());
+    let client = NftContractClient::new(&env, &contract_id);
+
+    let config = CollectionConfig {
+        name: String::from_str(&env, "TooLarge"),
+        symbol: String::from_str(&env, "TL"),
+        base_uri: String::from_str(&env, ""),
+        max_supply: 1_000_001,
+        mint_price: None,
+        is_revealed: true,
+        metadata_is_frozen: false,
+    };
+    let result = client.try_initialize(&admin, &config, &None);
+    assert!(result.is_err());
+}
+
+/// initialize() must accept max_supply == MAX_SUPPLY_HARD_CAP exactly
+#[test]
+fn test_initialize_at_hard_cap_succeeds() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let contract_id = env.register(NftContract, ());
+    let client = NftContractClient::new(&env, &contract_id);
+
+    let config = CollectionConfig {
+        name: String::from_str(&env, "AtCap"),
+        symbol: String::from_str(&env, "CAP"),
+        base_uri: String::from_str(&env, ""),
+        max_supply: 1_000_000,
+        mint_price: None,
+        is_revealed: true,
+        metadata_is_frozen: false,
+    };
+    client.initialize(&admin, &config, &None);
+    assert_eq!(client.total_supply(), 0);
+}
+
+/// Minting exactly up to cap succeeds; one more fails
+#[test]
+fn test_mint_at_exact_cap_then_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let contract_id = env.register(NftContract, ());
+    let client = NftContractClient::new(&env, &contract_id);
+
+    let config = CollectionConfig {
+        name: String::from_str(&env, "Exact"),
+        symbol: String::from_str(&env, "EX"),
+        base_uri: String::from_str(&env, ""),
+        max_supply: 3,
+        mint_price: None,
+        is_revealed: true,
+        metadata_is_frozen: false,
+    };
+    client.initialize(&admin, &config, &None);
+
+    let user = Address::generate(&env);
+    let uri = String::from_str(&env, "ipfs://x");
+    let attrs: Vec<TokenAttribute> = Vec::new(&env);
+
+    // Mint up to cap
+    client.mint(&admin, &user, &uri, &attrs, &None);
+    client.mint(&admin, &user, &uri, &attrs, &None);
+    client.mint(&admin, &user, &uri, &attrs, &None);
+    assert_eq!(client.total_supply(), 3);
+    assert_eq!(client.remaining_supply(), 0);
+
+    // One more must fail
+    let result = client.try_mint(&admin, &user, &uri, &attrs, &None);
+    assert!(result.is_err());
+}
+
+/// remaining_supply() returns correct values throughout the lifecycle
+#[test]
+fn test_remaining_supply() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let contract_id = env.register(NftContract, ());
+    let client = NftContractClient::new(&env, &contract_id);
+
+    let config = CollectionConfig {
+        name: String::from_str(&env, "RS"),
+        symbol: String::from_str(&env, "RS"),
+        base_uri: String::from_str(&env, ""),
+        max_supply: 5,
+        mint_price: None,
+        is_revealed: true,
+        metadata_is_frozen: false,
+    };
+    client.initialize(&admin, &config, &None);
+    assert_eq!(client.remaining_supply(), 5);
+
+    let user = Address::generate(&env);
+    let uri = String::from_str(&env, "ipfs://y");
+    let attrs: Vec<TokenAttribute> = Vec::new(&env);
+
+    client.mint(&admin, &user, &uri, &attrs, &None);
+    assert_eq!(client.remaining_supply(), 4);
+
+    client.mint(&admin, &user, &uri, &attrs, &None);
+    assert_eq!(client.remaining_supply(), 3);
+}
+
+/// batch_mint() fails when the batch would push total over the cap
+#[test]
+fn test_batch_mint_exceeds_cap_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let contract_id = env.register(NftContract, ());
+    let client = NftContractClient::new(&env, &contract_id);
+
+    let config = CollectionConfig {
+        name: String::from_str(&env, "BM"),
+        symbol: String::from_str(&env, "BM"),
+        base_uri: String::from_str(&env, ""),
+        max_supply: 4,
+        mint_price: None,
+        is_revealed: true,
+        metadata_is_frozen: false,
+    };
+    client.initialize(&admin, &config, &None);
+
+    // Mint 2 first
+    let user = Address::generate(&env);
+    let uri = String::from_str(&env, "ipfs://z");
+    let attrs: Vec<TokenAttribute> = Vec::new(&env);
+    client.mint(&admin, &user, &uri, &attrs, &None);
+    client.mint(&admin, &user, &uri, &attrs, &None);
+
+    // batch_mint of 3 would bring total to 5 > cap of 4 — must fail
+    let mut recipients: Vec<Address> = Vec::new(&env);
+    let mut uris: Vec<String> = Vec::new(&env);
+    let mut all_attrs: Vec<Vec<TokenAttribute>> = Vec::new(&env);
+    for _ in 0..3u32 {
+        recipients.push_back(Address::generate(&env));
+        uris.push_back(String::from_str(&env, "ipfs://batch"));
+        all_attrs.push_back(Vec::new(&env));
+    }
+
+    let result = client.try_batch_mint(&admin, &recipients, &uris, &all_attrs);
+    assert!(result.is_err());
+    // Supply unchanged
+    assert_eq!(client.total_supply(), 2);
+}
+
+/// update_max_supply() can only lower the cap
+#[test]
+fn test_update_max_supply_lower_succeeds() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env); // max_supply = 1000
+
+    client.update_max_supply(&admin, &500);
+    // remaining should now reflect 500
+    assert_eq!(client.remaining_supply(), 500);
+}
+
+/// update_max_supply() cannot raise the cap
+#[test]
+fn test_update_max_supply_raise_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env); // max_supply = 1000
+
+    let result = client.try_update_max_supply(&admin, &1001);
+    assert!(result.is_err());
+}
+
+/// update_max_supply() cannot set cap below current total supply
+#[test]
+fn test_update_max_supply_below_minted_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let user = Address::generate(&env);
+    let uri = String::from_str(&env, "ipfs://hash");
+    let attrs: Vec<TokenAttribute> = Vec::new(&env);
+
+    // Mint 5 tokens
+    for _ in 0..5u32 {
+        client.mint(&admin, &user, &uri, &attrs, &None);
+    }
+    assert_eq!(client.total_supply(), 5);
+
+    // Try to lower cap to 3 (below current supply of 5) — must fail
+    let result = client.try_update_max_supply(&admin, &3);
+    assert!(result.is_err());
+
+    // Cap remains at 1000
+    assert_eq!(client.remaining_supply(), 995);
+}
+
+/// update_max_supply() cannot be called by a non-admin
+#[test]
+fn test_update_max_supply_non_admin_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _admin) = setup(&env);
+
+    let rando = Address::generate(&env);
+    let result = client.try_update_max_supply(&rando, &500);
+    assert!(result.is_err());
+}
+
+/// update_max_supply() rejects zero and values > MAX_SUPPLY_HARD_CAP
+#[test]
+fn test_update_max_supply_invalid_values_fail() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    assert!(client.try_update_max_supply(&admin, &0).is_err());
+    assert!(client.try_update_max_supply(&admin, &1_000_001).is_err());
+}
+
+/// Admin cannot bypass the supply cap through any role assignment
+#[test]
+fn test_admin_cannot_bypass_supply_cap_via_role() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let contract_id = env.register(NftContract, ());
+    let client = NftContractClient::new(&env, &contract_id);
+
+    let config = CollectionConfig {
+        name: String::from_str(&env, "RoleCap"),
+        symbol: String::from_str(&env, "RC"),
+        base_uri: String::from_str(&env, ""),
+        max_supply: 1,
+        mint_price: None,
+        is_revealed: true,
+        metadata_is_frozen: false,
+    };
+    client.initialize(&admin, &config, &None);
+
+    let minter = Address::generate(&env);
+    // Grant a fresh address the MINTER role
+    client.grant_role(&admin, &minter, &crate::types::role::MINTER);
+
+    let user = Address::generate(&env);
+    let uri = String::from_str(&env, "ipfs://only");
+    let attrs: Vec<TokenAttribute> = Vec::new(&env);
+
+    // First mint hits the cap
+    client.mint(&minter, &user, &uri, &attrs, &None);
+    assert_eq!(client.total_supply(), 1);
+
+    // Even the MINTER role cannot mint beyond cap
+    let result = client.try_mint(&minter, &user, &uri, &attrs, &None);
+    assert!(result.is_err());
 }

@@ -36,7 +36,10 @@ pub struct CollectionConfig {
     pub name: String,
     pub symbol: String,
     pub base_uri: String,
-    pub max_supply: Option<u64>,
+    /// Hard supply ceiling for this collection.
+    /// Must be > 0 and <= MAX_SUPPLY_HARD_CAP (1_000_000).
+    /// Not optional — unlimited minting is not permitted.
+    pub max_supply: u64,
     pub mint_price: Option<i128>,
     pub is_revealed: bool,
     pub metadata_is_frozen: bool,
