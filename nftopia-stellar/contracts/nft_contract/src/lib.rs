@@ -1,4 +1,6 @@
 #![no_std]
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::cast_possible_truncation)]
 
 pub mod access_control;
 pub mod error;
