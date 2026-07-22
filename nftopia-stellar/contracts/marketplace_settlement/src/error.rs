@@ -49,6 +49,7 @@ pub enum SettlementError {
     InvalidDisputeState = 502,
     ArbitrationFailed = 503,
     InsufficientArbitrators = 504,
+    ArbitrationTimeout = 505,
 
     // Security errors
     ReentrancyDetected = 600,

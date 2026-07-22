@@ -51,13 +51,16 @@ impl MarketplaceSettlement {
     ) -> Result<(), SettlementError> {
         let admin_config = AdminConfig {
             admin: admin.clone(),
+            admin_list: Vec::from_array(&env, [admin.clone()]),
+            oracle_address: None,
             emergency_withdrawal_enabled: true,
-            max_transaction_duration: 2592000, // 30 days
-            max_auction_duration: 604800,      // 7 days
-            min_bid_increment_bps: 100,        // 1%
-            max_royalty_percentage: 5000,      // 50%
-            dispute_cooling_period: 86400,     // 24 hours
+            max_transaction_duration: 2592000,
+            max_auction_duration: 604800,
+            min_bid_increment_bps: 100,
+            max_royalty_percentage: 5000,
+            dispute_cooling_period: 86400,
             arbitration_quorum: 3,
+            force_resolve_min_signatures: 2,
         };
 
         env.storage()
