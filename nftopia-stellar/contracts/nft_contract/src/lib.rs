@@ -1,6 +1,8 @@
 #![no_std]
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::cast_lossless)]
 
 pub mod access_control;
 pub mod error;
