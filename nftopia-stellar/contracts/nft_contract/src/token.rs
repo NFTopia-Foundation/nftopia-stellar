@@ -31,11 +31,18 @@ fn check_supply(env: &Env) -> Result<(), ContractError> {
         .get(&DataKey::TotalSupply)
         .unwrap_or(0);
 
-    if let Some(max) = config.max_supply
-        && total >= max
-    {
+    // Enforce absolute hard cap first
+    if total >= MAX_SUPPLY_HARD_CAP {
+        crate::events::emit_supply_cap_reached(env, MAX_SUPPLY_HARD_CAP, total);
         return Err(ContractError::SupplyLimitExceeded);
     }
+
+    // Enforce collection-level cap (mandatory — max_supply is no longer Option)
+    if total >= config.max_supply {
+        crate::events::emit_supply_cap_reached(env, config.max_supply, total);
+        return Err(ContractError::SupplyCapReached);
+    }
+
     Ok(())
 }
 
@@ -162,13 +169,16 @@ pub fn batch_mint(
         .instance()
         .get(&DataKey::TotalSupply)
         .unwrap_or(0);
-    if let Some(max) = config.max_supply
-        && total + n as u64 > max
-    {
+
+    // Enforce hard cap
+    if total.saturating_add(n as u64) > MAX_SUPPLY_HARD_CAP {
         return Err(ContractError::SupplyLimitExceeded);
     }
-    if total + n as u64 > MAX_SUPPLY_HARD_CAP {
-        return Err(ContractError::SupplyLimitExceeded);
+
+    // Enforce collection cap (mandatory — no Option)
+    if total.saturating_add(n as u64) > config.max_supply {
+        crate::events::emit_supply_cap_reached(env, config.max_supply, total);
+        return Err(ContractError::SupplyCapReached);
     }
 
     let mut ids: Vec<u64> = Vec::new(env);
@@ -416,4 +426,21 @@ pub fn total_supply(env: &Env) -> u64 {
         .instance()
         .get(&DataKey::TotalSupply)
         .unwrap_or(0)
+}
+
+/// Returns how many more tokens can be minted before the collection cap is hit.
+pub fn remaining_supply(env: &Env) -> Result<u64, crate::error::ContractError> {
+    let config: CollectionConfig = env
+        .storage()
+        .instance()
+        .get(&DataKey::CollectionConfig)
+        .ok_or(crate::error::ContractError::NotFound)?;
+
+    let total: u64 = env
+        .storage()
+        .instance()
+        .get(&DataKey::TotalSupply)
+        .unwrap_or(0);
+
+    Ok(config.max_supply.saturating_sub(total))
 }

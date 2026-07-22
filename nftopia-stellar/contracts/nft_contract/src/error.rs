@@ -28,4 +28,9 @@ pub enum ContractError {
     MismatchedArrays = 22,
     AlreadyBurned = 23,
     BurnNotAllowed = 24,
+    /// max_supply was zero, exceeded MAX_SUPPLY_HARD_CAP, or a downward
+    /// update would go below current total supply.
+    InvalidMaxSupply = 25,
+    /// The collection supply cap has been fully reached.
+    SupplyCapReached = 26,
 }

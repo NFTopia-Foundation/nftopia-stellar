@@ -2,6 +2,7 @@ use soroban_sdk::{Address, contracttype};
 
 #[derive(Clone)]
 #[contracttype]
+#[allow(dead_code)]
 pub enum DataKey {
     // Contract-level configuration
     Admin,
@@ -34,6 +35,7 @@ pub enum DataKey {
 }
 
 pub const MAX_BATCH_SIZE: u32 = 50;
+#[allow(dead_code)]
 pub const BATCH_RATE_WINDOW: u64 = 100; // ledger sequences
 pub const MAX_ROYALTY_BPS: u32 = 10_000; // 100%
 pub const MAX_SUPPLY_HARD_CAP: u64 = 1_000_000;

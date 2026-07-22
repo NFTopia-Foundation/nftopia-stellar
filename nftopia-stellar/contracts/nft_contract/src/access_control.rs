@@ -47,6 +47,7 @@ pub fn require_minter(env: &Env, caller: &Address) -> Result<(), ContractError> 
     }
 }
 
+#[allow(dead_code)]
 pub fn require_burner(env: &Env, caller: &Address) -> Result<(), ContractError> {
     if has_role(env, caller, role::OWNER)
         || has_role(env, caller, role::ADMIN)
@@ -58,6 +59,7 @@ pub fn require_burner(env: &Env, caller: &Address) -> Result<(), ContractError> 
     }
 }
 
+#[allow(dead_code)]
 pub fn require_metadata_updater(env: &Env, caller: &Address) -> Result<(), ContractError> {
     if has_role(env, caller, role::METADATA_UPDATER) {
         Ok(())
