@@ -4,7 +4,13 @@ coverage
 npm-debug.log
 .env
 .env.local
+.env.production
+.env.production.template
 .git
 .gitignore
 README.md
 README-SETUP.md
+docker-compose.prod.yml
+lint_results.txt
+*.test.ts
+*.spec.ts
