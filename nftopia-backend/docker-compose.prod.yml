@@ -1,0 +1,439 @@
+# =============================================================================
+# NFTopia Backend — Production Docker Compose
+# =============================================================================
+#
+# Usage:
+#   docker-compose -f docker-compose.prod.yml up -d
+#
+# Prerequisites:
+#   1. Create a .env.production file (copy from .env.production.template).
+#      This file holds NON-SECRET environment variables only.
+#   2. Provision Docker secrets listed in the `secrets:` block below.
+#      See "Secrets Provisioning" in docs/production-deployment.md.
+#   3. Ensure the Dockerfile is present in the nftopia-backend/ directory.
+#
+# Secrets Provisioning (one-time setup on each production host):
+#   printf 'your-jwt-secret'             | docker secret create nftopia_jwt_secret -
+#   printf 'your-db-password'            | docker secret create nftopia_db_password -
+#   printf 'your-stellar-operator-secret'| docker secret create nftopia_stellar_operator_secret -
+#   printf 'your-pinata-jwt'             | docker secret create nftopia_pinata_jwt -
+#   printf 'your-meilisearch-master-key' | docker secret create nftopia_meilisearch_master_key -
+#   printf 'your-redis-password'         | docker secret create nftopia_redis_password -
+#
+# Docker Swarm note:
+#   Docker secrets are only available in Swarm mode. Initialise with:
+#     docker swarm init
+#   before deploying this stack. Deploy as a stack for replica support:
+#     docker stack deploy -c docker-compose.prod.yml nftopia
+# =============================================================================
+
+name: nftopia-prod
+
+# ---------------------------------------------------------------------------
+# Secrets
+# All sensitive credentials are supplied as Docker secrets.
+# The container reads them from /run/secrets/<secret_name> at runtime.
+# The NestJS app must be configured to read secret files for these values
+# (see SecretsLoader in src/config/secrets.loader.ts).
+# ---------------------------------------------------------------------------
+secrets:
+  nftopia_jwt_secret:
+    external: true
+  nftopia_db_password:
+    external: true
+  nftopia_stellar_operator_secret:
+    external: true
+  nftopia_pinata_jwt:
+    external: true
+  nftopia_meilisearch_master_key:
+    external: true
+  nftopia_redis_password:
+    external: true
+
+# ---------------------------------------------------------------------------
+# Networks
+# All inter-service traffic flows over the isolated `nftopia_internal` network.
+# No database or cache ports are bound to the host interface.
+# ---------------------------------------------------------------------------
+networks:
+  nftopia_internal:
+    driver: bridge
+    internal: false   # Allow egress (Stellar RPC, Pinata, Arweave calls)
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+# ---------------------------------------------------------------------------
+# Volumes
+# Named volumes managed by Docker Engine for data persistence.
+# ---------------------------------------------------------------------------
+volumes:
+  postgres_prod_data:
+    driver: local
+  meilisearch_prod_data:
+    driver: local
+  redis_prod_data:
+    driver: local
+
+# ---------------------------------------------------------------------------
+# Services
+# ---------------------------------------------------------------------------
+services:
+
+  # --------------------------------------------------------------------------
+  # NestJS Backend
+  # --------------------------------------------------------------------------
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # Build-time arg — sets NODE_ENV inside the builder stage only.
+      # The runtime ENV is controlled by the environment block below.
+      args:
+        NODE_ENV: production
+    image: nftopia-backend:production
+
+    # In Swarm mode the `deploy` block takes effect.
+    # In plain Compose it is ignored; use `--scale backend=2` instead.
+    deploy:
+      mode: replicated
+      replicas: 2
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          cpus: "1.0"
+          memory: 512M
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 120s
+      update_config:
+        parallelism: 1          # Roll one replica at a time
+        delay: 30s              # Wait 30 s between replica updates
+        failure_action: rollback
+        monitor: 60s
+        order: start-first      # Start new replica before stopping old one
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: pause
+        order: stop-first
+
+    # Plain Compose restart policy (used when NOT running in Swarm mode)
+    restart: on-failure
+
+    # Only expose the REST API port. Traffic enters through a reverse proxy
+    # (nginx / Traefik / Caddy). GraphQL port (3001) is internal only.
+    ports:
+      - "3000:3000"
+
+    networks:
+      - nftopia_internal
+
+    # All secrets are mounted as read-only files under /run/secrets/
+    secrets:
+      - nftopia_jwt_secret
+      - nftopia_db_password
+      - nftopia_stellar_operator_secret
+      - nftopia_pinata_jwt
+      - nftopia_meilisearch_master_key
+      - nftopia_redis_password
+
+    environment:
+      # --- Server ---
+      NODE_ENV: production
+      PORT: 3000
+      GRAPHQL_PORT: 3001
+      GRAPHQL_PLAYGROUND_ENABLED: "false"
+      GRAPHQL_INTROSPECTION_ENABLED: "false"
+      LOG_LEVEL: ${LOG_LEVEL:-warn}
+      LOG_SAMPLE_RATE: ${LOG_SAMPLE_RATE:-0.1}
+
+      # --- CORS ---
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+
+      # --- Database (no password — read from secret file) ---
+      DATABASE_URL: postgresql://${DB_USER}@postgres:5432/${DB_NAME}
+      # The app reads /run/secrets/nftopia_db_password to complete the DSN.
+
+      # --- Redis (no password — read from secret file) ---
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: ${REDIS_DB:-0}
+      CACHE_TTL: ${CACHE_TTL:-300}
+
+      # --- JWT (secret read from /run/secrets/nftopia_jwt_secret) ---
+      JWT_EXPIRES_IN_SECONDS: ${JWT_EXPIRES_IN_SECONDS:-900}
+      JWT_REFRESH_EXPIRES_IN_SECONDS: ${JWT_REFRESH_EXPIRES_IN_SECONDS:-604800}
+
+      # --- Stellar / Soroban ---
+      SOROBAN_RPC_URL: ${SOROBAN_RPC_URL}
+      STELLAR_NETWORK: ${STELLAR_NETWORK:-mainnet}
+      COLLECTION_FACTORY_CONTRACT_ID: ${COLLECTION_FACTORY_CONTRACT_ID}
+      TRANSACTION_CONTRACT_ID: ${TRANSACTION_CONTRACT_ID}
+      MARKETPLACE_SETTLEMENT_CONTRACT_ID: ${MARKETPLACE_SETTLEMENT_CONTRACT_ID}
+      TRANSACTION_TIMEOUT_SECONDS: ${TRANSACTION_TIMEOUT_SECONDS:-60}
+      SOROBAN_RPC_MAX_RETRIES: ${SOROBAN_RPC_MAX_RETRIES:-3}
+      SOROBAN_RPC_RETRY_DELAY_MS: ${SOROBAN_RPC_RETRY_DELAY_MS:-1000}
+      SOROBAN_RPC_RETRY_BACKOFF_MULTIPLIER: ${SOROBAN_RPC_RETRY_BACKOFF_MULTIPLIER:-2}
+      SOROBAN_RPC_RETRY_MAX_DELAY_MS: ${SOROBAN_RPC_RETRY_MAX_DELAY_MS:-30000}
+      STELLAR_OPERATOR_PUBLIC_KEY: ${STELLAR_OPERATOR_PUBLIC_KEY}
+      # STELLAR_OPERATOR_SECRET is read from /run/secrets/nftopia_stellar_operator_secret
+
+      # --- IPFS / Pinata (JWT read from secret file) ---
+      IPFS_PROVIDER: ${IPFS_PROVIDER:-pinata}
+      IPFS_GATEWAY_URL: ${IPFS_GATEWAY_URL:-https://ipfs.io/ipfs}
+      IPFS_MAX_FILE_SIZE_BYTES: ${IPFS_MAX_FILE_SIZE_BYTES:-52428800}
+      IPFS_RETRY_ATTEMPTS: ${IPFS_RETRY_ATTEMPTS:-2}
+      IPFS_RETRY_BACKOFF_MS: ${IPFS_RETRY_BACKOFF_MS:-250}
+      # IPFS_PINATA_JWT is read from /run/secrets/nftopia_pinata_jwt
+
+      # --- Arweave ---
+      ARWEAVE_GATEWAY_URL: ${ARWEAVE_GATEWAY_URL:-https://arweave.net}
+      ARWEAVE_HOST: ${ARWEAVE_HOST:-arweave.net}
+      ARWEAVE_PORT: ${ARWEAVE_PORT:-443}
+      ARWEAVE_PROTOCOL: ${ARWEAVE_PROTOCOL:-https}
+      ARWEAVE_MAX_FILE_SIZE_BYTES: ${ARWEAVE_MAX_FILE_SIZE_BYTES:-104857600}
+      ARWEAVE_RETRY_ATTEMPTS: ${ARWEAVE_RETRY_ATTEMPTS:-2}
+      ARWEAVE_RETRY_BACKOFF_MS: ${ARWEAVE_RETRY_BACKOFF_MS:-350}
+      STORAGE_FALLBACK_ENABLED: ${STORAGE_FALLBACK_ENABLED:-true}
+
+      # --- Malware Scanning ---
+      MALWARE_SCAN_ENABLED: ${MALWARE_SCAN_ENABLED:-true}
+      CLAMAV_HOST: ${CLAMAV_HOST:-127.0.0.1}
+      CLAMAV_PORT: ${CLAMAV_PORT:-3310}
+      SCAN_TIMEOUT_MS: ${SCAN_TIMEOUT_MS:-60000}
+      SCAN_RETRY_ATTEMPTS: ${SCAN_RETRY_ATTEMPTS:-3}
+      SCAN_RETRY_BACKOFF_MS: ${SCAN_RETRY_BACKOFF_MS:-500}
+      SCAN_ASYNC_THRESHOLD_BYTES: ${SCAN_ASYNC_THRESHOLD_BYTES:-20971520}
+      SCAN_FAIL_CLOSED: ${SCAN_FAIL_CLOSED:-true}
+      SCAN_RESCAN_BATCH_SIZE: ${SCAN_RESCAN_BATCH_SIZE:-25}
+      SCAN_RESCAN_STALE_AFTER_MS: ${SCAN_RESCAN_STALE_AFTER_MS:-604800000}
+
+      # --- Meilisearch (master key read from secret file) ---
+      MEILISEARCH_HOST: http://meilisearch:7700
+
+      # --- Misc ---
+      CONTRACT_TRANSACTION_TIMEOUT: ${CONTRACT_TRANSACTION_TIMEOUT:-60}
+      ENABLE_ONCHAIN_SETTLEMENT: ${ENABLE_ONCHAIN_SETTLEMENT:-true}
+
+      # Paths to Docker secret files — read by SecretsLoader at app startup.
+      SECRET_FILE_JWT: /run/secrets/nftopia_jwt_secret
+      SECRET_FILE_DB_PASSWORD: /run/secrets/nftopia_db_password
+      SECRET_FILE_STELLAR_OPERATOR: /run/secrets/nftopia_stellar_operator_secret
+      SECRET_FILE_PINATA_JWT: /run/secrets/nftopia_pinata_jwt
+      SECRET_FILE_MEILISEARCH_KEY: /run/secrets/nftopia_meilisearch_master_key
+      SECRET_FILE_REDIS_PASSWORD: /run/secrets/nftopia_redis_password
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      meilisearch:
+        condition: service_healthy
+
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+        labels: "service=backend,env=production"
+
+  # --------------------------------------------------------------------------
+  # PostgreSQL
+  # --------------------------------------------------------------------------
+  postgres:
+    image: postgres:14-alpine
+    container_name: nftopia-postgres-prod
+
+    # Secrets: password is injected via POSTGRES_PASSWORD_FILE
+    secrets:
+      - nftopia_db_password
+
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD_FILE: /run/secrets/nftopia_db_password
+      POSTGRES_DB: ${DB_NAME}
+      # Performance tuning for production workloads
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+
+    # No host port binding — only accessible inside nftopia_internal network
+    expose:
+      - "5432"
+
+    networks:
+      - nftopia_internal
+
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 60s
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+        labels: "service=postgres,env=production"
+
+  # --------------------------------------------------------------------------
+  # Redis
+  # --------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: nftopia-redis-prod
+
+    # Secrets: password passed as a file to redis-server via --requirepass
+    secrets:
+      - nftopia_redis_password
+
+    # Start Redis with persistence (AOF) and require auth from the secret file.
+    # The secret file contents are read at startup via shell substitution.
+    command: >
+      sh -c "redis-server
+        --requirepass $$(cat /run/secrets/nftopia_redis_password)
+        --appendonly yes
+        --appendfsync everysec
+        --maxmemory 400mb
+        --maxmemory-policy allkeys-lru
+        --save 900 1
+        --save 300 10
+        --save 60 10000"
+
+    # No host port binding
+    expose:
+      - "6379"
+
+    networks:
+      - nftopia_internal
+
+    volumes:
+      - redis_prod_data:/data
+
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 60s
+
+    restart: unless-stopped
+
+    healthcheck:
+      # Authenticate with the password from the secret file before pinging.
+      test: ["CMD-SHELL", "redis-cli -a $$(cat /run/secrets/nftopia_redis_password) ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+        labels: "service=redis,env=production"
+
+  # --------------------------------------------------------------------------
+  # Meilisearch
+  # --------------------------------------------------------------------------
+  meilisearch:
+    image: getmeili/meilisearch:v1.12
+    container_name: nftopia-meilisearch-prod
+
+    secrets:
+      - nftopia_meilisearch_master_key
+
+    # Read master key from secret file at runtime via entrypoint wrapper.
+    entrypoint:
+      - sh
+      - -c
+      - |
+        export MEILI_MASTER_KEY="$$(cat /run/secrets/nftopia_meilisearch_master_key)"
+        exec /bin/meilisearch
+
+    environment:
+      MEILI_ENV: production
+      MEILI_DB_PATH: /meili_data
+      MEILI_HTTP_ADDR: "0.0.0.0:7700"
+      MEILI_LOG_LEVEL: ${MEILISEARCH_LOG_LEVEL:-WARN}
+      # Master key is populated from the secret file by the entrypoint above.
+
+    # No host port binding
+    expose:
+      - "7700"
+
+    networks:
+      - nftopia_internal
+
+    volumes:
+      - meilisearch_prod_data:/meili_data
+
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 2G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 60s
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7700/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      start_period: 30s
+      retries: 5
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+        labels: "service=meilisearch,env=production"
