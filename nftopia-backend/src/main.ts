@@ -1,3 +1,14 @@
+// -------------------------------------------------------------------------
+// Secrets must be resolved BEFORE dotenv/config (and therefore before any
+// module import that reads process.env) so that config validators see the
+// correct values at startup. The loadDockerSecrets() call is a no-op in
+// development (when SECRET_FILE_* vars are absent).
+// -------------------------------------------------------------------------
+import { loadDockerSecrets } from './config/secrets.loader';
+
+const _secretsResult = loadDockerSecrets();
+// Log the result after the Pino logger is available (see bootstrap()).
+
 import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
@@ -322,12 +333,21 @@ async function bootstrapGraphqlGateway() {
 }
 
 async function bootstrap() {
+  // Emit secrets-load audit record once the Nest logger is ready.
+  const startupLogger = new NestLogger('Bootstrap');
+  startupLogger.log(
+    `[SecretsLoader] Resolved ${_secretsResult.loadedCount} Docker secret(s): ` +
+      `[${_secretsResult.loadedVars.join(', ')}]. ` +
+      (_secretsResult.skippedVars.length > 0
+        ? `Skipped (not configured): [${_secretsResult.skippedVars.join(', ')}].`
+        : 'All optional secrets configured.'),
+  );
+
   // Validate CORS configuration on startup
   try {
     getCorsConfig();
   } catch (error) {
-    const logger = new NestLogger('Bootstrap');
-    logger.error(`CORS configuration error: ${(error as Error).message}`);
+    startupLogger.error(`CORS configuration error: ${(error as Error).message}`);
     if (process.env.NODE_ENV === 'production') {
       process.exit(1);
     }
