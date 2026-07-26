@@ -3,13 +3,14 @@
 import { OptimizedImage } from './image';
 import { Button } from "@/components/ui/button";
 import { emitCtaClicked, CTA_IDS, CTA_PLACEMENTS } from "@/lib/telemetry/navigation-instrumentation";
-import { Clock, Heart } from "lucide-react";
+import { Clock, Heart, Search, ShoppingBag, AlertCircle, RefreshCw } from "lucide-react";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useState, useMemo } from 'react';
 import { PurchaseModal } from './marketplace/PurchaseModal';
 import { MarketplaceFilters } from './marketplace/MarketplaceFilters';
 import { useListingsQuery } from '@/hooks/graphql/useListingsQuery';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { EmptyState } from '@/components/ui/empty-state';
 import { ListingStatus } from '@/hooks/graphql/generated';
 
 type NFTItem = {
@@ -35,7 +36,9 @@ export function TodaysPicks() {
   const maxPrice = searchParams.get("maxPrice") ? Number(searchParams.get("maxPrice")) : undefined;
   const sortBy = searchParams.get("sortBy") || "newest";
 
-  const { data, loading, error, fetchMore } = useListingsQuery({
+  const router = useRouter();
+
+  const { data, loading, error, fetchMore, refetch } = useListingsQuery({
     variables: {
       pagination: { first: 8 },
       filter: {
@@ -51,6 +54,15 @@ export function TodaysPicks() {
 
   const listings = data?.listings?.edges.map(e => e.node) || [];
   const pageInfo = data?.listings?.pageInfo;
+  const hasActiveFilters = !!(search || minPrice || maxPrice);
+
+  const clearFilters = () => {
+    router.replace("/marketplace");
+  };
+
+  const handleCreateNFT = () => {
+    router.push("/creator-dashboard/mint-nft");
+  };
 
   const nftItems: NFTItem[] = useMemo(() => {
     return listings.map((listing: any, i) => ({
@@ -70,17 +82,34 @@ export function TodaysPicks() {
     <section className="py-16 relative">
       <MarketplaceFilters />
 
-      {loading && !data ? (
+      {error ? (
+        <EmptyState
+          icon={<AlertCircle className="h-12 w-12" />}
+          title="Failed to load listings"
+          description={error.message || "An unexpected error occurred. Please try again."}
+          actionLabel="Retry"
+          onAction={() => refetch()}
+          secondaryActionLabel={hasActiveFilters ? "Clear Filters" : undefined}
+          onSecondaryAction={hasActiveFilters ? clearFilters : undefined}
+          className="py-20"
+        />
+      ) : loading && !data ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {[...Array(8)].map((_, i) => (
             <div key={i} className="bg-[#1E1A45] rounded-2xl h-[360px] animate-pulse border border-purple-900/30" />
           ))}
         </div>
       ) : nftItems.length === 0 ? (
-        <div className="text-center py-20 bg-[#1E1A45] rounded-2xl border border-purple-900/30">
-          <h3 className="text-xl text-gray-300 font-semibold mb-2">No NFTs Found</h3>
-          <p className="text-gray-500">Try adjusting your filters or search term</p>
-        </div>
+        <EmptyState
+          icon={hasActiveFilters ? <Search className="h-12 w-12" /> : <ShoppingBag className="h-12 w-12" />}
+          title={hasActiveFilters ? "No NFTs Found" : "No NFTs Listed Yet"}
+          description={hasActiveFilters 
+            ? "No listings match your current filters. Try adjusting your search or price range." 
+            : "The marketplace is empty. Be the first to list an NFT and start earning!"}
+          actionLabel={hasActiveFilters ? "Clear Filters" : "Create NFT"}
+          onAction={hasActiveFilters ? clearFilters : handleCreateNFT}
+          className="py-20"
+        />
       ) : (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
