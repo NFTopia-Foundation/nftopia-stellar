@@ -1,9 +1,12 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { ScheduleModule } from '@nestjs/schedule';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { NotificationsGateway } from './notifications.gateway';
 import { NotificationsService } from './notifications.service';
+import { EmailModule } from '../email/email.module';
+import { User } from '../../users/user.entity';
 
 /**
  * NotificationsModule
@@ -38,10 +41,12 @@ import { NotificationsService } from './notifications.service';
 @Module({
   imports: [
     ConfigModule,
+    TypeOrmModule.forFeature([User]),
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'your-secret-key-change-in-production',
     }),
     ScheduleModule.forRoot(),
+    forwardRef(() => EmailModule),
   ],
   providers: [NotificationsGateway, NotificationsService],
   exports: [NotificationsService],

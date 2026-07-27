@@ -1,9 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { Logger } from '@nestjs/common';
 import type { Server } from 'socket.io';
+import { getRepositoryToken } from '@nestjs/typeorm';
 import { NotificationsService } from './notifications.service';
 import { NotificationsGateway } from './notifications.gateway';
 import type { BidUpdatePayload } from './interfaces/notification.interface';
+import { EmailQueueService } from '../email/queue/email.queue.service';
+import { User } from '../../users/user.entity';
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -32,6 +35,15 @@ const makeBidUpdate = (
   ...override,
 });
 
+const mockEmailQueueService = {
+  queueBidNotificationEmail: jest.fn().mockResolvedValue(undefined),
+  queueAuctionWonEmail: jest.fn().mockResolvedValue(undefined),
+};
+
+const mockUserRepository = {
+  findOne: jest.fn(),
+};
+
 // ── tests ────────────────────────────────────────────────────────────────────
 
 describe('NotificationsService', () => {
@@ -49,6 +61,11 @@ describe('NotificationsService', () => {
       providers: [
         NotificationsService,
         { provide: NotificationsGateway, useValue: mockGateway },
+        { provide: EmailQueueService, useValue: mockEmailQueueService },
+        {
+          provide: getRepositoryToken(User),
+          useValue: mockUserRepository,
+        },
       ],
     }).compile();
 
@@ -215,6 +232,109 @@ describe('NotificationsService', () => {
     it('emits once per call', () => {
       service.broadcastBidUpdate('auction-1', makeBidUpdate());
       expect(room.emit).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ── sendBidNotificationEmail ──────────────────────────────────────────────
+
+  describe('sendBidNotificationEmail', () => {
+    it('queues bid notification email for owner with verified email', async () => {
+      const mockOwner = {
+        id: 'owner-123',
+        email: 'owner@example.com',
+        isEmailVerified: true,
+        username: 'OwnerUser',
+      };
+      mockUserRepository.findOne.mockResolvedValueOnce(mockOwner);
+
+      await service.sendBidNotificationEmail(
+        'owner-123',
+        'Cool NFT',
+        'BidderUser',
+        '150.00',
+        'auction-456',
+        'Cool Collection',
+      );
+
+      expect(mockEmailQueueService.queueBidNotificationEmail).toHaveBeenCalledWith(
+        'owner@example.com',
+        'OwnerUser',
+        'Cool NFT',
+        'BidderUser',
+        '150.00',
+        expect.stringContaining('auction-456'),
+        'Cool Collection',
+        undefined,
+      );
+    });
+
+    it('skips email when owner has no verified email', async () => {
+      const mockOwner = {
+        id: 'owner-123',
+        email: 'owner@example.com',
+        isEmailVerified: false,
+        username: 'OwnerUser',
+      };
+      mockUserRepository.findOne.mockResolvedValueOnce(mockOwner);
+
+      await service.sendBidNotificationEmail('owner-123', 'Cool NFT', 'Bidder', '100', 'auction-1');
+
+      expect(mockEmailQueueService.queueBidNotificationEmail).not.toHaveBeenCalled();
+    });
+
+    it('skips email when owner not found', async () => {
+      mockUserRepository.findOne.mockResolvedValueOnce(null);
+
+      await service.sendBidNotificationEmail('unknown-user', 'NFT', 'Bidder', '100', 'auction-1');
+
+      expect(mockEmailQueueService.queueBidNotificationEmail).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── sendAuctionWonEmail ───────────────────────────────────────────────────
+
+  describe('sendAuctionWonEmail', () => {
+    it('queues auction won email for winner with verified email', async () => {
+      const mockWinner = {
+        id: 'winner-123',
+        email: 'winner@example.com',
+        isEmailVerified: true,
+        username: 'WinnerUser',
+      };
+      mockUserRepository.findOne.mockResolvedValueOnce(mockWinner);
+
+      await service.sendAuctionWonEmail(
+        'winner-123',
+        'Rare NFT',
+        'SellerUser',
+        '500.00',
+        'nft-789',
+        'Rare Collection',
+      );
+
+      expect(mockEmailQueueService.queueAuctionWonEmail).toHaveBeenCalledWith(
+        'winner@example.com',
+        'WinnerUser',
+        'Rare NFT',
+        'SellerUser',
+        '500.00',
+        expect.stringContaining('nft-789'),
+        'Rare Collection',
+      );
+    });
+
+    it('skips email when winner has no verified email', async () => {
+      const mockWinner = {
+        id: 'winner-123',
+        email: null,
+        isEmailVerified: false,
+        username: 'WinnerUser',
+      };
+      mockUserRepository.findOne.mockResolvedValueOnce(mockWinner);
+
+      await service.sendAuctionWonEmail('winner-123', 'NFT', 'Seller', '500', 'nft-1');
+
+      expect(mockEmailQueueService.queueAuctionWonEmail).not.toHaveBeenCalled();
     });
   });
 });
