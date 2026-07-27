@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Congratulations! You Won the Auction</title>
+    <style>
+        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f4f4f4; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .email-wrapper { background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .header { background: linear-gradient(135deg, #27ae60 0%, #229954 100%); padding: 30px 20px; text-align: center; }
+        .logo { font-size: 28px; font-weight: bold; color: #ffffff; margin: 0; }
+        .content { padding: 40px 30px; }
+        .button { display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #27ae60 0%, #229954 100%); color: #ffffff !important; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 20px 0; }
+        .footer { background-color: #f8f9fa; padding: 20px 30px; text-align: center; font-size: 14px; color: #666; }
+        .footer a { color: #667eea; text-decoration: none; }
+        .nft-details { background-color: #f0fdf4; border-radius: 8px; padding: 20px; margin: 20px 0; border: 2px solid #27ae60; }
+        .winning-amount { font-size: 28px; font-weight: bold; color: #27ae60; margin: 10px 0; }
+        .label { font-weight: 600; color: #666; margin-right: 8px; }
+        .trophy { font-size: 48px; text-align: center; margin: 20px 0; }
+        @media only screen and (max-width: 600px) { .content { padding: 30px 20px; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="email-wrapper">
+            <div class="header">
+                <h1 class="logo">NFTopia</h1>
+            </div>
+            <div class="content">
+                <div class="trophy">🏆</div>
+                <h2 style="text-align: center; color: #27ae60;">Congratulations! You Won!</h2>
+                <p>Hi {{username}},</p>
+                <p>Exciting news! You've won the auction and this amazing NFT is now yours!</p>
+                <div class="nft-details">
+                    <p><span class="label">NFT:</span>{{nftName}}</p>
+                    {{#if collectionName}}
+                    <p><span class="label">Collection:</span>{{collectionName}}</p>
+                    {{/if}}
+                    <p><span class="label">Seller:</span>{{sellerName}}</p>
+                    <div class="winning-amount">{{winningAmount}} XLM</div>
+                    <p style="font-size: 13px; color: #666; margin-top: 4px;">Your winning bid</p>
+                </div>
+                <p>The NFT will be transferred to your wallet shortly. You can view it in your collection:</p>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{{nftUrl}}" class="button">View Your NFT</a>
+                </div>
+                <p>Thank you for being part of the NFTopia community!</p>
+            </div>
+            <div class="footer">
+                <p>© {{year}} NFTopia. All rights reserved.</p>
+                <p><a href="https://nftopia.com">Visit Website</a> | <a href="https://nftopia.com/support">Support</a></p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

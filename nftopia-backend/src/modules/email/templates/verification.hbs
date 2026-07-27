@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Your NFTopia Email</title>
+    <style>
+        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f4f4f4; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .email-wrapper { background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px 20px; text-align: center; }
+        .logo { font-size: 28px; font-weight: bold; color: #ffffff; margin: 0; }
+        .content { padding: 40px 30px; }
+        .button { display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff !important; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 20px 0; }
+        .footer { background-color: #f8f9fa; padding: 20px 30px; text-align: center; font-size: 14px; color: #666; }
+        .footer a { color: #667eea; text-decoration: none; }
+        .expiry-note { color: #888; font-size: 13px; margin-top: 16px; }
+        @media only screen and (max-width: 600px) { .content { padding: 30px 20px; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="email-wrapper">
+            <div class="header">
+                <h1 class="logo">NFTopia</h1>
+            </div>
+            <div class="content">
+                <h2>Verify Your Email Address</h2>
+                <p>Hi {{username}},</p>
+                <p>Welcome to NFTopia! Please verify your email address to get started with buying, selling, and trading NFTs on the Stellar blockchain.</p>
+                <p>Click the button below to confirm your email address:</p>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{{verificationUrl}}" class="button">Verify Email Address</a>
+                </div>
+                <p>Or copy and paste this link into your browser:</p>
+                <p style="word-break: break-all; color: #667eea;">{{verificationUrl}}</p>
+                <p class="expiry-note">This link will expire in {{expiryHours}} hours. If you did not create an account, you can safely ignore this email.</p>
+            </div>
+            <div class="footer">
+                <p>© {{year}} NFTopia. All rights reserved.</p>
+                <p><a href="https://nftopia.com">Visit Website</a> | <a href="https://nftopia.com/support">Support</a></p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
