@@ -4,6 +4,8 @@ import { CacheModule } from '@nestjs/cache-manager';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { BullModule } from '@nestjs/bullmq';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -37,6 +39,7 @@ import { getLoggerConfig } from './config/logger.config';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 import { SocialModule } from './modules/social/social.module';
 import { PaymentModule } from './modules/payment/payment.module';
+import { EmailModule } from './modules/email/email.module';
 // import { CorsConfig } from './config/cors.config';
 
 @Module({
@@ -49,6 +52,20 @@ import { PaymentModule } from './modules/payment/payment.module';
     }),
     ConfigModule.forRoot({ isGlobal: true }),
     EventEmitterModule.forRoot(),
+    // Global throttler for rate limiting
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        throttlers: [
+          {
+            name: 'default',
+            ttl: configService.get<number>('THROTTLE_TTL', 60000),
+            limit: configService.get<number>('THROTTLE_LIMIT', 100),
+          },
+        ],
+      }),
+    }),
     CacheModule.registerAsync({
       isGlobal: true,
       inject: [ConfigService],
@@ -59,6 +76,19 @@ import { PaymentModule } from './modules/payment/payment.module';
         password: config.get('REDIS_PASSWORD'),
         db: parseInt(config.get('REDIS_DB') || '0', 10),
         ttl: parseInt(config.get('CACHE_TTL') || '300', 10),
+      }),
+    }),
+    // Global BullMQ connection
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        connection: {
+          host: configService.get<string>('REDIS_HOST', 'localhost'),
+          port: configService.get<number>('REDIS_PORT', 6379),
+          password: configService.get<string>('REDIS_PASSWORD') || undefined,
+          db: configService.get<number>('REDIS_DB', 0),
+        },
       }),
     }),
 
@@ -128,6 +158,7 @@ import { PaymentModule } from './modules/payment/payment.module';
     MetricsModule,
     SocialModule,
     PaymentModule,
+    EmailModule,
   ],
   controllers: [AppController],
   providers: [
@@ -141,6 +172,10 @@ import { PaymentModule } from './modules/payment/payment.module';
     {
       provide: APP_GUARD,
       useClass: RedisRateGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
     },
   ],
 })
