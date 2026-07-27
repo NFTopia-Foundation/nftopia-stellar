@@ -3,10 +3,10 @@ import { EmailAuthResponse, ApiAuthError } from "./types";
 import { tokenStorage } from "./tokenStorage";
 
 // error handling function
-function handleError(error: unknown): never {
-  if (axios.isAxiosError(error)) {
-    const message = error.response?.data?.message ?? error.message;
-    const statusCode = error.response?.status;
+function handleError(err: unknown): never {
+  if (axios.isAxiosError(err)) {
+    const message = err.response?.data?.message ?? err.message;
+    const statusCode = err.response?.status;
     const authError: ApiAuthError = { message, statusCode };
     throw authError;
   }

@@ -1,11 +1,13 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import React from 'react';
 import HomeScreen from '@/screens/Home/HomeScreen';
+import MarketplaceScreen from '@/screens/Marketplace/MarketplaceScreen';
 import ProfileScreen from '@/screens/Profile/ProfileScreen';
 import WalletManagementScreen from '@/screens/Profile/WalletManagementScreen';
 
 export type MainStackParamList = {
   Home: undefined;
+  Marketplace: undefined;
   WalletManagement: undefined;
   Profile: undefined;
 };
@@ -20,6 +22,7 @@ export default function MainNavigator() {
       }}
     >
       <Stack.Screen name="Home" component={HomeScreen} />
+      <Stack.Screen name="Marketplace" component={MarketplaceScreen} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="WalletManagement" component={WalletManagementScreen} />
     </Stack.Navigator>
