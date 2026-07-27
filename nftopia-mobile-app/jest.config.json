@@ -10,9 +10,11 @@
     "!src/services/auth/__tests__/**"
   ],
   "moduleNameMapper": {
-    "^expo-secure-store$": "<rootDir>/src/services/auth/__mocks__/expo-secure-store.ts"
+    "^expo-secure-store$": "<rootDir>/src/services/auth/__mocks__/expo-secure-store.ts",
+    "^expo-local-authentication$": "<rootDir>/src/services/auth/__mocks__/expo-local-authentication.ts",
+    "^expo-crypto$": "<rootDir>/src/services/auth/__mocks__/expo-crypto.ts"
   },
   "transformIgnorePatterns": [
-    "node_modules/(?!(stellar-hd-wallet)/)"
+    "node_modules/(?!(stellar-hd-wallet|expo-secure-store|expo-crypto|expo-local-authentication|expo-modules-core)/)"
   ]
 }

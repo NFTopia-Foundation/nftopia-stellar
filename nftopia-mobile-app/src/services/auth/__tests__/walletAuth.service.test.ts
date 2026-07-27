@@ -11,6 +11,33 @@ jest.mock('expo-crypto', () => ({
   digestStringAsync: jest.fn().mockResolvedValue('mockedhash'),
 }));
 
+jest.mock('expo-local-authentication', () => ({
+  hasHardwareAsync: jest.fn().mockResolvedValue(true),
+  isEnrolledAsync: jest.fn().mockResolvedValue(true),
+  authenticateAsync: jest.fn().mockResolvedValue({ success: true }),
+}));
+
+jest.mock('../tokenStorage', () => {
+  const actual = jest.requireActual('../tokenStorage');
+  return {
+    __esModule: true,
+    TokenStorage: actual.TokenStorage,
+    tokenStorage: {
+      saveTokens: jest.fn().mockResolvedValue(undefined),
+      getAccessToken: jest.fn().mockResolvedValue(null),
+      getRefreshToken: jest.fn().mockResolvedValue(null),
+      clearTokens: jest.fn().mockResolvedValue(undefined),
+      saveUserData: jest.fn().mockResolvedValue(undefined),
+      getUserData: jest.fn().mockResolvedValue(null),
+      clearUserData: jest.fn().mockResolvedValue(undefined),
+      clearAll: jest.fn().mockResolvedValue(undefined),
+      isTokenExpired: jest.fn().mockReturnValue(false),
+      init: jest.fn().mockResolvedValue(undefined),
+      migrateIfNeeded: jest.fn().mockResolvedValue(undefined),
+    },
+  };
+});
+
 jest.mock('stellar-hd-wallet', () => {
   const { Keypair: KP } = require('stellar-sdk');
   const mockKeypair = KP.random();
@@ -28,7 +55,7 @@ import { WalletAuthService } from '../walletAuth.service';
 import { StellarWalletService } from '../../stellar/wallet.service';
 import { AuthError, AuthErrorCode, AuthResponse, ChallengeResponse, LinkWalletResponse } from '../types';
 import { Wallet } from '../../stellar/types';
-import * as SecureStore from 'expo-secure-store';
+import { tokenStorage } from '../tokenStorage';
 
 const VALID_KEYPAIR = Keypair.random();
 const MOCK_WALLET: Wallet = {
@@ -147,12 +174,8 @@ describe('WalletAuthService', () => {
       );
 
       expect(result).toEqual(MOCK_AUTH_RESPONSE);
-      expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
-        'nftopia_access_token',
+      expect(tokenStorage.saveTokens).toHaveBeenCalledWith(
         'mock-access-token',
-      );
-      expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
-        'nftopia_refresh_token',
         'mock-refresh-token',
       );
     });
@@ -241,12 +264,8 @@ describe('WalletAuthService', () => {
 
       await service.walletLogin(MOCK_WALLET);
 
-      expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
-        'nftopia_access_token',
+      expect(tokenStorage.saveTokens).toHaveBeenCalledWith(
         MOCK_AUTH_RESPONSE.access_token,
-      );
-      expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
-        'nftopia_refresh_token',
         MOCK_AUTH_RESPONSE.refresh_token,
       );
     });
@@ -282,7 +301,7 @@ describe('WalletAuthService', () => {
 
   describe('linkWallet', () => {
     it('links wallet and returns link response on success', async () => {
-      (SecureStore.getItemAsync as jest.Mock).mockResolvedValue('stored-access-token');
+      (tokenStorage.getAccessToken as jest.Mock).mockResolvedValue('stored-access-token');
       mockFetchOk(MOCK_LINK_RESPONSE);
 
       const result = await service.linkWallet(
@@ -295,7 +314,7 @@ describe('WalletAuthService', () => {
     });
 
     it('sends Authorization header with stored access token', async () => {
-      (SecureStore.getItemAsync as jest.Mock).mockResolvedValue('my-jwt-token');
+      (tokenStorage.getAccessToken as jest.Mock).mockResolvedValue('my-jwt-token');
       mockFetchOk(MOCK_LINK_RESPONSE);
 
       await service.linkWallet(MOCK_WALLET.publicKey, 'sig', 'nonce');
@@ -311,7 +330,7 @@ describe('WalletAuthService', () => {
     });
 
     it('sends request without Authorization header when no token is stored', async () => {
-      (SecureStore.getItemAsync as jest.Mock).mockResolvedValue(null);
+      (tokenStorage.getAccessToken as jest.Mock).mockResolvedValue(null);
       mockFetchOk(MOCK_LINK_RESPONSE);
 
       await service.linkWallet(MOCK_WALLET.publicKey, 'sig', 'nonce');
@@ -321,7 +340,7 @@ describe('WalletAuthService', () => {
     });
 
     it('throws AuthError with LINK_FAILED on non-ok response', async () => {
-      (SecureStore.getItemAsync as jest.Mock).mockResolvedValue('token');
+      (tokenStorage.getAccessToken as jest.Mock).mockResolvedValue('token');
       mockFetchError(409, 'Wallet already linked to another account');
 
       await expect(
@@ -340,7 +359,7 @@ describe('WalletAuthService', () => {
 
   describe('unlinkWallet', () => {
     it('resolves without error on success', async () => {
-      (SecureStore.getItemAsync as jest.Mock).mockResolvedValue('stored-token');
+      (tokenStorage.getAccessToken as jest.Mock).mockResolvedValue('stored-token');
       global.fetch = jest.fn().mockResolvedValue({
         ok: true,
         status: 200,
@@ -351,7 +370,7 @@ describe('WalletAuthService', () => {
     });
 
     it('sends DELETE request to unlink endpoint with wallet address', async () => {
-      (SecureStore.getItemAsync as jest.Mock).mockResolvedValue('my-jwt-token');
+      (tokenStorage.getAccessToken as jest.Mock).mockResolvedValue('my-jwt-token');
       global.fetch = jest.fn().mockResolvedValue({
         ok: true,
         status: 200,
@@ -370,7 +389,7 @@ describe('WalletAuthService', () => {
     });
 
     it('sends Authorization header with stored access token', async () => {
-      (SecureStore.getItemAsync as jest.Mock).mockResolvedValue('my-jwt-token');
+      (tokenStorage.getAccessToken as jest.Mock).mockResolvedValue('my-jwt-token');
       global.fetch = jest.fn().mockResolvedValue({
         ok: true,
         status: 200,
@@ -390,7 +409,7 @@ describe('WalletAuthService', () => {
     });
 
     it('throws AuthError with UNLINK_FAILED on non-ok response', async () => {
-      (SecureStore.getItemAsync as jest.Mock).mockResolvedValue('token');
+      (tokenStorage.getAccessToken as jest.Mock).mockResolvedValue('token');
       mockFetchError(404, 'Wallet not linked to this account');
 
       await expect(service.unlinkWallet(MOCK_WALLET.publicKey)).rejects.toMatchObject({

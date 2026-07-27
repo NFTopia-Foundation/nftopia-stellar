@@ -1,6 +1,7 @@
-import * as SecureStore from 'expo-secure-store';
+import * as LocalAuthentication from 'expo-local-authentication';
 import { Wallet } from '../stellar/types';
 import { StellarWalletService } from '../stellar/wallet.service';
+import { tokenStorage } from './tokenStorage';
 import {
   AuthError,
   AuthErrorCode,
@@ -8,9 +9,6 @@ import {
   ChallengeResponse,
   LinkWalletResponse,
 } from './types';
-
-const ACCESS_TOKEN_KEY = 'nftopia_access_token';
-const REFRESH_TOKEN_KEY = 'nftopia_refresh_token';
 
 export class WalletAuthService {
   private readonly walletService: StellarWalletService;
@@ -71,7 +69,7 @@ export class WalletAuthService {
       }
 
       const authResponse = (await response.json()) as AuthResponse;
-      await this._storeTokens(authResponse.access_token, authResponse.refresh_token);
+      await tokenStorage.saveTokens(authResponse.access_token, authResponse.refresh_token);
       return authResponse;
     } catch (err) {
       if (err instanceof AuthError) throw err;
@@ -97,7 +95,7 @@ export class WalletAuthService {
     nonce: string,
   ): Promise<LinkWalletResponse> {
     try {
-      const accessToken = await this._getAccessToken();
+      const accessToken = await tokenStorage.getAccessToken();
       const response = await fetch(`${this.baseUrl}/auth/wallet/link`, {
         method: 'POST',
         headers: {
@@ -127,7 +125,7 @@ export class WalletAuthService {
 
   async unlinkWallet(walletAddress: string): Promise<void> {
     try {
-      const accessToken = await this._getAccessToken();
+      const accessToken = await tokenStorage.getAccessToken();
       const response = await fetch(`${this.baseUrl}/auth/wallet/unlink`, {
         method: 'DELETE',
         headers: {
@@ -153,26 +151,36 @@ export class WalletAuthService {
     }
   }
 
-  private async _storeTokens(
-    accessToken: string,
-    refreshToken: string,
-  ): Promise<void> {
+  async requireBiometricReauth(promptMessage?: string): Promise<boolean> {
     try {
-      await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, accessToken);
-      await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, refreshToken);
-    } catch (err) {
-      throw new AuthError(
-        `Failed to store tokens: ${(err as Error).message}`,
-        AuthErrorCode.TOKEN_STORAGE_ERROR,
-      );
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      if (!hasHardware) return true;
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+      if (!isEnrolled) return true;
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: promptMessage ?? 'Authenticate to access wallet keys',
+        fallbackLabel: 'Use passcode',
+      });
+      return result.success;
+    } catch {
+      return false;
     }
   }
 
-  private async _getAccessToken(): Promise<string | null> {
-    try {
-      return await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
-    } catch {
-      return null;
-    }
+  async revealSecretKey(publicKey: string, wallet: Wallet): Promise<string | null> {
+    const authenticated = await this.requireBiometricReauth(
+      'Authenticate to reveal secret key',
+    );
+    if (!authenticated) return null;
+    return wallet.secretKey;
+  }
+
+  async revealMnemonic(wallet: Wallet): Promise<string | null> {
+    if (!wallet.mnemonic) return null;
+    const authenticated = await this.requireBiometricReauth(
+      'Authenticate to reveal recovery phrase',
+    );
+    if (!authenticated) return null;
+    return wallet.mnemonic;
   }
 }

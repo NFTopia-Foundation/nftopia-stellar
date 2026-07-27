@@ -3,23 +3,28 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import * as SecureStore from 'expo-secure-store';
 import { Wallet } from '../services/stellar/types';
 import { SecureStorage } from '../services/stellar/secureStorage';
+import { tokenStorage } from '../services/auth/tokenStorage';
+import { authService } from '../services/auth/auth.service';
 import { AuthState, User } from './types';
 
 const secureStorage = new SecureStorage();
+const SESSION_TIMEOUT_MS = 15 * 60 * 1000;
 
-const AUTH_TOKEN_KEY = 'nftopia_auth_token';
+function getCurrentTimestamp(): number {
+  return Date.now();
+}
 
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
-      // Initial state
       user: null,
       wallet: null,
       isAuthenticated: false,
       isLoading: false,
       error: null,
+      lastActivity: null,
+      sessionTimer: null,
 
-      // Simple setters
       setUser: (user) => set({ user }),
       setWallet: (wallet) => set({ wallet }),
       setAuthenticated: (value) => set({ isAuthenticated: value }),
@@ -27,30 +32,60 @@ export const useAuthStore = create<AuthState>()(
       setError: (error) => set({ error }),
       clearError: () => set({ error: null }),
 
-      // Login with email and password
+      updateActivity: () => {
+        set({ lastActivity: getCurrentTimestamp() });
+      },
+
+      startSessionMonitor: () => {
+        const existing = get().sessionTimer;
+        if (existing) clearInterval(existing);
+        const timer = setInterval(() => {
+          const state = get();
+          if (!state.isAuthenticated) {
+            clearInterval(timer);
+            return;
+          }
+          const lastActivity = state.lastActivity ?? getCurrentTimestamp();
+          if (getCurrentTimestamp() - lastActivity > SESSION_TIMEOUT_MS) {
+            get().logout();
+          }
+        }, 30000);
+        set({ sessionTimer: timer, lastActivity: getCurrentTimestamp() });
+      },
+
+      stopSessionMonitor: () => {
+        const timer = get().sessionTimer;
+        if (timer) {
+          clearInterval(timer);
+          set({ sessionTimer: null });
+        }
+      },
+
       loginWithEmail: async (email, password) => {
         if (get().isLoading) return;
         set({ isLoading: true, error: null });
         try {
-          // TODO: replace with real auth service call when available
-          // const { user, token } = await authService.loginWithEmail(email, password);
-          // await SecureStore.setItemAsync(AUTH_TOKEN_KEY, token);
-          // set({ user, isAuthenticated: true });
-          throw new Error('Email login not yet implemented');
+          const response = await authService.emailLogin(email, password);
+          set({
+            user: response.user,
+            isAuthenticated: true,
+          });
+          get().startSessionMonitor();
         } catch (err) {
-          set({ error: (err as Error).message });
+          const message = (err as { message?: string }).message ?? 'Login failed';
+          set({ error: message });
         } finally {
           set({ isLoading: false });
         }
       },
 
-      // Login with an existing Stellar wallet
       loginWithWallet: async (wallet: Wallet) => {
         if (get().isLoading) return;
         set({ isLoading: true, error: null });
         try {
           await secureStorage.saveWallet(wallet);
           set({ wallet, isAuthenticated: true });
+          get().startSessionMonitor();
         } catch (err) {
           set({ error: (err as Error).message });
         } finally {
@@ -58,53 +93,83 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      // Register a new account with email and password
       registerWithEmail: async (email, password, username) => {
         if (get().isLoading) return;
         set({ isLoading: true, error: null });
         try {
-          // TODO: replace with real auth service call when available
-          // const { user, token } = await authService.register(email, password, username);
-          // await SecureStore.setItemAsync(AUTH_TOKEN_KEY, token);
-          // set({ user, isAuthenticated: true });
-          throw new Error('Email registration not yet implemented');
+          const response = await authService.emailRegister(email, password, username);
+          set({
+            user: response.user,
+            isAuthenticated: true,
+          });
+          get().startSessionMonitor();
         } catch (err) {
-          set({ error: (err as Error).message });
+          const message = (err as { message?: string }).message ?? 'Registration failed';
+          set({ error: message });
         } finally {
           set({ isLoading: false });
         }
       },
 
-      // Logout: clear all auth state and stored credentials
       logout: async () => {
         set({ isLoading: true, error: null });
         try {
-          await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+          get().stopSessionMonitor();
+          await authService.logout();
           await secureStorage.deleteWallet();
         } catch {
           // Ignore storage errors on logout to ensure state is always cleared
         } finally {
-          set({ user: null, wallet: null, isAuthenticated: false, isLoading: false });
+          set({
+            user: null,
+            wallet: null,
+            isAuthenticated: false,
+            isLoading: false,
+            lastActivity: null,
+          });
         }
       },
 
-      // Check if a valid auth session exists (wallet or token)
       checkAuth: async () => {
         set({ isLoading: true, error: null });
         try {
-          const token = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
+          await tokenStorage.migrateIfNeeded();
+
+          const token = await SecureStore.getItemAsync('nftopia_auth_token');
           if (token) {
-            // TODO: validate token with auth service when available
-            // const user = await authService.validateToken(token);
-            // set({ user, isAuthenticated: true });
-            set({ isAuthenticated: true });
-            return true;
+            const isValid = await authService.validateToken();
+            if (isValid) {
+              set({ isAuthenticated: true });
+              get().startSessionMonitor();
+              return true;
+            }
+            await SecureStore.deleteItemAsync('nftopia_auth_token');
+          }
+
+          const storedToken = await tokenStorage.getAccessToken();
+          if (storedToken) {
+            const isValid = await authService.validateToken();
+            if (isValid) {
+              const userData = await tokenStorage.getUserData();
+              if (userData && userData.id) {
+                set({
+                  user: userData as unknown as User,
+                  isAuthenticated: true,
+                });
+              } else {
+                set({ isAuthenticated: true });
+              }
+              get().startSessionMonitor();
+              return true;
+            }
+            await tokenStorage.clearTokens();
           }
 
           const hasWallet = await secureStorage.hasWallet();
           if (hasWallet) {
             const wallet = await secureStorage.getWallet();
             set({ wallet, isAuthenticated: true });
+            get().startSessionMonitor();
             return true;
           }
 
@@ -117,6 +182,24 @@ export const useAuthStore = create<AuthState>()(
           set({ isLoading: false });
         }
       },
+
+      requireBiometric: async (promptMessage?: string): Promise<boolean> => {
+        try {
+          const { isEnrolledAsync, hasHardwareAsync, authenticateAsync } =
+            await import('expo-local-authentication');
+          const hasHardware = await hasHardwareAsync();
+          if (!hasHardware) return true;
+          const isEnrolled = await isEnrolledAsync();
+          if (!isEnrolled) return true;
+          const result = await authenticateAsync({
+            promptMessage: promptMessage ?? 'Authenticate to perform this action',
+            fallbackLabel: 'Use passcode',
+          });
+          return result.success;
+        } catch {
+          return false;
+        }
+      },
     }),
     {
       name: 'nftopia-auth-storage',
@@ -125,7 +208,6 @@ export const useAuthStore = create<AuthState>()(
         setItem: async (key: string, value: string) => await SecureStore.setItemAsync(key, value),
         removeItem: async (key: string) => await SecureStore.deleteItemAsync(key),
       })),
-      // Only persist non-sensitive state; credentials are managed by SecureStorage
       partialize: (state) => ({
         user: state.user,
         isAuthenticated: state.isAuthenticated,
