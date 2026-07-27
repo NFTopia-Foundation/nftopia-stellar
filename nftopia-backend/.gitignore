@@ -41,6 +41,9 @@ lerna-debug.log*
 .env.test.local
 .env.production.local
 .env.local
+.env.production
+# Local dev secret files for docker-compose.prod.test.yml — NEVER commit.
+.secrets/
 
 # temp directory
 .temp

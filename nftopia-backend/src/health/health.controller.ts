@@ -7,6 +7,12 @@ import { HealthService } from './health.service';
 export class HealthController {
   constructor(private readonly healthService: HealthService) {}
 
+  @Get()
+  @ApiOperation({ summary: 'Health check probe' })
+  async getHealth() {
+    return this.getReady();
+  }
+
   @Get('live')
   @ApiOperation({ summary: 'Liveness probe' })
   @ApiResponse({

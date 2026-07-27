@@ -1,24 +1,16 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import HomeScreen from '@/screens/Home/HomeScreen';
+import ProfileScreen from '@/screens/Profile/ProfileScreen';
+import WalletManagementScreen from '@/screens/Profile/WalletManagementScreen';
 
 export type MainStackParamList = {
   Home: undefined;
-  Marketplace: undefined;
+  WalletManagement: undefined;
   Profile: undefined;
 };
 
 const Stack = createNativeStackNavigator<MainStackParamList>();
-
-// Placeholder screen for development
-function PlaceholderScreen({ title }: { title: string }) {
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{title}</Text>
-      <Text style={styles.subtitle}>Coming Soon</Text>
-    </View>
-  );
-}
 
 export default function MainNavigator() {
   return (
@@ -27,34 +19,9 @@ export default function MainNavigator() {
         headerShown: false,
       }}
     >
-      <Stack.Screen name="Home">
-        {(props) => <PlaceholderScreen {...props} title="Home" />}
-      </Stack.Screen>
-      <Stack.Screen name="Marketplace">
-        {(props) => <PlaceholderScreen {...props} title="Marketplace" />}
-      </Stack.Screen>
-      <Stack.Screen name="Profile">
-        {(props) => <PlaceholderScreen {...props} title="Profile" />}
-      </Stack.Screen>
+      <Stack.Screen name="Home" component={HomeScreen} />
+      <Stack.Screen name="Profile" component={ProfileScreen} />
+      <Stack.Screen name="WalletManagement" component={WalletManagementScreen} />
     </Stack.Navigator>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#ffffff',
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-  },
-});

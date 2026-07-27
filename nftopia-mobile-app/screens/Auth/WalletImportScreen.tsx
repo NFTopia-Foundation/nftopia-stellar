@@ -1,104 +1,139 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '@/navigation/AuthNavigator';
-import { useAuthStore } from '@/stores/authStore';
-import { StellarWalletService } from '@/src/services/stellar/wallet.service';
+import { useWalletConnect } from '@/hooks/useWalletConnect';
+import { colors, spacing, borderRadius } from '@/constants/theme';
+import SecureInput from '@/components/wallet/SecureInput';
+import MnemonicInput from '@/components/wallet/MnemonicInput';
+import ValidationError from '@/screens/Auth/components/ValidationError';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'WalletImport'>;
 
-export default function WalletImportScreen({ navigation }: Props) {
-  const [secretKey, setSecretKey] = useState('');
-  const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const { setUser } = useAuthStore();
+type ImportTab = 'secret' | 'mnemonic';
 
-  const handleImportWallet = async () => {
-    if (!secretKey || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+export default function WalletImportScreen({ navigation }: Props) {
+  const [activeTab, setActiveTab] = useState<ImportTab>('secret');
+  const [secretKey, setSecretKey] = useState('');
+  const [mnemonic, setMnemonic] = useState('');
+  const [password, setPassword] = useState('');
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  const { importFromSecretKey, importFromMnemonic, isLoading, error, clearError } = useWalletConnect();
+
+  const handleImport = async () => {
+    setLocalError(null);
+    clearError();
+
+    if (!password) {
+      setLocalError('Please enter a password');
+      return;
+    }
+
+    if (password.length < 8) {
+      setLocalError('Password must be at least 8 characters');
       return;
     }
 
     try {
-      setIsLoading(true);
-      
-      // Import wallet using the wallet service
-      const walletService = new StellarWalletService();
-      const wallet = await walletService.importFromSecretKey(secretKey, password);
-      
-      // Store user data
-      setUser({
-        id: Date.now().toString(),
-        walletAddress: wallet.publicKey,
-        walletType: 'stellar',
-        createdAt: new Date(),
-      });
-
-      Alert.alert('Success', 'Wallet imported successfully!');
-      
-      // Navigate to main app (to be implemented)
-      // navigation.reset({ routes: [{ name: 'Main' }] });
-    } catch (error) {
-      console.error('Wallet import error:', error);
-      Alert.alert(
-        'Error',
-        error instanceof Error ? error.message : 'Failed to import wallet'
-      );
-    } finally {
-      setIsLoading(false);
+      if (activeTab === 'secret') {
+        if (!secretKey.trim()) {
+          setLocalError('Please enter your secret key');
+          return;
+        }
+        await importFromSecretKey(secretKey.trim(), password);
+      } else {
+        const phrase = mnemonic.trim();
+        if (!phrase) {
+          setLocalError('Please enter your recovery phrase');
+          return;
+        }
+        const words = phrase.split(/\s+/);
+        if (![12, 15, 18, 21, 24].includes(words.length)) {
+          setLocalError('Recovery phrase must be 12, 15, 18, 21, or 24 words');
+          return;
+        }
+        await importFromMnemonic(phrase, password);
+      }
+      navigation.reset({ index: 0, routes: [{ name: 'EmailLogin' as any }] });
+    } catch {
+      // Error is set in store
     }
   };
 
+  const displayError = localError || error;
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Import Wallet</Text>
-      <Text style={styles.subtitle}>
-        Enter your Stellar secret key to import your wallet
-      </Text>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <Text style={styles.title}>Import Wallet</Text>
+        <Text style={styles.subtitle}>
+          Import your existing Stellar wallet
+        </Text>
 
-      <View style={styles.form}>
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Secret Key</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            placeholder="Enter your secret key (starts with S)"
-            placeholderTextColor="#999"
-            value={secretKey}
-            onChangeText={setSecretKey}
-            secureTextEntry
-            autoCapitalize="none"
-            multiline
-            numberOfLines={3}
-            editable={!isLoading}
-          />
+        <View style={styles.tabRow}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'secret' && styles.tabActive]}
+            onPress={() => setActiveTab('secret')}
+          >
+            <Text style={[styles.tabText, activeTab === 'secret' && styles.tabTextActive]}>
+              Secret Key
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'mnemonic' && styles.tabActive]}
+            onPress={() => setActiveTab('mnemonic')}
+          >
+            <Text style={[styles.tabText, activeTab === 'mnemonic' && styles.tabTextActive]}>
+              Recovery Phrase
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Password</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Create a password to encrypt your wallet"
-            placeholderTextColor="#999"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoCapitalize="none"
-            editable={!isLoading}
-          />
-        </View>
+        <View style={styles.form}>
+          {activeTab === 'secret' ? (
+            <SecureInput
+              label="Secret Key"
+              placeholder="Enter your secret key (starts with S)"
+              value={secretKey}
+              onChangeText={setSecretKey}
+              editable={!isLoading}
+              testID="secret-key-input"
+            />
+          ) : (
+            <MnemonicInput
+              value={mnemonic}
+              onChangeText={setMnemonic}
+              editable={!isLoading}
+              testID="mnemonic-input"
+            />
+          )}
 
-        <View style={styles.warningBox}>
-          <Text style={styles.warningIcon}>🔒</Text>
-          <Text style={styles.warningText}>
-            Your secret key is stored encrypted on your device. Never share it with anyone.
-          </Text>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Password</Text>
+            <View style={styles.passwordInputWrapper}>
+              <SecureInput
+                label=""
+                placeholder="Enter password to encrypt your wallet"
+                value={password}
+                onChangeText={setPassword}
+                editable={!isLoading}
+                testID="password-input"
+              />
+            </View>
+          </View>
+
+          <ValidationError message={displayError} />
         </View>
-      </View>
+      </ScrollView>
 
       <View style={styles.footer}>
         <TouchableOpacity
-          style={[styles.primaryButton, isLoading && styles.buttonDisabled]}
-          onPress={handleImportWallet}
+          style={[styles.primaryButton, (isLoading) && styles.buttonDisabled]}
+          onPress={handleImport}
           disabled={isLoading}
         >
           <Text style={styles.primaryButtonText}>
@@ -114,80 +149,82 @@ export default function WalletImportScreen({ navigation }: Props) {
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
       </View>
-    </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.background,
   },
   content: {
-    padding: 24,
+    padding: spacing.lg,
     paddingTop: 60,
   },
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#1a1a1a',
-    marginBottom: 8,
+    color: colors.text,
+    marginBottom: spacing.sm,
   },
   subtitle: {
     fontSize: 16,
-    color: '#666',
-    marginBottom: 32,
+    color: colors.textSecondary,
+    marginBottom: spacing.xl,
+  },
+  tabRow: {
+    flexDirection: 'row',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    padding: spacing.xs,
+    marginBottom: spacing.lg,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderRadius: borderRadius.sm,
+  },
+  tabActive: {
+    backgroundColor: colors.background,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  tabText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: colors.textTertiary,
+  },
+  tabTextActive: {
+    color: colors.text,
+    fontWeight: '600',
   },
   form: {
-    gap: 20,
+    gap: spacing.md,
   },
   inputGroup: {
-    gap: 8,
+    gap: spacing.sm,
   },
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#333',
+    color: colors.text,
   },
-  input: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-  },
-  textArea: {
-    fontFamily: 'monospace',
-    fontSize: 14,
-  },
-  warningBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    backgroundColor: '#e7f3ff',
-    padding: 16,
-    borderRadius: 8,
-    marginTop: 8,
-  },
-  warningIcon: {
-    fontSize: 20,
-  },
-  warningText: {
-    flex: 1,
-    fontSize: 14,
-    color: '#084298',
-    lineHeight: 20,
+  passwordInputWrapper: {
+    marginTop: -4,
   },
   footer: {
+    padding: spacing.lg,
     paddingBottom: 32,
-    gap: 12,
-    marginTop: 24,
+    gap: spacing.sm,
   },
   primaryButton: {
-    backgroundColor: '#000',
-    borderRadius: 12,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
     paddingVertical: 16,
     alignItems: 'center',
   },
@@ -195,7 +232,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   primaryButtonText: {
-    color: '#fff',
+    color: colors.textInverse,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -204,7 +241,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   backButtonText: {
-    color: '#666',
+    color: colors.textSecondary,
     fontSize: 16,
   },
 });

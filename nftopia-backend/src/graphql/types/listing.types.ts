@@ -77,8 +77,8 @@ export class ListingConnection {
   totalCount: number;
 }
 
-@ObjectType()
-export class TransactionResult {
+@ObjectType('ListingTransactionResult')
+export class ListingTransactionResult {
   @Field(() => Boolean)
   success: boolean;
 

@@ -116,8 +116,8 @@ export class AuctionConnection {
   totalCount: number;
 }
 
-@ObjectType('TransactionResult')
-export class TransactionResult {
+@ObjectType('AuctionTransactionResult')
+export class AuctionTransactionResult {
   @Field()
   success: boolean;
 

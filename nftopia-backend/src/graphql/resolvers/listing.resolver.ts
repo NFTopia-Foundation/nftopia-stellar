@@ -23,7 +23,7 @@ import {
 import {
   GraphqlListing,
   ListingConnection,
-  TransactionResult,
+  ListingTransactionResult,
 } from '../types/listing.types';
 import { GraphqlUserType } from '../types/user.types';
 import { GraphqlNft } from '../types/nft.types';
@@ -129,14 +129,14 @@ export class ListingResolver {
   }
 
   @UseGuards(GqlAuthGuard)
-  @Mutation(() => TransactionResult, {
+  @Mutation(() => ListingTransactionResult, {
     name: 'buyNFT',
     description: 'Execute NFT purchase against an active listing',
   })
   async buyNFT(
     @Args('listingId', { type: () => ID }) listingId: string,
     @Context() context: GraphqlContext,
-  ): Promise<TransactionResult> {
+  ): Promise<ListingTransactionResult> {
     const buyerId = this.getAuthenticatedUserId(context);
     const result = await this.listingService.buy(listingId, buyerId);
 
