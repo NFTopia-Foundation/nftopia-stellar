@@ -9,8 +9,10 @@ import {
   UnauthorizedException,
   UseGuards,
   NotFoundException,
+  Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { AuthService } from './auth.service';
 import { EmailLoginDto, EmailRegisterDto } from './dto/email-auth.dto';
@@ -24,6 +26,12 @@ import {
   WalletVerifyDto,
 } from './dto/wallet-auth.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import {
+  RequestPasswordResetDto,
+  ResetPasswordDto,
+  ResendVerificationDto,
+} from '../modules/email/dto/send-email.dto';
+import { EmailService } from '../modules/email/email.service';
 
 type RequestWithUser = Request & {
   user?: {
@@ -34,7 +42,10 @@ type RequestWithUser = Request & {
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly emailService: EmailService,
+  ) {}
 
   @Get('csrf-token')
   @ApiOperation({ summary: 'Get CSRF token' })
@@ -312,5 +323,58 @@ export class AuthController {
   @ApiOperation({ summary: 'Legacy alias for wallet verify endpoint' })
   legacyLogin(@Body() dto: WalletVerifyDto) {
     return this.authService.verifyWalletChallenge(dto);
+  }
+
+  @Post('verify-email')
+  @ApiOperation({ summary: 'Verify email address' })
+  async verifyEmail(@Query('token') token: string) {
+    await this.emailService.verifyEmail(token);
+    return {
+      data: {
+        success: true,
+        message: 'Email verified successfully',
+      },
+    };
+  }
+
+  @Post('resend-verification')
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  @ApiOperation({ summary: 'Resend verification email' })
+  async resendVerification(@Body() dto: ResendVerificationDto) {
+    await this.emailService.resendVerificationEmail(dto.email);
+    return {
+      data: {
+        success: true,
+        message: 'Verification email sent if account exists',
+      },
+    };
+  }
+
+  @Post('request-password-reset')
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  @ApiOperation({ summary: 'Request password reset email' })
+  async requestPasswordReset(
+    @Body() dto: RequestPasswordResetDto,
+    @Req() req: Request,
+  ) {
+    await this.emailService.requestPasswordReset(dto.email, req.ip);
+    return {
+      data: {
+        success: true,
+        message: 'Password reset email sent if account exists',
+      },
+    };
+  }
+
+  @Post('reset-password')
+  @ApiOperation({ summary: 'Reset password with token' })
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    await this.emailService.resetPassword(dto.token, dto.newPassword);
+    return {
+      data: {
+        success: true,
+        message: 'Password reset successfully',
+      },
+    };
   }
 }

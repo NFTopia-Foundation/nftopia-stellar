@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtModule } from '@nestjs/jwt';
@@ -9,6 +9,7 @@ import { User } from '../users/user.entity';
 import { UserWallet } from './entities/user-wallet.entity';
 import { WalletSession } from './entities/wallet-session.entity';
 import { StellarSignatureStrategy } from './strategies/stellar.strategy';
+import { EmailModule } from '../modules/email/email.module';
 
 const jwtAccessExpiresInSeconds = parseInt(
   process.env.JWT_EXPIRES_IN_SECONDS || '900',
@@ -25,6 +26,7 @@ const jwtAccessExpiresInSeconds = parseInt(
         expiresIn: jwtAccessExpiresInSeconds,
       },
     }),
+    forwardRef(() => EmailModule),
   ],
   controllers: [AuthController],
   providers: [AuthService, StellarSignatureStrategy, JwtStrategy],

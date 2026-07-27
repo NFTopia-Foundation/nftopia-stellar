@@ -5,6 +5,7 @@ import {
   HttpStatus,
   Injectable,
   NotFoundException,
+  Optional,
   UnauthorizedException,
   Inject,
 } from '@nestjs/common';
@@ -29,6 +30,7 @@ import { WalletSession } from './entities/wallet-session.entity';
 import { UserWallet } from './entities/user-wallet.entity';
 import { User } from '../users/user.entity';
 import { StellarSignatureStrategy } from './strategies/stellar.strategy';
+import { EmailQueueService } from '../modules/email/queue/email.queue.service';
 
 type JwtUserPayload = {
   sub: string;
@@ -77,6 +79,7 @@ export class AuthService {
     @InjectRepository(WalletSession)
     private readonly walletSessionRepository: Repository<WalletSession>,
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
+    @Optional() private readonly emailQueueService: EmailQueueService,
   ) {}
 
   async registerWithEmail(dto: EmailRegisterDto) {
@@ -100,6 +103,19 @@ export class AuthService {
         isEmailVerified: false,
       }),
     );
+
+    // Send verification email (non-blocking, best-effort)
+    if (this.emailQueueService) {
+      this.emailQueueService
+        .queueVerificationEmail(
+          normalizedEmail,
+          user.username || normalizedEmail,
+          `${process.env.FRONTEND_URL || 'http://localhost:3001'}/verify-email?token=PLACEHOLDER`,
+        )
+        .catch((err) => {
+          console.error('Failed to queue verification email:', err);
+        });
+    }
 
     return this.buildAuthResponse(user);
   }

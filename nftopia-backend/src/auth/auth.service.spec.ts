@@ -8,6 +8,7 @@ import { User } from '../users/user.entity';
 import { UserWallet } from './entities/user-wallet.entity';
 import { WalletSession } from './entities/wallet-session.entity';
 import { StellarSignatureStrategy } from './strategies/stellar.strategy';
+import { EmailQueueService } from '../modules/email/queue/email.queue.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -52,6 +53,10 @@ describe('AuthService', () => {
     del: jest.fn(),
   };
 
+  const emailQueueService = {
+    queueVerificationEmail: jest.fn().mockResolvedValue(undefined),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
 
@@ -81,6 +86,10 @@ describe('AuthService', () => {
         {
           provide: CACHE_MANAGER,
           useValue: cacheManager,
+        },
+        {
+          provide: EmailQueueService,
+          useValue: emailQueueService,
         },
       ],
     }).compile();
