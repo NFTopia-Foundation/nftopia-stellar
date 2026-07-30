@@ -1,4 +1,3 @@
-// --- Email auth types ---
 export interface AuthCredentials {
   email: string;
   password: string;
@@ -19,19 +18,16 @@ export interface UserProfile {
   username: string;
 }
 
-// Response shape for email-based auth endpoints (tokens wrapped in object)
 export interface EmailAuthResponse {
   tokens: AuthTokens;
   user: UserProfile;
 }
 
-// API-level error shape returned by the backend on failure
 export interface ApiAuthError {
   message: string;
   statusCode?: number;
 }
 
-// --- Wallet auth types ---
 export interface User {
   id: string;
   email?: string;
@@ -41,7 +37,6 @@ export interface User {
   walletProvider?: string;
 }
 
-// Matches the backend's actual response shape (snake_case keys)
 export interface AuthResponse {
   access_token: string;
   refresh_token: string;
@@ -67,6 +62,22 @@ export interface LinkWalletResponse {
   };
 }
 
+export interface TokenInfo {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: number;
+}
+
+export interface RetryConfig {
+  maxRetries: number;
+  retryDelay: number;
+}
+
+export const DEFAULT_RETRY_CONFIG: RetryConfig = {
+  maxRetries: 2,
+  retryDelay: 1000,
+};
+
 export class AuthError extends Error {
   constructor(
     message: string,
@@ -86,4 +97,8 @@ export enum AuthErrorCode {
   UNLINK_FAILED = 'UNLINK_FAILED',
   NETWORK_ERROR = 'NETWORK_ERROR',
   TOKEN_STORAGE_ERROR = 'TOKEN_STORAGE_ERROR',
+  TOKEN_EXPIRED = 'TOKEN_EXPIRED',
+  SESSION_EXPIRED = 'SESSION_EXPIRED',
+  BIOMETRIC_FAILED = 'BIOMETRIC_FAILED',
+  REFRESH_FAILED = 'REFRESH_FAILED',
 }

@@ -4,6 +4,7 @@ jest.mock('expo-secure-store', () => ({
   setItemAsync: jest.fn().mockResolvedValue(undefined),
   getItemAsync: jest.fn().mockResolvedValue(null),
   deleteItemAsync: jest.fn().mockResolvedValue(undefined),
+  isAvailableAsync: jest.fn().mockResolvedValue(true),
 }));
 
 jest.mock('expo-crypto', () => ({
@@ -24,6 +25,12 @@ jest.mock('stellar-hd-wallet', () => {
   };
 });
 
+jest.mock('expo-local-authentication', () => ({
+  hasHardwareAsync: jest.fn().mockResolvedValue(true),
+  isEnrolledAsync: jest.fn().mockResolvedValue(true),
+  authenticateAsync: jest.fn().mockResolvedValue({ success: true }),
+}));
+
 import { WalletAuthService } from '../walletAuth.service';
 import { StellarWalletService } from '../../stellar/wallet.service';
 import { AuthError, AuthErrorCode, AuthResponse, ChallengeResponse, LinkWalletResponse } from '../types';
@@ -42,6 +49,11 @@ const MOCK_CHALLENGE: ChallengeResponse = {
   nonce: 'nonce-xyz789',
   message: 'Sign this message to authenticate: nonce-xyz789',
   expiresAt: new Date(Date.now() + 300_000).toISOString(),
+};
+
+const EXPIRED_CHALLENGE: ChallengeResponse = {
+  ...MOCK_CHALLENGE,
+  expiresAt: new Date(Date.now() - 10_000).toISOString(),
 };
 
 const MOCK_AUTH_RESPONSE: AuthResponse = {
@@ -92,6 +104,18 @@ function mockFetchError(status: number, message: string): void {
   } as unknown as Response);
 }
 
+function mockFetchSequence(responses: Array<{ ok: boolean; status: number; body: unknown }>): void {
+  global.fetch = jest.fn().mockImplementation(() => {
+    const next = responses.shift();
+    if (!next) return Promise.reject(new Error('No more mock responses'));
+    return Promise.resolve({
+      ok: next.ok,
+      status: next.status,
+      json: jest.fn().mockResolvedValue(next.body),
+    } as unknown as Response);
+  });
+}
+
 describe('WalletAuthService', () => {
   let service: WalletAuthService;
   let mockWalletService: jest.Mocked<StellarWalletService>;
@@ -129,6 +153,36 @@ describe('WalletAuthService', () => {
 
     it('throws AuthError with NETWORK_ERROR on fetch failure', async () => {
       global.fetch = jest.fn().mockRejectedValue(new Error('Network unreachable'));
+
+      await expect(service.getChallenge(MOCK_WALLET.publicKey)).rejects.toMatchObject({
+        code: AuthErrorCode.NETWORK_ERROR,
+      });
+    });
+
+    it('retries on network failure before throwing', async () => {
+      const reject = jest.fn().mockRejectedValue(new Error('Timeout'));
+      const resolve = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: jest.fn().mockResolvedValue(MOCK_CHALLENGE),
+      } as unknown as Response);
+      global.fetch = jest
+        .fn()
+        .mockRejectedValueOnce(new Error('Network error'))
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: jest.fn().mockResolvedValue(MOCK_CHALLENGE),
+        } as unknown as Response);
+
+      const result = await service.getChallenge(MOCK_WALLET.publicKey);
+
+      expect(result).toEqual(MOCK_CHALLENGE);
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('throws NETWORK_ERROR after max retries', async () => {
+      global.fetch = jest.fn().mockRejectedValue(new Error('Persistent failure'));
 
       await expect(service.getChallenge(MOCK_WALLET.publicKey)).rejects.toMatchObject({
         code: AuthErrorCode.NETWORK_ERROR,
@@ -278,6 +332,60 @@ describe('WalletAuthService', () => {
         code: AuthErrorCode.INVALID_SIGNATURE,
       });
     });
+
+    it('validates nonce expiry and throws EXPIRED_NONCE when expired', async () => {
+      service = new WalletAuthService(mockWalletService, 'http://test-api.example.com', { maxRetries: 0, retryDelay: 0 });
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: jest.fn().mockResolvedValue(EXPIRED_CHALLENGE),
+      } as unknown as Response);
+
+      await expect(service.walletLogin(MOCK_WALLET)).rejects.toMatchObject({
+        code: AuthErrorCode.EXPIRED_NONCE,
+      });
+      expect(mockWalletService.signMessage).not.toHaveBeenCalled();
+    });
+
+    it('proceeds with login when nonce is not expired', async () => {
+      global.fetch = jest
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: jest.fn().mockResolvedValue(MOCK_CHALLENGE),
+        } as unknown as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: jest.fn().mockResolvedValue(MOCK_AUTH_RESPONSE),
+        } as unknown as Response);
+
+      const result = await service.walletLogin(MOCK_WALLET);
+
+      expect(result).toEqual(MOCK_AUTH_RESPONSE);
+      expect(mockWalletService.signMessage).toHaveBeenCalled();
+    });
+
+    it('handles nonce without expiresAt gracefully', async () => {
+      const challengeNoExpiry = { ...MOCK_CHALLENGE, expiresAt: '' };
+      global.fetch = jest
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: jest.fn().mockResolvedValue(challengeNoExpiry),
+        } as unknown as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: jest.fn().mockResolvedValue(MOCK_AUTH_RESPONSE),
+        } as unknown as Response);
+
+      const result = await service.walletLogin(MOCK_WALLET);
+
+      expect(result).toEqual(MOCK_AUTH_RESPONSE);
+    });
   });
 
   describe('linkWallet', () => {
@@ -335,6 +443,22 @@ describe('WalletAuthService', () => {
       await expect(
         service.linkWallet(MOCK_WALLET.publicKey, 'sig', 'nonce'),
       ).rejects.toMatchObject({ code: AuthErrorCode.NETWORK_ERROR });
+    });
+
+    it('refreshes access token on 401 and retries', async () => {
+      (SecureStore.getItemAsync as jest.Mock)
+        .mockResolvedValueOnce('stale-token')
+        .mockResolvedValueOnce('new-token');
+
+      mockFetchSequence([
+        { ok: false, status: 401, body: { message: 'Token expired' } },
+        { ok: true, status: 200, body: { access_token: 'new-token', refresh_token: 'new-refresh', user: { id: 'u1' } } },
+        { ok: true, status: 200, body: MOCK_LINK_RESPONSE },
+      ]);
+
+      const result = await service.linkWallet(MOCK_WALLET.publicKey, 'sig', 'nonce');
+
+      expect(result).toEqual(MOCK_LINK_RESPONSE);
     });
   });
 
@@ -414,6 +538,34 @@ describe('WalletAuthService', () => {
       expect(err.code).toBe(AuthErrorCode.AUTHENTICATION_FAILED);
       expect(err.message).toBe('Something failed');
       expect(err instanceof Error).toBe(true);
+    });
+  });
+
+  describe('refreshSession', () => {
+    it('returns true when refresh succeeds', async () => {
+      (SecureStore.getItemAsync as jest.Mock).mockResolvedValue('valid-refresh-token');
+      mockFetchOk(MOCK_AUTH_RESPONSE);
+
+      const result = await service.refreshSession();
+
+      expect(result).toBe(true);
+    });
+
+    it('returns false when no refresh token is stored', async () => {
+      (SecureStore.getItemAsync as jest.Mock).mockResolvedValue(null);
+
+      const result = await service.refreshSession();
+
+      expect(result).toBe(false);
+    });
+
+    it('returns false when refresh endpoint fails', async () => {
+      (SecureStore.getItemAsync as jest.Mock).mockResolvedValue('stale-refresh');
+      mockFetchError(401, 'Invalid refresh token');
+
+      const result = await service.refreshSession();
+
+      expect(result).toBe(false);
     });
   });
 });
