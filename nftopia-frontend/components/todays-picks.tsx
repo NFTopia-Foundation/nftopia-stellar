@@ -2,16 +2,16 @@
 
 import { OptimizedImage } from './image';
 import { Button } from "@/components/ui/button";
-import { emitCtaClicked, CTA_IDS, CTA_PLACEMENTS } from "@/lib/telemetry/navigation-instrumentation";
-import { Clock, Heart, Search, ShoppingBag, AlertCircle, RefreshCw } from "lucide-react";
+import { Heart, Search, ShoppingBag, AlertCircle } from "lucide-react";
 import { useTranslation } from "@/hooks/useTranslation";
-import { useState, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PurchaseModal } from './marketplace/PurchaseModal';
 import { MarketplaceFilters } from './marketplace/MarketplaceFilters';
 import { useListingsQuery } from '@/hooks/graphql/useListingsQuery';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ListingStatus } from '@/hooks/graphql/generated';
+import { mergeListingConnection } from "@/lib/services/marketplace-pagination";
 
 type NFTItem = {
   id: string;
@@ -30,6 +30,8 @@ export function TodaysPicks() {
   const { t } = useTranslation();
   const searchParams = useSearchParams();
   const [selectedNFT, setSelectedNFT] = useState<NFTItem | null>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
   
   const search = searchParams.get("search") || "";
   const minPrice = searchParams.get("minPrice") ? Number(searchParams.get("minPrice")) : undefined;
@@ -37,23 +39,28 @@ export function TodaysPicks() {
   const sortBy = searchParams.get("sortBy") || "newest";
 
   const router = useRouter();
+  const listingFilter = useMemo(
+    () => ({
+      status: ListingStatus.Active,
+      search,
+      minPrice,
+      maxPrice,
+      sortBy,
+    }),
+    [maxPrice, minPrice, search, sortBy],
+  );
 
   const { data, loading, error, fetchMore, refetch } = useListingsQuery({
     variables: {
       pagination: { first: 8 },
-      filter: {
-        status: ListingStatus.Active,
-        search,
-        minPrice,
-        maxPrice,
-        sortBy,
-      }
+      filter: listingFilter,
     },
     fetchPolicy: "cache-and-network"
   });
 
   const listings = data?.listings?.edges.map(e => e.node) || [];
   const pageInfo = data?.listings?.pageInfo;
+  const totalCount = data?.listings?.totalCount ?? listings.length;
   const hasActiveFilters = !!(search || minPrice || maxPrice);
 
   const clearFilters = () => {
@@ -77,6 +84,45 @@ export function TodaysPicks() {
       image: listing.nft?.image,
     }));
   }, [listings]);
+
+  const loadMoreListings = useCallback(async () => {
+    if (isLoadingMore || !pageInfo?.hasNextPage || !pageInfo.endCursor) {
+      return;
+    }
+
+    setIsLoadingMore(true);
+    try {
+      await fetchMore({
+        variables: {
+          pagination: { first: 8, after: pageInfo.endCursor },
+          filter: listingFilter,
+        },
+        updateQuery: (previous, { fetchMoreResult }) =>
+          mergeListingConnection(previous, fetchMoreResult),
+      });
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [fetchMore, isLoadingMore, listingFilter, pageInfo?.endCursor, pageInfo?.hasNextPage]);
+
+  useEffect(() => {
+    const target = loadMoreRef.current;
+    if (!target || !pageInfo?.hasNextPage) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          void loadMoreListings();
+        }
+      },
+      { rootMargin: "600px 0px" },
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [loadMoreListings, pageInfo?.hasNextPage]);
 
   return (
     <section className="py-16 relative">
@@ -112,6 +158,10 @@ export function TodaysPicks() {
         />
       ) : (
         <>
+          <div className="mb-5 text-sm text-[#9398a8]" aria-live="polite">
+            Showing {nftItems.length} of {totalCount} NFTs
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {nftItems.map((item) => (
               <div
@@ -186,19 +236,17 @@ export function TodaysPicks() {
           </div>
 
           {pageInfo?.hasNextPage && (
-            <div className="flex justify-center mt-10">
+            <div ref={loadMoreRef} className="flex justify-center mt-10">
               <Button
                 variant="ghost"
-                className="text-purple-400 hover:bg-transparent hover:text-purple-300 rounded-full px-8"
-                onClick={() => {
-                  fetchMore({
-                    variables: {
-                      pagination: { first: 8, after: pageInfo.endCursor }
-                    }
-                  });
-                }}
+                className="text-purple-400 hover:bg-transparent hover:text-purple-300 rounded-full px-8 disabled:opacity-60"
+                onClick={() => void loadMoreListings()}
+                disabled={isLoadingMore}
+                aria-busy={isLoadingMore}
               >
-                {t("todaysPicks.loadMore") || "Load More"}
+                {isLoadingMore
+                  ? t("todaysPicks.loadingMore") || "Loading..."
+                  : t("todaysPicks.loadMore") || "Load More"}
               </Button>
             </div>
           )}
