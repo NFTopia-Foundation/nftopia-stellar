@@ -93,8 +93,15 @@ export function createApolloClient(): ApolloClient<NormalizedCacheObject> {
               merge: false,
             },
             listings: {
-              keyArgs: ["filters", "page", "limit"],
-              merge: false,
+              keyArgs: ["filter"],
+              merge(existing, incoming, { args }) {
+                if (!existing) return incoming;
+                if (!args?.pagination?.after) return incoming;
+                return {
+                  ...incoming,
+                  edges: [...existing.edges, ...incoming.edges],
+                };
+              },
             },
             auctions: {
               keyArgs: ["filters", "page", "limit"],

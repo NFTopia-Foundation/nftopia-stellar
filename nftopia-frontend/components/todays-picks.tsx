@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { emitCtaClicked, CTA_IDS, CTA_PLACEMENTS } from "@/lib/telemetry/navigation-instrumentation";
 import { Clock, Heart, Search, ShoppingBag, AlertCircle, RefreshCw } from "lucide-react";
 import { useTranslation } from "@/hooks/useTranslation";
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { PurchaseModal } from './marketplace/PurchaseModal';
 import { MarketplaceFilters } from './marketplace/MarketplaceFilters';
 import { useListingsQuery } from '@/hooks/graphql/useListingsQuery';
@@ -30,7 +30,9 @@ export function TodaysPicks() {
   const { t } = useTranslation();
   const searchParams = useSearchParams();
   const [selectedNFT, setSelectedNFT] = useState<NFTItem | null>(null);
-  
+  const [loadingMore, setLoadingMore] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
   const search = searchParams.get("search") || "";
   const minPrice = searchParams.get("minPrice") ? Number(searchParams.get("minPrice")) : undefined;
   const maxPrice = searchParams.get("maxPrice") ? Number(searchParams.get("maxPrice")) : undefined;
@@ -38,23 +40,27 @@ export function TodaysPicks() {
 
   const router = useRouter();
 
+  const filterVariables = useMemo(() => ({
+    status: ListingStatus.Active,
+    search,
+    minPrice,
+    maxPrice,
+    sortBy,
+  }), [search, minPrice, maxPrice, sortBy]);
+
   const { data, loading, error, fetchMore, refetch } = useListingsQuery({
     variables: {
       pagination: { first: 8 },
-      filter: {
-        status: ListingStatus.Active,
-        search,
-        minPrice,
-        maxPrice,
-        sortBy,
-      }
+      filter: filterVariables,
     },
-    fetchPolicy: "cache-and-network"
+    fetchPolicy: "cache-and-network",
+    notifyOnNetworkStatusChange: true,
   });
 
   const listings = data?.listings?.edges.map(e => e.node) || [];
   const pageInfo = data?.listings?.pageInfo;
   const hasActiveFilters = !!(search || minPrice || maxPrice);
+  const hasMore = pageInfo?.hasNextPage ?? false;
 
   const clearFilters = () => {
     router.replace("/marketplace");
@@ -63,6 +69,38 @@ export function TodaysPicks() {
   const handleCreateNFT = () => {
     router.push("/creator-dashboard/mint-nft");
   };
+
+  const handleLoadMore = useCallback(async () => {
+    if (loadingMore || !hasMore || !pageInfo?.endCursor) return;
+    setLoadingMore(true);
+    try {
+      await fetchMore({
+        variables: {
+          pagination: { first: 8, after: pageInfo.endCursor },
+          filter: filterVariables,
+        },
+      });
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [fetchMore, filterVariables, pageInfo, hasMore, loadingMore]);
+
+  // Infinite scroll via IntersectionObserver
+  useEffect(() => {
+    if (!hasMore) return;
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !loading && !loadingMore) {
+          void handleLoadMore();
+        }
+      },
+      { rootMargin: "400px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, loading, loadingMore, handleLoadMore]);
 
   const nftItems: NFTItem[] = useMemo(() => {
     return listings.map((listing: any, i) => ({
@@ -190,18 +228,18 @@ export function TodaysPicks() {
               <Button
                 variant="ghost"
                 className="text-purple-400 hover:bg-transparent hover:text-purple-300 rounded-full px-8"
-                onClick={() => {
-                  fetchMore({
-                    variables: {
-                      pagination: { first: 8, after: pageInfo.endCursor }
-                    }
-                  });
-                }}
+                onClick={() => void handleLoadMore()}
+                disabled={loadingMore}
               >
-                {t("todaysPicks.loadMore") || "Load More"}
+                {loadingMore
+                  ? (t("todaysPicks.loading") || "Loading…")
+                  : (t("todaysPicks.loadMore") || "Load More")}
               </Button>
             </div>
           )}
+
+          {/* Infinite-scroll sentinel: triggers load more when scrolled into view */}
+          {hasMore && <div ref={sentinelRef} aria-hidden="true" className="h-1 w-full" />}
         </>
       )}
 
