@@ -28,7 +28,8 @@ NFTopia Mobile App is the React Native surface for onboarding users, creating or
 6. [Authentication and Wallet Layer](#-authentication-and-wallet-layer)
 7. [Testing](#-testing)
 8. [Accessibility](#-accessibility)
-9. [Repository Notes](#-repository-notes)
+9. [Bottom Sheet](#-bottom-sheet)
+10. [Repository Notes](#-repository-notes)
 
 ## 🏗️ Architecture
 
@@ -136,6 +137,15 @@ covering accessibility labels/roles, touch target sizing, focus order, font
 scaling, and color contrast. See
 [`docs/ACCESSIBILITY_AUDIT.md`](./docs/ACCESSIBILITY_AUDIT.md) for the audit
 findings behind it.
+
+## 🪟 Bottom Sheet
+
+Reusable sheets for filters, wallet actions and share options live in
+[`components/ui/BottomSheet.tsx`](./components/ui/BottomSheet.tsx). It wraps
+`@gorhom/bottom-sheet` and provides snap points, swipe/backdrop dismissal,
+keyboard-aware resizing and screen-reader focus management. See
+[`docs/BOTTOM_SHEET.md`](./docs/BOTTOM_SHEET.md) for the API and usage
+examples.
 
 ## 📌 Repository Notes
 

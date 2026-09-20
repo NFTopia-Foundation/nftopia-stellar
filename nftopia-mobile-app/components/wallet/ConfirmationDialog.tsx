@@ -1,7 +1,8 @@
 import React, { useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { colors, spacing, borderRadius, shadows } from '@/constants/theme';
+import BottomSheet from '@/components/ui/BottomSheet';
+import { colors, spacing, borderRadius } from '@/constants/theme';
 
 interface ConfirmationDialogProps {
   visible: boolean;
@@ -12,6 +13,8 @@ interface ConfirmationDialogProps {
   onConfirm: () => void;
   onCancel: () => void;
   destructive?: boolean;
+  /** Optional element to restore screen-reader focus to after closing. */
+  restoreFocusRef?: React.RefObject<any>;
 }
 
 export default function ConfirmationDialog({
@@ -23,9 +26,11 @@ export default function ConfirmationDialog({
   onConfirm,
   onCancel,
   destructive = false,
+  restoreFocusRef,
 }: ConfirmationDialogProps) {
   const confirmScale = useRef(new Animated.Value(1)).current;
   const cancelScale = useRef(new Animated.Value(1)).current;
+  const cancelRef = useRef<TouchableOpacity>(null);
 
   const handlePressIn = (scale: Animated.Value) => {
     Animated.spring(scale, {
@@ -56,67 +61,58 @@ export default function ConfirmationDialog({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <View style={styles.overlay}>
-        <View style={styles.dialog}>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.message}>{message}</Text>
-          <View style={styles.buttons}>
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={handleCancel}
-              onPressIn={() => handlePressIn(cancelScale)}
-              onPressOut={() => handlePressOut(cancelScale)}
-              activeOpacity={1}
+    <BottomSheet
+      visible={visible}
+      onClose={onCancel}
+      title={title}
+      snapPoints={['45%']}
+      enablePanDownToClose={false}
+      closeOnBackdropPress={false}
+      initialFocusRef={cancelRef}
+      restoreFocusRef={restoreFocusRef}
+      testID="confirmation-dialog"
+    >
+      <Text style={styles.message}>{message}</Text>
+      <View style={styles.buttons}>
+        <TouchableOpacity
+          ref={cancelRef}
+          style={styles.cancelButton}
+          onPress={handleCancel}
+          onPressIn={() => handlePressIn(cancelScale)}
+          onPressOut={() => handlePressOut(cancelScale)}
+          activeOpacity={1}
+          accessibilityRole="button"
+          accessibilityLabel={cancelLabel}
+          testID="confirmation-dialog-cancel"
+        >
+          <Animated.View style={{ transform: [{ scale: cancelScale }] }}>
+            <Text style={styles.cancelText}>{cancelLabel}</Text>
+          </Animated.View>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.confirmButton, destructive && styles.confirmDestructive]}
+          onPress={handleConfirm}
+          onPressIn={() => handlePressIn(confirmScale)}
+          onPressOut={() => handlePressOut(confirmScale)}
+          activeOpacity={1}
+          accessibilityRole="button"
+          accessibilityLabel={confirmLabel}
+          testID="confirmation-dialog-confirm"
+        >
+          <Animated.View style={{ transform: [{ scale: confirmScale }] }}>
+            <Text
+              style={[styles.confirmText, destructive && styles.confirmTextDestructive]}
             >
-              <Animated.View style={{ transform: [{ scale: cancelScale }] }}>
-                <Text style={styles.cancelText}>{cancelLabel}</Text>
-              </Animated.View>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.confirmButton, destructive && styles.confirmDestructive]}
-              onPress={handleConfirm}
-              onPressIn={() => handlePressIn(confirmScale)}
-              onPressOut={() => handlePressOut(confirmScale)}
-              activeOpacity={1}
-            >
-              <Animated.View style={{ transform: [{ scale: confirmScale }] }}>
-                <Text
-                  style={[styles.confirmText, destructive && styles.confirmTextDestructive]}
-                >
-                  {confirmLabel}
-                </Text>
-              </Animated.View>
-            </TouchableOpacity>
-          </View>
-        </View>
+              {confirmLabel}
+            </Text>
+          </Animated.View>
+        </TouchableOpacity>
       </View>
-    </Modal>
+    </BottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.xl,
-  },
-  dialog: {
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    width: '100%',
-    maxWidth: 340,
-    ...shadows.md,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
   message: {
     fontSize: 15,
     color: colors.textSecondary,

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { SafeAreaView, StatusBar, StyleSheet, Text, View, ActivityIndicator } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ApolloProvider, ApolloClient, NormalizedCacheObject } from '@apollo/client';
 import AppNavigator from './navigation/AppNavigator';
@@ -13,6 +14,33 @@ import { PrivacyOverlay } from './src/components/PrivacyOverlay';
 import { VersionCheckManager } from './src/components/VersionCheckManager';
 import { setupApollo } from './lib/api/apolloClient';
 import BackupReminderManager from './components/wallet/BackupReminderManager';
+import {
+  BottomSheetProvider,
+  useBottomSheetAccessibility,
+} from './components/ui/BottomSheet';
+
+function AppContent() {
+  const { isAnySheetOpen } = useBottomSheetAccessibility();
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+      <NetworkStatusManager />
+      <SessionManager />
+      <BackupReminderManager />
+      <ConnectivityBanner />
+      <VersionCheckManager />
+      <View
+        style={styles.container}
+        accessibilityElementsHidden={isAnySheetOpen}
+        importantForAccessibility={isAnySheetOpen ? 'no-hide-descendants' : 'auto'}
+      >
+        <AppNavigator />
+      </View>
+      <ToastProvider />
+    </SafeAreaView>
+  );
+}
 
 export default function App() {
   const [client, setClient] = useState<ApolloClient<NormalizedCacheObject> | undefined>();
@@ -30,25 +58,20 @@ export default function App() {
   }
 
   return (
-    <SafeAreaProvider>
-      <ApolloProvider client={client}>
-        <AppLayout>
-          <PrivacyOverlay />
-          <AppLockManager>
-            <VersionCheckManager />
-            <SafeAreaView style={styles.container}>
-              <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-              <NetworkStatusManager />
-              <SessionManager />
-              <BackupReminderManager />
-              <ConnectivityBanner />
-              <AppNavigator />
-              <ToastProvider />
-            </SafeAreaView>
-          </AppLockManager>
-        </AppLayout>
-      </ApolloProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={styles.container}>
+      <SafeAreaProvider>
+        <ApolloProvider client={client}>
+          <BottomSheetProvider>
+            <AppLayout>
+              <PrivacyOverlay />
+              <AppLockManager>
+                <AppContent />
+              </AppLockManager>
+            </AppLayout>
+          </BottomSheetProvider>
+        </ApolloProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 
