@@ -104,6 +104,28 @@ export class EmailService {
     );
   }
 
+  async sendAccountDeletionEmail(
+    to: string,
+    token: string,
+    username?: string,
+  ): Promise<void> {
+    const confirmationUrl = `${this.frontendUrl}/account/delete?token=${encodeURIComponent(token)}`;
+    const { html, text } = this.templateService.render('account-deletion', {
+      username: username || 'there',
+      confirmationUrl,
+      token,
+    });
+
+    await this.enqueue(
+      EmailType.ACCOUNT_DELETION,
+      to,
+      'Confirm your NFTopia account deletion',
+      html,
+      text,
+      {},
+    );
+  }
+
   async sendAuctionWonEmail(
     to: string,
     auctionId: string,

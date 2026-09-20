@@ -32,13 +32,13 @@ export class User {
   username?: string;
 
   @Column({ type: 'text', nullable: true })
-  bio?: string;
+  bio?: string | null;
 
   @Column({ type: 'varchar', length: 500, nullable: true })
-  avatarUrl?: string;
+  avatarUrl?: string | null;
 
   @Column({ name: 'banner_url', type: 'varchar', length: 500, nullable: true })
-  bannerUrl?: string;
+  bannerUrl?: string | null;
 
   @Column({
     name: 'twitter_handle',
@@ -46,7 +46,7 @@ export class User {
     length: 50,
     nullable: true,
   })
-  twitterHandle?: string;
+  twitterHandle?: string | null;
 
   @Column({
     name: 'instagram_handle',
@@ -54,10 +54,10 @@ export class User {
     length: 50,
     nullable: true,
   })
-  instagramHandle?: string;
+  instagramHandle?: string | null;
 
   @Column({ type: 'varchar', length: 500, nullable: true })
-  website?: string;
+  website?: string | null;
 
   @Column({
     type: 'enum',
@@ -68,6 +68,17 @@ export class User {
 
   @Column({ name: 'is_banned', type: 'boolean', default: false })
   isBanned: boolean;
+
+  /**
+   * Set when a GDPR right-to-erasure request has been executed. The row is
+   * kept (and anonymized) so on-chain / marketplace records that reference
+   * the user id remain resolvable.
+   */
+  @Column({ name: 'deleted_at', type: 'timestamptz', nullable: true })
+  deletedAt?: Date | null;
+
+  @Column({ name: 'is_anonymized', type: 'boolean', default: false })
+  isAnonymized: boolean;
 
   @Column({
     name: 'wallet_address',

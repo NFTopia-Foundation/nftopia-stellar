@@ -12,6 +12,7 @@ export enum EmailType {
   PASSWORD_RESET = 'password_reset',
   BID_NOTIFICATION = 'bid_notification',
   AUCTION_WON = 'auction_won',
+  ACCOUNT_DELETION = 'account_deletion',
 }
 
 export enum EmailStatus {
