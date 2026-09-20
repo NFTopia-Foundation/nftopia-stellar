@@ -28,6 +28,27 @@ export const typography = {
   mono: { fontSize: 14, fontFamily: 'monospace' as const },
 };
 
+// Shared spacing/typography tokens for empty, error, and offline states.
+export const emptyState = {
+  iconContainerSize: 88,
+  iconContainerRadius: 44,
+  iconSize: 40,
+  maxContentWidth: 320,
+  contentPaddingVertical: spacing.xxl,
+  contentPaddingHorizontal: spacing.xl,
+  iconMarginBottom: spacing.md,
+  titleMarginBottom: spacing.xs,
+  messageMarginBottom: spacing.lg,
+  actionGap: spacing.sm,
+  actionPaddingVertical: spacing.md,
+  actionPaddingHorizontal: spacing.lg,
+  actionRadius: borderRadius.md,
+  titleFontSize: typography.h3.fontSize,
+  titleFontWeight: '700' as const,
+  messageFontSize: typography.bodySmall.fontSize,
+  messageLineHeight: 20,
+};
+
 export const shadows = {
   sm: {
     shadowOffset: { width: 0, height: 1 },
