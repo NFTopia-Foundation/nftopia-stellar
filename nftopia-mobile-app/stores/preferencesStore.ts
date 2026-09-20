@@ -9,6 +9,8 @@ export interface PreferencesState {
   notificationsEnabled: boolean;
   soundEnabled: boolean;
   vibrationEnabled: boolean;
+  /** When true, all app haptic feedback is suppressed (accessibility preference). */
+  reduceHaptics: boolean;
   autoLock: boolean;
   lockTimeout: number; // in minutes
   hideBalances: boolean;
@@ -24,6 +26,7 @@ const initialState: PreferencesState = {
   notificationsEnabled: true,
   soundEnabled: true,
   vibrationEnabled: true,
+  reduceHaptics: false,
   autoLock: true,
   lockTimeout: 5,
   hideBalances: false,
@@ -37,6 +40,7 @@ interface PreferencesStore extends PreferencesState {
   setNotificationsEnabled: (enabled: boolean) => void;
   setSoundEnabled: (enabled: boolean) => void;
   setVibrationEnabled: (enabled: boolean) => void;
+  setReduceHaptics: (enabled: boolean) => void;
   setAutoLock: (enabled: boolean) => void;
   setLockTimeout: (timeout: number) => void;
   setHideBalances: (hide: boolean) => void;
@@ -76,6 +80,10 @@ export const usePreferencesStore = createStore<PreferencesStore>({
       set({ vibrationEnabled: enabled, lastUpdated: new Date().toISOString() });
     },
 
+    setReduceHaptics: (enabled: boolean) => {
+      set({ reduceHaptics: enabled, lastUpdated: new Date().toISOString() });
+    },
+
     setAutoLock: (enabled: boolean) => {
       set({ autoLock: enabled, lastUpdated: new Date().toISOString() });
     },
@@ -107,6 +115,7 @@ export const usePreferencesStore = createStore<PreferencesStore>({
       notificationsEnabled: state.notificationsEnabled,
       soundEnabled: state.soundEnabled,
       vibrationEnabled: state.vibrationEnabled,
+      reduceHaptics: state.reduceHaptics,
       autoLock: state.autoLock,
       lockTimeout: state.lockTimeout,
       hideBalances: state.hideBalances,

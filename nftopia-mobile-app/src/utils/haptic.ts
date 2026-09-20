@@ -1,30 +1,33 @@
-import * as Haptics from 'expo-haptics';
+/**
+ * @deprecated Use `@/lib/haptics` instead.
+ *
+ * This legacy wrapper predates the centralized haptics module and did not
+ * respect the "Reduce haptics" preference or the platform capability guard.
+ * It is kept as a thin compatibility shim so existing imports keep working.
+ */
+import { haptics, HapticPreset } from '@/lib/haptics';
 
 export type HapticImpactStyle = 'light' | 'medium' | 'heavy';
 export type HapticNotificationType = 'success' | 'warning' | 'error';
 export type HapticSelectionType = 'selection';
 
+const IMPACT_PRESETS: Record<HapticImpactStyle, HapticPreset> = {
+  light: 'press',
+  medium: 'confirm',
+  heavy: 'longPress',
+};
+
 export class HapticFeedback {
   static impact(style: HapticImpactStyle = 'light'): void {
-    const map = {
-      light: Haptics.ImpactFeedbackStyle.Light,
-      medium: Haptics.ImpactFeedbackStyle.Medium,
-      heavy: Haptics.ImpactFeedbackStyle.Heavy,
-    };
-    Haptics.impactAsync(map[style]);
+    haptics.impact(style);
   }
 
   static notification(type: HapticNotificationType): void {
-    const map = {
-      success: Haptics.NotificationFeedbackType.Success,
-      warning: Haptics.NotificationFeedbackType.Warning,
-      error: Haptics.NotificationFeedbackType.Error,
-    };
-    Haptics.notificationAsync(map[type]);
+    haptics.notification(type);
   }
 
   static selection(): void {
-    Haptics.selectionAsync();
+    haptics.selection();
   }
 
   static light(): void {
@@ -52,11 +55,11 @@ export class HapticFeedback {
   }
 
   static onPress(style: HapticImpactStyle = 'light'): void {
-    this.impact(style);
+    haptics.trigger(IMPACT_PRESETS[style]);
   }
 
   static onLongPress(): void {
-    this.impact('heavy');
+    haptics.longPress();
   }
 
   static onSuccess(): void {

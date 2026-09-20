@@ -1,6 +1,7 @@
 import React, { useCallback } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFavoritesStore } from '@/stores/favoritesStore';
+import { haptics } from '@/lib/haptics';
 import { colors, shadows } from '@/constants/theme';
 
 export type FavoriteKind = 'nft' | 'collection';
@@ -50,6 +51,7 @@ export const FavoriteButton: React.FC<FavoriteButtonProps> = ({
 
   const handlePress = useCallback(() => {
     const next = !isFavorite;
+    haptics.toggle();
     toggle(id);
     onToggle?.(next);
   }, [id, isFavorite, toggle, onToggle]);

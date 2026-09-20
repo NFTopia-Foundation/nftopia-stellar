@@ -8,7 +8,7 @@ import {
   Animated,
   GestureResponderEvent,
 } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/lib/haptics';
 import { borderRadius, shadows } from '@/constants/theme';
 import { useTheme } from '@/src/theme/ThemeContext';
 
@@ -60,7 +60,7 @@ export function InteractiveCard({
       }).start();
     }
     if (hapticFeedback && onPress) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      haptics.press();
     }
   };
 
@@ -84,7 +84,7 @@ export function InteractiveCard({
     if (disabled) return;
     if (onLongPress) {
       if (hapticFeedback) {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        haptics.longPress();
       }
       onLongPress();
     }

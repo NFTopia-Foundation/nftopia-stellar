@@ -4,6 +4,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '@/navigation/AuthNavigator';
 import { useAuthStore } from '@/stores/authStore';
 import { KeyboardAwareScreen } from '@/src/components/KeyboardAwareScreen';
+import { haptics } from '@/lib/haptics';
 import FormInput from './components/FormInput';
 import PasswordStrengthIndicator from './components/PasswordStrengthIndicator';
 import { validateEmail, validatePassword, validateUsername, validateConfirmPassword } from './utils/validation';
@@ -65,6 +66,10 @@ export default function EmailRegisterScreen({ navigation }: Props) {
     if (!confirmPasswordValidation.isValid) {
       setConfirmPasswordError(confirmPasswordValidation.error);
       isValid = false;
+    }
+
+    if (!isValid) {
+      haptics.error();
     }
 
     return isValid;

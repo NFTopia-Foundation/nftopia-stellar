@@ -8,7 +8,7 @@ import {
   ViewStyle,
   TextStyle,
 } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/lib/haptics';
 import { useTheme } from '@/src/theme/ThemeContext';
 import { spacing, borderRadius } from '@/constants/theme';
 
@@ -48,7 +48,7 @@ export function InteractiveListItem({
 
   const handlePressIn = () => {
     if (haptic) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      haptics.press();
     }
     Animated.spring(scaleAnim, {
       toValue: 0.98,

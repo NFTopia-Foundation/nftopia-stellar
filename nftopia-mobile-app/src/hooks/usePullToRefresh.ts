@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/lib/haptics';
 import { analyticsService } from '@/src/analytics/analytics.service';
 import { errorLogger } from '@/src/errors/logger';
 
@@ -83,11 +83,7 @@ export function usePullToRefresh({
 
     // Trigger haptic feedback
     if (hapticFeedback) {
-      try {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      } catch (hapticError) {
-        // Silently fail haptic feedback
-      }
+      await haptics.impact('medium');
     }
 
     setIsRefreshing(true);
@@ -127,11 +123,7 @@ export function usePullToRefresh({
       
       // Trigger success haptic
       if (hapticFeedback) {
-        try {
-          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        } catch (hapticError) {
-          // Silently fail
-        }
+        await haptics.success();
       }
     } catch (err) {
       const errorObj = err instanceof Error ? err : new Error('Refresh failed');
@@ -152,11 +144,7 @@ export function usePullToRefresh({
       
       // Trigger error haptic
       if (hapticFeedback) {
-        try {
-          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        } catch (hapticError) {
-          // Silently fail
-        }
+        await haptics.error();
       }
       
       errorLogger.log(errorObj, 'PullToRefresh');

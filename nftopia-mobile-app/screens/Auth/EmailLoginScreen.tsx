@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useAnalytics } from '@/src/hooks/useAnalytics';
 import { ANALYTICS_EVENTS } from '@/src/analytics/config';
 import { KeyboardAwareScreen } from '@/src/components/KeyboardAwareScreen';
+import { haptics } from '@/lib/haptics';
 import FormInput from './components/FormInput';
 import { validateEmail, validatePassword } from './utils/validation';
 
@@ -28,12 +29,14 @@ export default function EmailLoginScreen({ navigation }: Props) {
     const emailValidation = validateEmail(email);
     if (!emailValidation.isValid) {
       setEmailError(emailValidation.error);
+      haptics.error();
       return false;
     }
 
     const passwordValidation = validatePassword(password);
     if (!passwordValidation.isValid) {
       setPasswordError(passwordValidation.error);
+      haptics.error();
       return false;
     }
 

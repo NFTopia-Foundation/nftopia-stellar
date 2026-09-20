@@ -11,7 +11,7 @@ import {
   Animated,
   GestureResponderEvent,
 } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/lib/haptics';
 import { useTheme } from '@/src/theme/ThemeContext';
 import { spacing, borderRadius } from '@/constants/theme';
 
@@ -134,7 +134,7 @@ export function InteractiveButton({
   const handlePressIn = () => {
     setIsPressed(true);
     if (hapticFeedback) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      haptics.press();
     }
     if (scaleOnPress) {
       Animated.spring(scaleAnim, {

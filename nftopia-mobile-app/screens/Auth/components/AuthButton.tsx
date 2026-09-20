@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   Animated,
 } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/lib/haptics';
 
 interface AuthButtonProps {
   title: string;
@@ -40,7 +40,7 @@ export default function AuthButton({
 
   const handlePressIn = () => {
     if (haptic) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      haptics.press();
     }
     Animated.spring(scaleAnim, {
       toValue: 0.95,

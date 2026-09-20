@@ -1,6 +1,6 @@
 import { useRef, useCallback } from 'react';
 import { Animated, GestureResponderEvent } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { haptics, HapticPreset } from '@/lib/haptics';
 
 export interface TouchFeedbackOptions {
   scale?: boolean;
@@ -28,26 +28,15 @@ export function useTouchFeedback(options: TouchFeedbackOptions = {}) {
 
   const handlePressIn = useCallback(() => {
     if (haptic) {
-      switch (hapticStyle) {
-        case 'light':
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          break;
-        case 'medium':
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          break;
-        case 'heavy':
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-          break;
-        case 'success':
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          break;
-        case 'warning':
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-          break;
-        case 'error':
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-          break;
-      }
+      const presetMap: Record<TouchFeedbackOptions['hapticStyle'] & string, HapticPreset> = {
+        light: 'press',
+        medium: 'confirm',
+        heavy: 'longPress',
+        success: 'success',
+        warning: 'warning',
+        error: 'error',
+      };
+      haptics.trigger(presetMap[hapticStyle] ?? 'press');
     }
 
     const animations: Animated.CompositeAnimation[] = [];

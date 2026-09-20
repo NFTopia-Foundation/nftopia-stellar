@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, Animated } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '@/lib/haptics';
 import { colors, spacing, borderRadius, shadows } from '@/constants/theme';
 
 interface ConfirmationDialogProps {
@@ -9,7 +9,11 @@ interface ConfirmationDialogProps {
   message: string;
   confirmLabel?: string;
   cancelLabel?: string;
-  onConfirm: () => void;
+  /**
+   * Called when the user confirms. If it returns a promise, the dialog fires
+   * success/error haptics when it settles.
+   */
+  onConfirm: () => void | Promise<void>;
   onCancel: () => void;
   destructive?: boolean;
 }
@@ -46,12 +50,19 @@ export default function ConfirmationDialog({
   };
 
   const handleConfirm = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    onConfirm();
+    // Destructive actions get a warning buzz, regular confirms a firm tap.
+    haptics.trigger(destructive ? 'warning' : 'confirm');
+
+    const result = onConfirm();
+    if (result && typeof (result as Promise<void>).then === 'function') {
+      (result as Promise<void>)
+        .then(() => haptics.success())
+        .catch(() => haptics.error());
+    }
   };
 
   const handleCancel = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptics.cancel();
     onCancel();
   };
 
