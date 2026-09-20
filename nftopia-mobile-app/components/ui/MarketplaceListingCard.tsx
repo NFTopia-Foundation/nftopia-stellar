@@ -3,6 +3,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { colors, spacing, borderRadius, shadows } from '@/constants/theme';
 import { OptimizedImage } from '@/src/components/OptimizedImage';
 import { FavoriteButton } from '@/components/ui/FavoriteButton';
+import { ShareButton } from '@/components/ui/ShareButton';
 import type { MarketplaceListingCard as MarketplaceListingCardVM } from '@/src/utils/marketplaceViewModels';
 
 const CARD_IMAGE_HEIGHT = 160;
@@ -44,7 +45,16 @@ const MarketplaceListingCard: React.FC<MarketplaceListingCardProps> = ({
           onLoad={() => onImageLoad?.(item)}
           onError={(err) => onImageError?.(item, err)}
         />
-        <View style={styles.favoriteOverlay}>
+        <View style={styles.overlayActions}>
+          <ShareButton
+            type="nft"
+            id={item.nftId}
+            title={item.name}
+            message={`Check out ${item.name} by ${item.creatorName} on NFTopia!`}
+            variant="icon"
+            size="sm"
+            testID={`listing-share-${item.id}`}
+          />
           <FavoriteButton
             id={item.nftId}
             kind="nft"
@@ -82,10 +92,13 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     gap: 2,
   },
-  favoriteOverlay: {
+  overlayActions: {
     position: 'absolute',
     top: spacing.sm,
     right: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
   },
   title: {
     fontSize: 14,

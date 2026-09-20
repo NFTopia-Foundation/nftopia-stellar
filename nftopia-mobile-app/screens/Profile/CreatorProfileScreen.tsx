@@ -7,11 +7,11 @@ import {
   Image,
   TouchableOpacity,
   RefreshControl,
-  Share,
   Linking,
 } from 'react-native';
 import apiClient from '@/lib/api/sample';
 import { useAuthStore } from '@/stores/authStore';
+import { ShareButton } from '@/components/ui/ShareButton';
 import { CreatorProfile, NFT, Collection, ActivityEvent } from '@/types';
 
 function FollowButton({ isFollowing, onPress }: { isFollowing: boolean; onPress: () => void }) {
@@ -84,16 +84,6 @@ export default function CreatorProfileScreen({ route, navigation }: any) {
     }
   };
 
-  const handleShare = async () => {
-    try {
-      await Share.share({
-        message: `Check out ${profile?.displayName || 'this creator'} on NFTopia!`,
-        url: `https://nftopia.io/profile/${userId}`,
-      });
-      apiClient.trackEvent('profile_share', { userId });
-    } catch {}
-  };
-
   const handleSocialLink = (url?: string) => {
     if (url) {
       Linking.openURL(url.startsWith('http') ? url : `https://${url}`);
@@ -138,9 +128,15 @@ export default function CreatorProfileScreen({ route, navigation }: any) {
         </View>
         <View style={styles.profileActions}>
           {!isOwnProfile && <FollowButton isFollowing={isFollowing} onPress={handleFollow} />}
-          <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
-            <Text style={styles.shareIcon}>📤</Text>
-          </TouchableOpacity>
+          <ShareButton
+            type="creator"
+            id={userId}
+            title={profile.displayName}
+            message={`Check out ${profile.displayName} on NFTopia!`}
+            variant="icon"
+            size="lg"
+            testID="creator-profile-share"
+          />
         </View>
       </View>
 
@@ -282,8 +278,6 @@ const styles = StyleSheet.create({
   followingButton: { backgroundColor: '#F0F0F0', borderWidth: 1, borderColor: '#6C5CE7' },
   followText: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
   followingText: { color: '#6C5CE7' },
-  shareButton: { padding: 8 },
-  shareIcon: { fontSize: 20 },
   section: { padding: 16, paddingTop: 0 },
   bio: { fontSize: 14, color: '#666', lineHeight: 20 },
   statsRow: { flexDirection: 'row', backgroundColor: '#FFFFFF', margin: 16, borderRadius: 12, padding: 16 },

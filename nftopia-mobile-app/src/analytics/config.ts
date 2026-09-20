@@ -123,6 +123,10 @@ export const ANALYTICS_EVENTS = {
   LIKE: 'like',
   UNLIKE: 'unlike',
   SHARE: 'share',
+  SHARE_INITIATED: 'share_initiated',
+  SHARE_COMPLETED: 'share_completed',
+  SHARE_CANCELLED: 'share_cancelled',
+  SHARE_FAILED: 'share_failed',
 
   // Wallet
   WALLET_BALANCE_CHECK: 'wallet_balance_check',

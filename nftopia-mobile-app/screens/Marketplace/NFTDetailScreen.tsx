@@ -21,6 +21,7 @@ import { ImageGallery } from '@/src/components/ImageGallery';
 import { NFTDetailSkeleton } from '@/src/components/skeletons';
 import { useRecentlyViewedStore } from '@/stores/recentlyViewedStore';
 import { FavoriteButton } from '@/components/ui/FavoriteButton';
+import { ShareButton } from '@/components/ui/ShareButton';
 
 type NFTDetailRouteProp = RouteProp<MainStackParamList, 'NFTDetail'>;
 type NavigationProp = NativeStackNavigationProp<MainStackParamList>;
@@ -88,7 +89,18 @@ export default function NFTDetailScreen() {
         <Text style={styles.headerTitle} numberOfLines={1}>
           {nft.name}
         </Text>
-        <FavoriteButton id={nft.id} kind="nft" size="md" testID="nft-detail-favorite" />
+        <View style={styles.headerActions}>
+          <ShareButton
+            type="nft"
+            id={nft.id}
+            title={nft.name}
+            message={`Check out ${nft.name} on NFTopia!`}
+            variant="icon"
+            size="md"
+            testID="nft-detail-share"
+          />
+          <FavoriteButton id={nft.id} kind="nft" size="md" testID="nft-detail-favorite" />
+        </View>
       </View>
       
       <ScrollView
@@ -173,6 +185,11 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: colors.text,
     flex: 1,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   scrollContent: {
     paddingBottom: spacing.xxl,
