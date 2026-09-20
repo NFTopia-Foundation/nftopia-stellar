@@ -2,6 +2,7 @@ import React from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import Constants from 'expo-constants';
 import { usePreferencesStore, ThemeMode } from '@/stores/preferencesStore';
+import { SUPPORTED_CURRENCIES } from '@/src/services/stellar/priceService';
 import { colors, spacing, borderRadius } from '@/constants/theme';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { MainStackParamList } from '@/navigation/MainNavigator';
@@ -38,7 +39,7 @@ export default function SettingsScreen({ navigation }: Props) {
 
       <Section title="Currency">
         <View style={styles.choices} accessibilityRole="radiogroup">
-          {['XLM', 'USD'].map((currency) => choice(currency, currency, preferences.currency === currency, () => preferences.setCurrency(currency)))}
+          {SUPPORTED_CURRENCIES.map((currency) => choice(currency, currency, preferences.currency === currency, () => preferences.setCurrency(currency)))}
         </View>
       </Section>
 

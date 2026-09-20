@@ -1,6 +1,7 @@
 import React from 'react';
 import { Text, TextProps } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { formatCurrency } from '@/src/utils/formatCurrency';
 
 interface FormattedCurrencyProps extends TextProps {
   amount: number | string;
@@ -17,22 +18,11 @@ export function FormattedCurrency({
 }: FormattedCurrencyProps) {
   const { i18n } = useTranslation();
 
-  try {
-    const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+  const formatted = formatCurrency(amount, {
+    currency,
+    locale: i18n.language,
+    fallback,
+  });
 
-    if (isNaN(numAmount)) {
-      return <Text style={style} {...props}>{fallback}</Text>;
-    }
-
-    const formatted = new Intl.NumberFormat(i18n.language, {
-      style: 'currency',
-      currency: currency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(numAmount);
-
-    return <Text style={style} {...props}>{formatted}</Text>;
-  } catch (error) {
-    return <Text style={style} {...props}>{fallback}</Text>;
-  }
+  return <Text style={style} {...props}>{formatted}</Text>;
 }
