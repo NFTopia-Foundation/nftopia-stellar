@@ -144,6 +144,63 @@ pub struct GasEstimate {
     pub estimated_cost: i128,
 }
 
+/// Mainnet Soroban fee-ladder parameters used to price a transaction.
+///
+/// The defaults mirror Stellar mainnet `ConfigSettingContractComputeV0`
+/// (`feeRatePerInstructionsIncrement`) and
+/// `ConfigSettingContractLedgerCostV0` (`feeReadLedgerEntry`,
+/// `feeWriteLedgerEntry`, `feeRead1KB`, ...) plus the state-archival rent
+/// settings.  Because the ledger fee configuration can be updated by network
+/// validators, every field is admin-configurable on-chain and the values used
+/// for a given estimate are stored alongside the contract.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NetworkFeeParams {
+    /// Stroops charged per 10,000 CPU instructions (fee-ladder increment).
+    pub stroops_per_10k_instructions: i128,
+    /// Stroops charged per ledger entry read.
+    pub stroops_per_read_entry: i128,
+    /// Stroops charged per ledger entry write.
+    pub stroops_per_write_entry: i128,
+    /// Stroops charged per byte of ledger entry read.
+    pub stroops_per_read_byte: i128,
+    /// Stroops charged per byte of ledger entry written.
+    pub stroops_per_write_byte: i128,
+    /// Stroops charged per ledger of TTL extension (state archival rent).
+    pub stroops_per_ttl_ledger: i128,
+    /// Network congestion uplift in basis points (10,000 = no congestion).
+    pub congestion_multiplier_bps: u32,
+    /// Ledgers of TTL to buy for entries created or modified by an operation.
+    pub ttl_extension_ledgers: u32,
+}
+
+/// Mainnet-recommended safety multiplier applied on top of the raw estimate.
+/// Soroban fee rates are validator-configurable and can rise during
+/// congestion; a 30% buffer (13,000 bps) avoids underpayment for typical
+/// operations under normal network conditions.
+pub const DEFAULT_MAINNET_GAS_MULTIPLIER_BPS: u32 = 13_000;
+
+/// Upper bound accepted for the admin-configurable safety multiplier.
+pub const MAX_GAS_MULTIPLIER_BPS: u32 = 20_000;
+
+/// Lower bound accepted for the admin-configurable safety multiplier.
+pub const MIN_GAS_MULTIPLIER_BPS: u32 = 10_000;
+
+/// Default mainnet fee parameters, sourced from the Stellar mainnet ledger
+/// configuration (see `gas_calculator.rs` module docs for references).
+pub fn default_network_fee_params() -> NetworkFeeParams {
+    NetworkFeeParams {
+        stroops_per_10k_instructions: 25,
+        stroops_per_read_entry: 6_250,
+        stroops_per_write_entry: 10_000,
+        stroops_per_read_byte: 1_786,
+        stroops_per_write_byte: 1_786,
+        stroops_per_ttl_ledger: 1,
+        congestion_multiplier_bps: 10_000,
+        ttl_extension_ledgers: 100,
+    }
+}
+
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ExecutionResult {
@@ -197,6 +254,6 @@ pub fn default_gas_config(_env: &Env) -> GasOptimizationConfig {
         gas_price_tolerance: 20,
         enable_reordering: false,
         enable_caching: false,
-        fallback_gas_multiplier_bps: 11_000,
+        fallback_gas_multiplier_bps: DEFAULT_MAINNET_GAS_MULTIPLIER_BPS,
     }
 }

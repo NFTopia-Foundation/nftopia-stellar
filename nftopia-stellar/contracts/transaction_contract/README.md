@@ -85,6 +85,13 @@ get_transaction_status(env, transaction_id) -> TransactionStatus
 estimate_transaction_gas(env, transaction_id) -> GasEstimate
 optimize_transaction_flow(env, transaction_id, config) -> GasOptimizationConfig
 
+// --- Mainnet fee calibration (admin) ---
+initialize(env, admin)
+get_network_fee_params(env) -> NetworkFeeParams
+set_network_fee_params(env, caller, params)
+get_gas_multiplier_bps(env) -> u32
+set_gas_multiplier_bps(env, caller, bps)
+
 // --- Signatures ---
 add_signature(env, transaction_id, signer, signature_bytes)
 verify_signatures(env, transaction_id) -> bool
@@ -138,7 +145,42 @@ Draft ──► Pending ──► Executing ──► Completed
 | Max operations per transaction | 50 |
 | Max parameters per operation | 20 |
 | Max transactions per batch | 10 |
-| Default gas ceiling | 100,000 |
+| Default gas ceiling | 100,000,000 CPU instructions |
+| Default safety multiplier | 13,000 bps (1.30×) |
+| Accepted multiplier range | 10,000–20,000 bps |
+
+## Mainnet Gas Calibration
+
+`utils/gas_calculator.rs` implements a mainnet cost model. Each `OperationType`
+has its own profiled CPU instruction count and ledger-entry footprint
+(entries/bytes read and written). The stroop cost of an operation is:
+
+```
+cost = MIN_INCLUSION_FEE
+     + instructions * stroops_per_10k_instructions / 10_000
+     + entries_read      * stroops_per_read_entry
+     + entries_written   * stroops_per_write_entry
+     + bytes_read        * stroops_per_read_byte
+     + bytes_written     * stroops_per_write_byte
+     + ttl_cost
+```
+
+`ttl_cost` models state-archival rent for the entries written:
+`bytes_written * ttl_extension_ledgers * stroops_per_ttl_ledger`. The subtotal
+is then scaled by `congestion_multiplier_bps`, which lets an admin apply a
+dynamic uplift during network congestion.
+
+All rates live in the on-chain `NetworkFeeParams` struct and default to the
+Stellar mainnet ledger configuration. An admin (set once via `initialize`) can
+re-calibrate them with `set_network_fee_params`, and adjust the safety buffer
+with `set_gas_multiplier_bps`. Estimates are validated against the host CPU
+instruction meter where available and against each operation's declared
+`gas_limit`; deviations beyond the tolerance emit a `GasEstimateDeviation`
+diagnostic event.
+
+References:
+- [Resource limits and fees](https://developers.stellar.org/docs/learn/smart-contract-internals/resource-limits-fees)
+- [State archival](https://developers.stellar.org/docs/learn/smart-contract-internals/state-archival)
 
 ## License
 

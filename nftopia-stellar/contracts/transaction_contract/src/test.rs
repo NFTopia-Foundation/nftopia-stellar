@@ -5,7 +5,9 @@ extern crate std;
 use soroban_sdk::{Address, Env, String, Vec, map, testutils::Address as _, vec};
 
 use crate::transaction_core::{TransactionContract, TransactionContractClient};
-use crate::types::{GasOptimizationConfig, RecoveryStrategy, TransactionBlueprint};
+use crate::types::{
+    GasOptimizationConfig, RecoveryStrategy, TransactionBlueprint, default_network_fee_params,
+};
 use crate::{Operation, OperationType, ParamType, Parameter, TransactionState};
 
 fn sample_operation(env: &Env, id: u64, deps: Vec<u64>) -> Operation {
@@ -712,4 +714,153 @@ fn test_batch_execute_partial_success() {
     assert_eq!(result.failed, 1);
     assert_eq!(result.result_ids.len(), 1);
     assert_eq!(result.result_ids.get(0).unwrap(), tx1);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MAINNET FEE MODEL RECALIBRATION TESTS (#291)
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn operation_type_storage_profiles_differ() {
+    use crate::utils::gas_calculator::operation_type_storage_profile;
+
+    let mint = operation_type_storage_profile(&OperationType::NftMint);
+    let verify = operation_type_storage_profile(&OperationType::VerificationCheck);
+
+    // Mint writes ownership + metadata + royalty entries; verification is read-only.
+    assert!(mint.entries_written > verify.entries_written);
+    assert!(mint.bytes_written > verify.bytes_written);
+}
+
+#[test]
+fn gas_cost_includes_storage_byte_ttl_and_congestion_fees() {
+    use crate::utils::gas_calculator;
+
+    let env = Env::default();
+    let op = sample_operation(&env, 1, vec![&env]);
+    let params = default_network_fee_params();
+
+    let baseline = gas_calculator::op_stroop_cost(&op, &params);
+
+    // Removing the TTL extension budget must lower the estimate.
+    let mut no_ttl = params.clone();
+    no_ttl.ttl_extension_ledgers = 0;
+    assert!(baseline > gas_calculator::op_stroop_cost(&op, &no_ttl));
+
+    // Removing per-byte fees must lower the estimate.
+    let mut no_byte_fees = params.clone();
+    no_byte_fees.stroops_per_read_byte = 0;
+    no_byte_fees.stroops_per_write_byte = 0;
+    assert!(baseline > gas_calculator::op_stroop_cost(&op, &no_byte_fees));
+
+    // Congestion uplift raises the estimate.
+    let mut congested = params.clone();
+    congested.congestion_multiplier_bps = 20_000;
+    assert!(gas_calculator::op_stroop_cost(&op, &congested) > baseline);
+}
+
+#[test]
+fn execute_operation_enforces_per_operation_gas_limit() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let mut over_budget = sample_operation(&env, 1, vec![&env]);
+    over_budget.gas_limit = Some(1);
+    let result = crate::execution_engine::execute_operation(&env, &over_budget);
+    assert!(!result.success);
+    assert!(result.error_message.is_some());
+
+    let mut within_budget = sample_operation(&env, 2, vec![&env]);
+    within_budget.gas_limit = Some(10_000_000);
+    let ok = crate::execution_engine::execute_operation(&env, &within_budget);
+    assert!(ok.success);
+    assert!(ok.error_message.is_none());
+}
+
+#[test]
+fn gas_validation_flags_large_deviation() {
+    use crate::gas_optimizer::validate_estimate;
+
+    let within = validate_estimate(1, 1_000, 1_050, 5_000);
+    assert!(within.within_tolerance);
+    assert!(within.deviation_bps <= 5_000);
+
+    let outside = validate_estimate(2, 10_000, 1_000, 5_000);
+    assert!(!outside.within_tolerance);
+    assert_eq!(outside.deviation_bps, 90_000);
+
+    // A missing host meter (0) is treated as "no diagnostic".
+    let no_meter = validate_estimate(3, 10_000, 0, 5_000);
+    assert!(no_meter.within_tolerance);
+    assert_eq!(no_meter.deviation_bps, 0);
+}
+
+#[test]
+fn admin_can_recalibrate_fee_params_and_multiplier() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, creator) = make_client(&env);
+    let admin = Address::generate(&env);
+
+    client.initialize(&admin);
+    assert_eq!(
+        client.get_gas_multiplier_bps(),
+        crate::types::DEFAULT_MAINNET_GAS_MULTIPLIER_BPS
+    );
+
+    let tx_id = client.create_transaction(&creator, &map![&env], &vec![&env]);
+    client.add_operation(&tx_id, &sample_operation(&env, 1, vec![&env]));
+    let est_before = client.estimate_transaction_gas(&tx_id);
+
+    // Raising the safety buffer raises the estimated instruction budget.
+    client.set_gas_multiplier_bps(&admin, &15_000_u32);
+    assert_eq!(client.get_gas_multiplier_bps(), 15_000);
+    let est_after = client.estimate_transaction_gas(&tx_id);
+    assert!(est_after.estimated_gas > est_before.estimated_gas);
+
+    // Raising the fee-ladder rate raises the estimated stroop cost.
+    let mut params = default_network_fee_params();
+    params.stroops_per_10k_instructions = 100;
+    client.set_network_fee_params(&admin, &params);
+
+    let stored = client.get_network_fee_params();
+    assert_eq!(stored.stroops_per_10k_instructions, 100);
+    let est_costly = client.estimate_transaction_gas(&tx_id);
+    assert!(est_costly.estimated_cost > est_after.estimated_cost);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2)")] // TransactionError::Unauthorized
+fn non_admin_cannot_recalibrate_gas() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _creator) = make_client(&env);
+    let admin = Address::generate(&env);
+    let rando = Address::generate(&env);
+
+    client.initialize(&admin);
+    client.set_gas_multiplier_bps(&rando, &15_000_u32);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #13)")] // TransactionError::NotInitialized
+fn recalibration_requires_initialization() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _creator) = make_client(&env);
+    let caller = Address::generate(&env);
+
+    client.set_gas_multiplier_bps(&caller, &15_000_u32);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #4)")] // TransactionError::InvalidOperation
+fn out_of_range_gas_multiplier_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _creator) = make_client(&env);
+    let admin = Address::generate(&env);
+
+    client.initialize(&admin);
+    client.set_gas_multiplier_bps(&admin, &9_000_u32);
 }

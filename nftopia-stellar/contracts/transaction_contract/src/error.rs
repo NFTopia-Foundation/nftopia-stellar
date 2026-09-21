@@ -16,4 +16,6 @@ pub enum TransactionError {
     DuplicateOperationId = 10,
     ResourceLimitExceeded = 11,
     OperationTimedOut = 12,
+    NotInitialized = 13,
+    AlreadyInitialized = 14,
 }

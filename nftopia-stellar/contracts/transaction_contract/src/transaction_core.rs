@@ -3,14 +3,14 @@ use soroban_sdk::{Address, Bytes, Env, Map, String, Vec, contract, contractimpl}
 
 use crate::error::TransactionError;
 use crate::events;
+use crate::gas_optimizer;
 use crate::tx_storage as storage;
 use crate::types::{
-    BatchExecutionResult, ExecutionResult, GasEstimate, GasOptimizationConfig, Operation,
-    OperationResult, RecoveryResult, RecoveryStrategy, SignatureRecord, Transaction,
-    TransactionBlueprint, TransactionState, TransactionStatus, default_gas_config,
+    BatchExecutionResult, ExecutionResult, GasEstimate, GasOptimizationConfig,
+    MAX_GAS_MULTIPLIER_BPS, MIN_GAS_MULTIPLIER_BPS, NetworkFeeParams, Operation, OperationResult,
+    RecoveryResult, RecoveryStrategy, SignatureRecord, Transaction, TransactionBlueprint,
+    TransactionState, TransactionStatus, default_gas_config, default_network_fee_params,
 };
-
-const STROOPS_PER_GAS: i128 = 1;
 
 use crate::security::resource_guard;
 use crate::security::validation_engine;
@@ -119,7 +119,9 @@ impl TransactionContract {
         let mut succeeded_ids = Vec::new(&env);
         let mut results = Vec::new(&env);
         let mut used_gas = 0_u64;
+        let mut used_cost = 0_i128;
         let mut successful_operations = 0_u32;
+        let fee_params = gas_optimizer::active_fee_params(&env);
 
         for op in tx.operations.iter() {
             if !dependencies_satisfied(&succeeded_ids, &op.dependencies) {
@@ -140,6 +142,7 @@ impl TransactionContract {
 
             let op_gas = gas_calculator::op_gas(&op);
             used_gas = used_gas.saturating_add(op_gas);
+            used_cost = used_cost.saturating_add(gas_calculator::op_stroop_cost(&op, &fee_params));
 
             if let Err(e) = resource_guard::check_gas_ceiling(used_gas, gas_ceiling, &env) {
                 let reason = error_handler::to_reason_string(&env, &e);
@@ -170,7 +173,7 @@ impl TransactionContract {
         }
 
         tx.total_gas_used = used_gas;
-        tx.total_cost = (used_gas as i128) * STROOPS_PER_GAS;
+        tx.total_cost = used_cost;
         tx.completed_at = Some(env.ledger().timestamp());
         tx.state = TransactionState::Completed;
 
@@ -225,7 +228,86 @@ impl TransactionContract {
             .ok_or(TransactionError::TransactionNotFound)?;
 
         gas_calculator::validate_gas_limits(&tx.operations)?;
-        Ok(gas_calculator::total_gas(&tx.operations))
+
+        let mut cfg = default_gas_config(&env);
+        cfg.fallback_gas_multiplier_bps =
+            storage::get_gas_multiplier_bps(&env).unwrap_or(cfg.fallback_gas_multiplier_bps);
+
+        let params = gas_optimizer::active_fee_params(&env);
+        Ok(gas_optimizer::estimate_with_config_and_params(
+            &env,
+            &tx.operations,
+            &cfg,
+            &params,
+        ))
+    }
+
+    // -------------------------------------------------------------------------
+    // Gas calibration administration
+    // -------------------------------------------------------------------------
+
+    /// One-time initialization recording the account allowed to re-calibrate
+    /// mainnet fee parameters.
+    pub fn initialize(env: Env, admin: Address) -> Result<(), TransactionError> {
+        if storage::get_admin(&env).is_some() {
+            return Err(TransactionError::AlreadyInitialized);
+        }
+        admin.require_auth();
+        storage::set_admin(&env, &admin);
+        Ok(())
+    }
+
+    /// Return the fee parameters currently used for estimates and execution
+    /// accounting (admin-configured when set, otherwise mainnet defaults).
+    pub fn get_network_fee_params(env: Env) -> NetworkFeeParams {
+        storage::load_fee_params(&env).unwrap_or_else(default_network_fee_params)
+    }
+
+    /// Replace the mainnet fee parameters used to price operations.
+    pub fn set_network_fee_params(
+        env: Env,
+        caller: Address,
+        params: NetworkFeeParams,
+    ) -> Result<(), TransactionError> {
+        require_admin(&env, &caller)?;
+
+        if params.stroops_per_10k_instructions <= 0
+            || params.stroops_per_read_entry < 0
+            || params.stroops_per_write_entry < 0
+            || params.stroops_per_read_byte < 0
+            || params.stroops_per_write_byte < 0
+            || params.stroops_per_ttl_ledger < 0
+        {
+            return Err(TransactionError::InvalidOperation);
+        }
+        // Congestion uplift may only raise the price (never below 1.0x) and is
+        // capped to avoid accidental overpayment.
+        if params.congestion_multiplier_bps < 10_000 || params.congestion_multiplier_bps > 50_000 {
+            return Err(TransactionError::InvalidOperation);
+        }
+
+        storage::set_fee_params(&env, &params);
+        Ok(())
+    }
+
+    /// Return the admin-configured safety multiplier in basis points.
+    pub fn get_gas_multiplier_bps(env: Env) -> u32 {
+        storage::get_gas_multiplier_bps(&env)
+            .unwrap_or(crate::types::DEFAULT_MAINNET_GAS_MULTIPLIER_BPS)
+    }
+
+    /// Update the safety multiplier applied on top of raw gas estimates.
+    pub fn set_gas_multiplier_bps(
+        env: Env,
+        caller: Address,
+        bps: u32,
+    ) -> Result<(), TransactionError> {
+        require_admin(&env, &caller)?;
+        if !(MIN_GAS_MULTIPLIER_BPS..=MAX_GAS_MULTIPLIER_BPS).contains(&bps) {
+            return Err(TransactionError::InvalidOperation);
+        }
+        storage::set_gas_multiplier_bps(&env, bps);
+        Ok(())
     }
 
     pub fn batch_create_transactions(
@@ -411,6 +493,15 @@ impl TransactionContract {
     pub fn get_version(env: Env) -> String {
         version::get_version(&env)
     }
+}
+
+fn require_admin(env: &Env, caller: &Address) -> Result<(), TransactionError> {
+    let admin = storage::get_admin(env).ok_or(TransactionError::NotInitialized)?;
+    if admin != *caller {
+        return Err(TransactionError::Unauthorized);
+    }
+    caller.require_auth();
+    Ok(())
 }
 
 fn dependencies_satisfied(succeeded_ids: &Vec<u64>, required_dependencies: &Vec<u64>) -> bool {

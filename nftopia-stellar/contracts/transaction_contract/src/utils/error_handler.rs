@@ -21,6 +21,8 @@ pub fn to_reason_string(env: &Env, err: &TransactionError) -> String {
         TransactionError::DuplicateOperationId => "duplicate operation id",
         TransactionError::ResourceLimitExceeded => "resource limit exceeded",
         TransactionError::OperationTimedOut => "operation timed out",
+        TransactionError::NotInitialized => "contract not initialized",
+        TransactionError::AlreadyInitialized => "contract already initialized",
     };
     String::from_str(env, msg)
 }
