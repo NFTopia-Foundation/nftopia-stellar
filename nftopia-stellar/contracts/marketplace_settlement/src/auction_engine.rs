@@ -290,6 +290,8 @@ impl AuctionEngine {
 
         let mut auction = AuctionStore::get(env, auction_id)?;
 
+        Self::validate_bid_amount(&auction, bid_amount, bidder, env)?;
+
         // Process the revealed bid
         let timestamp = env.ledger().timestamp();
         Self::process_direct_bid(env, &mut auction, bidder, bid_amount, timestamp)?;
@@ -711,6 +713,10 @@ impl AuctionEngine {
         env: &Env,
     ) -> Result<(), SettlementError> {
         let config = Self::get_auction_config(env)?;
+
+        if bid_amount <= 0 {
+            return Err(SettlementError::InvalidAmount);
+        }
 
         // Must be higher than current highest bid
         if bid_amount <= auction.highest_bid {

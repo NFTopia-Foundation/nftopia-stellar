@@ -362,6 +362,457 @@ fn test_get_nonexistent_auction_fails() {
     assert!(client.try_get_auction(&9999u64).is_err());
 }
 
+// ─── Auction Edge Cases: zero-amount and dust bids ───────────────────────────
+
+macro_rules! assert_settlement_error {
+    ($res:expr, $expected:expr $(,)?) => {
+        match $res {
+            Err(Ok(err)) => {
+                let actual: SettlementError = err;
+                assert_eq!(actual, $expected);
+            }
+            other => panic!("Expected Err(Ok({:?})), got: {:?}", $expected, other),
+        }
+    };
+}
+
+#[test]
+fn test_zero_bid_rejected_english_auction() {
+    let (env, cid, client, admin) = new_env();
+    let asset = mk_asset(&env);
+    let seller = Address::generate(&env);
+    let bidder = Address::generate(&env);
+    let nft = env.register(MockNft, ());
+    let creator = Address::generate(&env);
+    reg(&env, &cid, &nft, &creator, &admin, &asset);
+    MockNftClient::new(&env, &nft).set_owner(&seller);
+
+    let id = client.create_auction(
+        &seller,
+        &nft,
+        &1u64,
+        &100_000i128,
+        &80_000i128,
+        &3600u64,
+        &1_000i128,
+        &AuctionType::English,
+        &asset,
+    );
+
+    assert_settlement_error!(
+        client.try_place_bid(&id, &bidder, &0i128, &None),
+        SettlementError::InvalidAmount,
+    );
+}
+
+#[test]
+fn test_negative_bid_rejected_english_auction() {
+    let (env, cid, client, admin) = new_env();
+    let asset = mk_asset(&env);
+    let seller = Address::generate(&env);
+    let bidder = Address::generate(&env);
+    let nft = env.register(MockNft, ());
+    let creator = Address::generate(&env);
+    reg(&env, &cid, &nft, &creator, &admin, &asset);
+    MockNftClient::new(&env, &nft).set_owner(&seller);
+
+    let id = client.create_auction(
+        &seller,
+        &nft,
+        &1u64,
+        &100_000i128,
+        &80_000i128,
+        &3600u64,
+        &1_000i128,
+        &AuctionType::English,
+        &asset,
+    );
+
+    assert_settlement_error!(
+        client.try_place_bid(&id, &bidder, &-1i128, &None),
+        SettlementError::InvalidAmount,
+    );
+}
+
+#[test]
+fn test_dust_bid_below_starting_price_rejected() {
+    let (env, cid, client, admin) = new_env();
+    let asset = mk_asset(&env);
+    let seller = Address::generate(&env);
+    let bidder = Address::generate(&env);
+    let nft = env.register(MockNft, ());
+    let creator = Address::generate(&env);
+    reg(&env, &cid, &nft, &creator, &admin, &asset);
+    MockNftClient::new(&env, &nft).set_owner(&seller);
+
+    let id = client.create_auction(
+        &seller,
+        &nft,
+        &1u64,
+        &100_000i128,
+        &80_000i128,
+        &3600u64,
+        &1_000i128,
+        &AuctionType::English,
+        &asset,
+    );
+
+    assert_settlement_error!(
+        client.try_place_bid(&id, &bidder, &1i128, &None),
+        SettlementError::BidTooLow,
+    );
+}
+
+#[test]
+fn test_dust_bid_below_minimum_increment_rejected() {
+    let (env, cid, client, admin) = new_env();
+    let asset = mk_asset(&env);
+    let seller = Address::generate(&env);
+    let first_bidder = Address::generate(&env);
+    let dust_bidder = Address::generate(&env);
+    let nft = env.register(MockNft, ());
+    let creator = Address::generate(&env);
+    reg(&env, &cid, &nft, &creator, &admin, &asset);
+    MockNftClient::new(&env, &nft).set_owner(&seller);
+
+    let id = client.create_auction(
+        &seller,
+        &nft,
+        &1u64,
+        &100_000i128,
+        &80_000i128,
+        &3600u64,
+        &1_000i128,
+        &AuctionType::English,
+        &asset,
+    );
+
+    client.place_bid(&id, &first_bidder, &100_000i128, &None);
+
+    assert_settlement_error!(
+        client.try_place_bid(&id, &dust_bidder, &100_001i128, &None),
+        SettlementError::BidBelowMinimumIncrement,
+    );
+}
+
+#[test]
+fn test_rejected_zero_bid_leaves_auction_state_unchanged() {
+    let (env, cid, client, admin) = new_env();
+    let asset = mk_asset(&env);
+    let seller = Address::generate(&env);
+    let bidder = Address::generate(&env);
+    let nft = env.register(MockNft, ());
+    let creator = Address::generate(&env);
+    reg(&env, &cid, &nft, &creator, &admin, &asset);
+    MockNftClient::new(&env, &nft).set_owner(&seller);
+
+    let id = client.create_auction(
+        &seller,
+        &nft,
+        &1u64,
+        &100_000i128,
+        &80_000i128,
+        &3600u64,
+        &1_000i128,
+        &AuctionType::English,
+        &asset,
+    );
+
+    assert!(client.try_place_bid(&id, &bidder, &0i128, &None).is_err());
+
+    let auction = client.get_auction(&id);
+    assert_eq!(auction.highest_bid, 0i128);
+    assert_eq!(auction.highest_bidder, None);
+    assert_eq!(auction.bids.len(), 0);
+}
+
+#[test]
+fn test_zero_bid_rejected_dutch_auction() {
+    let (env, cid, client, admin) = new_env();
+    let asset = mk_asset(&env);
+    let seller = Address::generate(&env);
+    let bidder = Address::generate(&env);
+    let nft = env.register(MockNft, ());
+    let creator = Address::generate(&env);
+    reg(&env, &cid, &nft, &creator, &admin, &asset);
+    MockNftClient::new(&env, &nft).set_owner(&seller);
+
+    let id = client.create_auction(
+        &seller,
+        &nft,
+        &1u64,
+        &200_000i128,
+        &50_000i128,
+        &7200u64,
+        &2_000i128,
+        &AuctionType::Dutch,
+        &asset,
+    );
+
+    assert_settlement_error!(
+        client.try_place_bid(&id, &bidder, &0i128, &None),
+        SettlementError::InvalidAmount,
+    );
+}
+
+#[test]
+fn test_dust_bid_rejected_dutch_auction() {
+    let (env, cid, client, admin) = new_env();
+    let asset = mk_asset(&env);
+    let seller = Address::generate(&env);
+    let bidder = Address::generate(&env);
+    let nft = env.register(MockNft, ());
+    let creator = Address::generate(&env);
+    reg(&env, &cid, &nft, &creator, &admin, &asset);
+    MockNftClient::new(&env, &nft).set_owner(&seller);
+
+    let id = client.create_auction(
+        &seller,
+        &nft,
+        &1u64,
+        &200_000i128,
+        &50_000i128,
+        &7200u64,
+        &2_000i128,
+        &AuctionType::Dutch,
+        &asset,
+    );
+
+    assert_settlement_error!(
+        client.try_place_bid(&id, &bidder, &1i128, &None),
+        SettlementError::BidTooLow,
+    );
+}
+
+#[test]
+fn test_create_auction_negative_starting_price_rejected() {
+    let (env, cid, client, admin) = new_env();
+    let asset = mk_asset(&env);
+    let seller = Address::generate(&env);
+    let nft = env.register(MockNft, ());
+    let creator = Address::generate(&env);
+    reg(&env, &cid, &nft, &creator, &admin, &asset);
+    MockNftClient::new(&env, &nft).set_owner(&seller);
+
+    assert_settlement_error!(
+        client.try_create_auction(
+            &seller,
+            &nft,
+            &1u64,
+            &-1i128,
+            &0i128,
+            &3600u64,
+            &1_000i128,
+            &AuctionType::English,
+            &asset,
+        ),
+        SettlementError::InvalidAmount,
+    );
+}
+
+#[test]
+fn test_create_auction_negative_reserve_price_rejected() {
+    let (env, cid, client, admin) = new_env();
+    let asset = mk_asset(&env);
+    let seller = Address::generate(&env);
+    let nft = env.register(MockNft, ());
+    let creator = Address::generate(&env);
+    reg(&env, &cid, &nft, &creator, &admin, &asset);
+    MockNftClient::new(&env, &nft).set_owner(&seller);
+
+    assert_settlement_error!(
+        client.try_create_auction(
+            &seller,
+            &nft,
+            &1u64,
+            &100_000i128,
+            &-1i128,
+            &3600u64,
+            &1_000i128,
+            &AuctionType::English,
+            &asset,
+        ),
+        SettlementError::InvalidAmount,
+    );
+}
+
+#[test]
+fn test_create_auction_reserve_above_starting_price_rejected() {
+    let (env, cid, client, admin) = new_env();
+    let asset = mk_asset(&env);
+    let seller = Address::generate(&env);
+    let nft = env.register(MockNft, ());
+    let creator = Address::generate(&env);
+    reg(&env, &cid, &nft, &creator, &admin, &asset);
+    MockNftClient::new(&env, &nft).set_owner(&seller);
+
+    assert_settlement_error!(
+        client.try_create_auction(
+            &seller,
+            &nft,
+            &1u64,
+            &100_000i128,
+            &200_000i128,
+            &3600u64,
+            &1_000i128,
+            &AuctionType::English,
+            &asset,
+        ),
+        SettlementError::InvalidAmount,
+    );
+}
+
+#[test]
+fn test_zero_amount_reveal_bid_rejected() {
+    let (env, cid, client, admin) = new_env();
+    let asset = mk_asset(&env);
+    let seller = Address::generate(&env);
+    let bidder = Address::generate(&env);
+    let nft = env.register(MockNft, ());
+    let creator = Address::generate(&env);
+    reg(&env, &cid, &nft, &creator, &admin, &asset);
+    MockNftClient::new(&env, &nft).set_owner(&seller);
+
+    env.as_contract(&cid, || {
+        let mut config = crate::auction_engine::AuctionEngine::get_auction_config(&env).unwrap();
+        config.commit_reveal_enabled = 1;
+        env.storage()
+            .instance()
+            .set(&symbol_short!("auc_cfg"), &config);
+    });
+
+    let id = client.create_auction(
+        &seller,
+        &nft,
+        &1u64,
+        &100_000i128,
+        &80_000i128,
+        &3600u64,
+        &1_000i128,
+        &AuctionType::English,
+        &asset,
+    );
+
+    let salt = Bytes::from_slice(&env, b"reveal_salt");
+    client.place_bid(&id, &bidder, &100_000i128, &Some(salt.clone()));
+
+    assert_settlement_error!(
+        client.try_reveal_bid(&id, &bidder, &0i128, &salt),
+        SettlementError::InvalidAmount,
+    );
+}
+
+#[test]
+fn test_dust_reveal_bid_below_starting_price_rejected() {
+    let (env, cid, client, admin) = new_env();
+    let asset = mk_asset(&env);
+    let seller = Address::generate(&env);
+    let bidder = Address::generate(&env);
+    let nft = env.register(MockNft, ());
+    let creator = Address::generate(&env);
+    reg(&env, &cid, &nft, &creator, &admin, &asset);
+    MockNftClient::new(&env, &nft).set_owner(&seller);
+
+    env.as_contract(&cid, || {
+        let mut config = crate::auction_engine::AuctionEngine::get_auction_config(&env).unwrap();
+        config.commit_reveal_enabled = 1;
+        env.storage()
+            .instance()
+            .set(&symbol_short!("auc_cfg"), &config);
+    });
+
+    let id = client.create_auction(
+        &seller,
+        &nft,
+        &1u64,
+        &100_000i128,
+        &80_000i128,
+        &3600u64,
+        &1_000i128,
+        &AuctionType::English,
+        &asset,
+    );
+
+    let salt = Bytes::from_slice(&env, b"dust_reveal_salt");
+    client.place_bid(&id, &bidder, &100_000i128, &Some(salt.clone()));
+
+    assert_settlement_error!(
+        client.try_reveal_bid(&id, &bidder, &1i128, &salt),
+        SettlementError::BidTooLow,
+    );
+}
+
+#[test]
+fn test_valid_committed_bid_reveal_still_succeeds() {
+    let (env, cid, client, admin) = new_env();
+    let asset = mk_asset(&env);
+    let seller = Address::generate(&env);
+    let bidder = Address::generate(&env);
+    let nft = env.register(MockNft, ());
+    let creator = Address::generate(&env);
+    reg(&env, &cid, &nft, &creator, &admin, &asset);
+    MockNftClient::new(&env, &nft).set_owner(&seller);
+
+    env.as_contract(&cid, || {
+        let mut config = crate::auction_engine::AuctionEngine::get_auction_config(&env).unwrap();
+        config.commit_reveal_enabled = 1;
+        env.storage()
+            .instance()
+            .set(&symbol_short!("auc_cfg"), &config);
+    });
+
+    let id = client.create_auction(
+        &seller,
+        &nft,
+        &1u64,
+        &100_000i128,
+        &80_000i128,
+        &3600u64,
+        &1_000i128,
+        &AuctionType::English,
+        &asset,
+    );
+
+    let salt = Bytes::from_slice(&env, b"valid_reveal_salt");
+    client.place_bid(&id, &bidder, &100_000i128, &Some(salt.clone()));
+    client.reveal_bid(&id, &bidder, &100_000i128, &salt);
+
+    let auction = client.get_auction(&id);
+    assert_eq!(auction.highest_bid, 100_000i128);
+    assert_eq!(auction.highest_bidder, Some(bidder));
+}
+
+#[test]
+fn test_auction_stats_for_auction_without_bids_are_zero() {
+    let (env, cid, client, admin) = new_env();
+    let asset = mk_asset(&env);
+    let seller = Address::generate(&env);
+    let nft = env.register(MockNft, ());
+    let creator = Address::generate(&env);
+    reg(&env, &cid, &nft, &creator, &admin, &asset);
+    MockNftClient::new(&env, &nft).set_owner(&seller);
+
+    let id = client.create_auction(
+        &seller,
+        &nft,
+        &1u64,
+        &100_000i128,
+        &80_000i128,
+        &3600u64,
+        &1_000i128,
+        &AuctionType::English,
+        &asset,
+    );
+
+    env.as_contract(&cid, || {
+        let stats = crate::auction_engine::AuctionAnalytics::get_auction_stats(&env, id).unwrap();
+        assert_eq!(stats.total_bids, 0);
+        assert_eq!(stats.highest_bid, 0i128);
+        assert_eq!(stats.average_bid, 0i128);
+        assert_eq!(stats.bid_frequency, 0i128);
+    });
+}
+
 // ─── Fee Manager ─────────────────────────────────────────────────────────────
 
 #[test]
