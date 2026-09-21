@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity } from 'react-native';
-import { colors, spacing, borderRadius } from '@/constants/theme';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
+import TextField from '@/components/ui/TextField';
+import { colors, spacing, typography } from '@/constants/theme';
 
 interface MnemonicInputProps {
   value: string;
@@ -10,9 +11,15 @@ interface MnemonicInputProps {
   testID?: string;
 }
 
-const VALID_WORD_COUNTS = [12, 15, 18, 21, 24];
-const MAX_WORDS = 24;
+export const VALID_WORD_COUNTS = [12, 15, 18, 21, 24];
+export const MAX_WORDS = 24;
 
+/**
+ * Recovery-phrase entry. Both the paste-a-phrase text area and the
+ * word-by-word grid are composed from the shared `TextField` (the grid uses the
+ * compact size), so error, focus and accessibility behaviour match the rest of
+ * the form library.
+ */
 export default function MnemonicInput({
   value,
   onChangeText,
@@ -67,30 +74,40 @@ export default function MnemonicInput({
       <View style={styles.container}>
         <View style={styles.modeRow}>
           <Text style={styles.label}>Recovery Phrase</Text>
-          <TouchableOpacity onPress={switchToPaste}>
+          <TouchableOpacity
+            onPress={switchToPaste}
+            accessibilityRole="button"
+            accessibilityLabel="Paste recovery phrase instead"
+          >
             <Text style={styles.switchLink}>Paste instead</Text>
           </TouchableOpacity>
         </View>
         <View style={styles.wordGrid}>
           {wordInputs.slice(0, MAX_WORDS).map((word, index) => (
             <View key={index} style={styles.wordInputWrapper}>
-              <Text style={styles.wordIndex}>{index + 1}.</Text>
-              <TextInput
-                ref={(ref) => {
-                  wordRefs.current[index] = ref;
-                }}
-                style={styles.wordInput}
-                placeholder={`Word ${index + 1}`}
-                placeholderTextColor={colors.textTertiary}
-                value={word}
-                onChangeText={(t) => handleWordChange(index, t)}
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={editable}
-                returnKeyType={index < MAX_WORDS - 1 ? 'next' : 'done'}
-                onSubmitEditing={() => handleWordSubmit(index)}
-                testID={testID ? `${testID}-word-${index}` : undefined}
-              />
+              <Text style={styles.wordIndex} accessibilityElementsHidden importantForAccessibility="no">
+                {index + 1}.
+              </Text>
+              <View style={styles.wordField}>
+                <TextField
+                  size="compact"
+                  containerStyle={styles.wordTextField}
+                  placeholder={`Word ${index + 1}`}
+                  value={word}
+                  onChangeText={(t) => handleWordChange(index, t)}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={editable}
+                  returnKeyType={index < MAX_WORDS - 1 ? 'next' : 'done'}
+                  onSubmitEditing={() => handleWordSubmit(index)}
+                  inputRef={(ref) => {
+                    wordRefs.current[index] = ref;
+                  }}
+                  accessibilityLabel={`Recovery phrase word ${index + 1}`}
+                  accessibilityHint={`Word ${index + 1} of the recovery phrase`}
+                  testID={testID ? `${testID}-word-${index}` : undefined}
+                />
+              </View>
             </View>
           ))}
         </View>
@@ -106,26 +123,32 @@ export default function MnemonicInput({
     <View style={styles.container}>
       <View style={styles.modeRow}>
         <Text style={styles.label}>Recovery Phrase</Text>
-        <TouchableOpacity onPress={switchToWords}>
+        <TouchableOpacity
+          onPress={switchToWords}
+          accessibilityRole="button"
+          accessibilityLabel="Enter recovery phrase word-by-word"
+        >
           <Text style={styles.switchLink}>Enter word-by-word</Text>
         </TouchableOpacity>
       </View>
       {/* Paste mode is a multiline field: pasting a full phrase (12-24 words)
           works in one gesture and Return inserts a newline instead of blurring,
           so multi-word entry stays clean with the keyboard open. */}
-      <TextInput
-        style={[styles.textArea, error ? styles.inputError : undefined]}
-        placeholder="Paste your 12, 15, 18, 21, or 24 word phrase"
-        placeholderTextColor={colors.textTertiary}
-        value={value}
-        onChangeText={onChangeText}
+      <TextField
         multiline
         numberOfLines={4}
+        containerStyle={styles.pasteField}
+        inputStyle={styles.pasteInput}
+        placeholder="Paste your 12, 15, 18, 21, or 24 word phrase"
+        value={value}
+        onChangeText={onChangeText}
         autoCapitalize="none"
         autoCorrect={false}
         editable={editable}
         blurOnSubmit={false}
         testID={testID}
+        accessibilityLabel="Recovery phrase"
+        accessibilityHint="Paste your 12, 15, 18, 21, or 24 word recovery phrase"
       />
       {value.trim() ? (
         <Text style={[styles.wordCount, !isValidCount && styles.wordCountInvalid]}>
@@ -157,21 +180,12 @@ const styles = StyleSheet.create({
     color: colors.info,
     fontWeight: '500',
   },
-  textArea: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: 16,
-    fontSize: 16,
-    fontFamily: 'monospace',
-    borderWidth: 1,
-    borderColor: colors.border,
-    minHeight: 100,
-    textAlignVertical: 'top',
-    color: colors.text,
+  pasteField: {
+    marginBottom: 0,
   },
-  inputError: {
-    borderColor: colors.error,
-    backgroundColor: colors.errorBackground,
+  pasteInput: {
+    minHeight: 100,
+    fontFamily: typography.mono.fontFamily,
   },
   wordGrid: {
     flexDirection: 'row',
@@ -184,23 +198,17 @@ const styles = StyleSheet.create({
     width: '47%',
     gap: spacing.xs,
   },
+  wordField: {
+    flex: 1,
+  },
+  wordTextField: {
+    marginBottom: 0,
+  },
   wordIndex: {
     fontSize: 12,
     color: colors.textTertiary,
     width: 24,
     textAlign: 'right',
-  },
-  wordInput: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.sm,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    fontSize: 14,
-    fontFamily: 'monospace',
-    borderWidth: 1,
-    borderColor: colors.border,
-    color: colors.text,
   },
   wordCount: {
     fontSize: 12,

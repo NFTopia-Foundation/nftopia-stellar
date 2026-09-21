@@ -52,6 +52,54 @@ export const getColors = (isDark: boolean): ThemeColors => {
 // These will be deprecated in favor of useTheme()
 export const colors = lightColors;
 
+// Centralised form-input design tokens.
+//
+// Every input variant (TextField, AmountField, SelectField, and the legacy
+// FormInput/SecureInput/MnemonicInput wrappers) resolves its border and
+// background colours through these tokens so focus/blur/error styling can never
+// drift between screens. Keep the focus/blur colours here rather than in
+// individual StyleSheets.
+export const inputTokens = {
+  border: colors.border,
+  borderFocused: colors.borderFocused,
+  borderError: colors.error,
+  background: colors.surface,
+  backgroundFocused: colors.background,
+  backgroundError: colors.errorBackground,
+  backgroundDisabled: '#f1f3f5',
+  placeholder: colors.textTertiary,
+  label: colors.text,
+  helper: colors.textSecondary,
+} as const;
+
+export interface InputVisualState {
+  focused?: boolean;
+  error?: boolean;
+  disabled?: boolean;
+}
+
+/** Resolve the border colour for an input from its focus/error state. */
+export const resolveInputBorderColor = ({
+  focused = false,
+  error = false,
+}: InputVisualState = {}): string => {
+  if (error) return inputTokens.borderError;
+  if (focused) return inputTokens.borderFocused;
+  return inputTokens.border;
+};
+
+/** Resolve the background colour for an input from its visual state. */
+export const resolveInputBackgroundColor = ({
+  focused = false,
+  error = false,
+  disabled = false,
+}: InputVisualState = {}): string => {
+  if (disabled) return inputTokens.backgroundDisabled;
+  if (error) return inputTokens.backgroundError;
+  if (focused) return inputTokens.backgroundFocused;
+  return inputTokens.background;
+};
+
 // Re-export types
 export type { ThemeColors };
 

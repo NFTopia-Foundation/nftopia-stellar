@@ -1,13 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  StyleSheet,
-  TouchableOpacity,
-  TextInputProps,
-  AccessibilityInfo,
-} from 'react-native';
+import React from 'react';
+import { TextInput, TextInputProps } from 'react-native';
+import TextField from '@/components/ui/TextField';
 
 export interface FormInputProps {
   label: string;
@@ -33,6 +26,10 @@ export interface FormInputProps {
   inputRef?: React.Ref<TextInput>;
 }
 
+/**
+ * Auth-screen text input. Thin adapter over the shared `TextField` so email,
+ * username and password fields all inherit the same styling and a11y wiring.
+ */
 export default function FormInput({
   label,
   placeholder,
@@ -52,104 +49,25 @@ export default function FormInput({
   blurOnSubmit,
   inputRef,
 }: FormInputProps) {
-  const [isFocused, setIsFocused] = useState(false);
-
-  useEffect(() => {
-    if (error) {
-      AccessibilityInfo.announceForAccessibility(error);
-    }
-  }, [error]);
-
   return (
-    <View style={styles.container}>
-      <Text style={styles.label} nativeID={`${testID}-label`}>
-        {label}
-      </Text>
-      <TextInput
-        ref={inputRef}
-        style={[
-          styles.input,
-          isFocused ? styles.inputFocused : undefined,
-          error ? styles.inputError : undefined,
-          !editable ? styles.inputDisabled : undefined,
-          multiline ? styles.inputMultiline : undefined,
-        ]}
-        placeholder={placeholder}
-        placeholderTextColor="#999"
-        value={value}
-        onChangeText={onChangeText}
-        keyboardType={keyboardType}
-        secureTextEntry={secureTextEntry}
-        autoCapitalize={autoCapitalize}
-        autoCorrect={autoCorrect}
-        editable={editable}
-        returnKeyType={returnKeyType}
-        onSubmitEditing={onSubmitEditing}
-        blurOnSubmit={blurOnSubmit}
-        onFocus={() => setIsFocused(true)}
-        onBlur={() => setIsFocused(false)}
-        testID={testID}
-        multiline={multiline}
-        numberOfLines={numberOfLines}
-        accessible
-        accessibilityLabel={label}
-        accessibilityHint={error ?? undefined}
-        accessibilityState={{ disabled: !editable }}
-      />
-      {error ? (
-        <Text
-          style={styles.errorText}
-          accessible
-          accessibilityRole="text"
-          accessibilityLiveRegion="polite"
-          testID={testID ? `${testID}-error` : undefined}
-        >
-          {error}
-        </Text>
-      ) : null}
-    </View>
+    <TextField
+      label={label}
+      placeholder={placeholder}
+      value={value}
+      onChangeText={onChangeText}
+      keyboardType={keyboardType}
+      secureTextEntry={secureTextEntry}
+      autoCapitalize={autoCapitalize}
+      autoCorrect={autoCorrect}
+      editable={editable}
+      error={error}
+      testID={testID}
+      multiline={multiline}
+      numberOfLines={numberOfLines}
+      returnKeyType={returnKeyType}
+      onSubmitEditing={onSubmitEditing}
+      blurOnSubmit={blurOnSubmit}
+      inputRef={inputRef}
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    gap: 8,
-    marginBottom: 4,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-  },
-  input: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-    minHeight: 52,
-  },
-  inputFocused: {
-    borderColor: '#007AFF',
-    backgroundColor: '#fff',
-  },
-  inputError: {
-    borderColor: '#D63228',
-    backgroundColor: '#FFF5F5',
-  },
-  inputDisabled: {
-    opacity: 0.6,
-    backgroundColor: '#f1f3f5',
-  },
-  inputMultiline: {
-    textAlignVertical: 'top',
-    paddingTop: 12,
-  },
-  errorText: {
-    fontSize: 12,
-    color: '#D63228',
-    marginTop: 4,
-  },
-});
