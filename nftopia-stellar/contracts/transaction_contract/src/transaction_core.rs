@@ -6,17 +6,19 @@ use crate::events;
 use crate::tx_storage as storage;
 use crate::types::{
     BatchExecutionResult, ExecutionResult, GasEstimate, GasOptimizationConfig, Operation,
-    OperationResult, RecoveryResult, RecoveryStrategy, SignatureRecord, Transaction,
-    TransactionBlueprint, TransactionState, TransactionStatus, default_gas_config,
+    OperationResult, OperationTtl, RecoveryResult, RecoveryStrategy, SignatureRecord, Transaction,
+    TransactionBlueprint, TransactionState, TransactionStatus, TtlConfig, default_gas_config,
 };
 
 const STROOPS_PER_GAS: i128 = 1;
 
+use crate::dependency_resolver;
 use crate::security::resource_guard;
 use crate::security::validation_engine;
 use crate::storage::state_store;
 use crate::utils::error_handler;
 use crate::utils::gas_calculator;
+use crate::utils::time_manager;
 
 #[contract]
 pub struct TransactionContract;
@@ -117,25 +119,38 @@ impl TransactionContract {
         state_store::record_transition(&env, tx.transaction_id, TransactionState::Executing);
 
         let mut succeeded_ids = Vec::new(&env);
+        let mut completed_ttls: Vec<OperationTtl> = Vec::new(&env);
         let mut results = Vec::new(&env);
         let mut used_gas = 0_u64;
         let mut successful_operations = 0_u32;
 
-        for op in tx.operations.iter() {
-            if !dependencies_satisfied(&succeeded_ids, &op.dependencies) {
+        // Execute in dependency-safe (topologically sorted) order and validate
+        // that dependency storage TTLs survive until each dependent completes.
+        let ttl_config = dependency_resolver::load_ttl_config(&env);
+        let ordered_operations =
+            dependency_resolver::resolve_execution_order(&env, &tx.operations)?;
+
+        for op in ordered_operations.iter() {
+            if let Err(e) = dependency_resolver::validate_dependency_ttl(
+                &env,
+                &succeeded_ids,
+                &completed_ttls,
+                &op,
+                &ttl_config,
+            ) {
+                let reason = error_handler::to_reason_string(&env, &e);
                 tx.state = TransactionState::Failed;
-                tx.error_reason = Some(String::from_str(&env, "operation dependency not met"));
-                events::publish_failed(
-                    &env,
-                    tx.transaction_id,
-                    &tx.error_reason
-                        .clone()
-                        .unwrap_or(String::from_str(&env, "unknown")),
-                );
+                tx.error_reason = Some(reason.clone());
+                events::publish_failed(&env, tx.transaction_id, &reason);
                 tx.state = TransactionState::RolledBack;
                 tx.completed_at = Some(env.ledger().timestamp());
+                state_store::record_transition(
+                    &env,
+                    tx.transaction_id,
+                    TransactionState::RolledBack,
+                );
                 storage::save_transaction(&env, &tx);
-                return Err(TransactionError::DependencyNotMet);
+                return Err(e);
             }
 
             let op_gas = gas_calculator::op_gas(&op);
@@ -166,6 +181,11 @@ impl TransactionContract {
             };
             results.push_back(result);
             succeeded_ids.push_back(op.operation_id);
+            completed_ttls.push_back(OperationTtl {
+                operation_id: op.operation_id,
+                satisfied_at_ledger: time_manager::current_ledger(&env),
+                remaining_ttl_ledgers: ttl_config.temporary_entry_min_ttl,
+            });
             successful_operations += 1;
         }
 
@@ -411,13 +431,24 @@ impl TransactionContract {
     pub fn get_version(env: Env) -> String {
         version::get_version(&env)
     }
-}
 
-fn dependencies_satisfied(succeeded_ids: &Vec<u64>, required_dependencies: &Vec<u64>) -> bool {
-    for dep in required_dependencies.iter() {
-        if !succeeded_ids.contains(dep) {
-            return false;
-        }
+    // -------------------------------------------------------------------------
+    // TTL configuration
+    // -------------------------------------------------------------------------
+
+    /// Admin-configurable TTL settings used during dependency resolution.
+    /// `min_remaining_ttl_buffer` absorbs mainnet ledger-close variability.
+    pub fn configure_ttl(
+        env: Env,
+        admin: Address,
+        config: TtlConfig,
+    ) -> Result<(), TransactionError> {
+        admin.require_auth();
+        dependency_resolver::save_ttl_config(&env, &config)
     }
-    true
+
+    /// Returns the active TTL configuration (defaults if never configured).
+    pub fn get_ttl_config(env: Env) -> TtlConfig {
+        dependency_resolver::load_ttl_config(&env)
+    }
 }

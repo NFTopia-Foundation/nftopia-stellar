@@ -1,6 +1,7 @@
 //! Pre-execution validation engine. Every transaction is subjected to a
 //! set of preflight checks before the execution engine is allowed to proceed.
 
+use crate::dependency_resolver;
 use crate::error::TransactionError;
 use crate::types::{Operation, Transaction, TransactionState};
 use soroban_sdk::Env;
@@ -12,7 +13,16 @@ pub fn preflight(env: &Env, tx: &Transaction) -> Result<(), TransactionError> {
     check_not_empty(tx)?;
     check_operation_ids_unique(env, tx)?;
     check_dependencies_in_scope(env, tx)?;
+    check_dependency_graph(env, tx)?;
     Ok(())
+}
+
+/// Build the dependency graph to detect cycles and validate that every
+/// operation's execution window fits within the persistent TTL bound.
+fn check_dependency_graph(env: &Env, tx: &Transaction) -> Result<(), TransactionError> {
+    let graph = dependency_resolver::DependencyGraph::build(env, &tx.operations)?;
+    let config = dependency_resolver::load_ttl_config(env);
+    graph.validate_ttl_windows(&config)
 }
 
 /// The transaction must be in `Draft` or `Pending` state to execute.

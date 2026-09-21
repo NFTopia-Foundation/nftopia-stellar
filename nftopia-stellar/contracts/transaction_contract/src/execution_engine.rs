@@ -1,7 +1,7 @@
 use crate::dependency_resolver;
 use crate::error::TransactionError;
-use crate::types::{Operation, OperationResult};
-use crate::utils::gas_calculator;
+use crate::types::{Operation, OperationResult, OperationTtl};
+use crate::utils::{gas_calculator, time_manager};
 use soroban_sdk::{Env, Vec};
 
 // Simulate execution of one operation for orchestration-level accounting.
@@ -21,16 +21,29 @@ pub fn execute_operations(
     env: &Env,
     operations: &Vec<Operation>,
 ) -> Result<Vec<OperationResult>, TransactionError> {
-    let ordered = dependency_resolver::resolve_execution_order(env, operations);
+    let config = dependency_resolver::load_ttl_config(env);
+    let ordered = dependency_resolver::resolve_execution_order(env, operations)?;
+
     let mut completed_ids = Vec::new(env);
+    let mut completed_ttls: Vec<OperationTtl> = Vec::new(env);
     let mut results = Vec::new(env);
 
     for op in ordered.iter() {
-        if !dependency_resolver::dependencies_satisfied(&completed_ids, &op) {
-            return Err(TransactionError::DependencyNotMet);
-        }
+        dependency_resolver::validate_dependency_ttl(
+            env,
+            &completed_ids,
+            &completed_ttls,
+            &op,
+            &config,
+        )?;
+
         let result = execute_operation(env, &op);
         completed_ids.push_back(op.operation_id);
+        completed_ttls.push_back(OperationTtl {
+            operation_id: op.operation_id,
+            satisfied_at_ledger: time_manager::current_ledger(env),
+            remaining_ttl_ledgers: config.temporary_entry_min_ttl,
+        });
         results.push_back(result);
     }
 

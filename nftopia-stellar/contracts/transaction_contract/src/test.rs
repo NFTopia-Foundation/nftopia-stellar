@@ -2,10 +2,19 @@
 
 extern crate std;
 
-use soroban_sdk::{Address, Env, String, Vec, map, testutils::Address as _, vec};
+use soroban_sdk::{
+    Address, Env, String, Vec, map, testutils::Address as _, testutils::Ledger, vec,
+};
 
+use crate::dependency_resolver;
+use crate::error::TransactionError;
+use crate::state_machine;
 use crate::transaction_core::{TransactionContract, TransactionContractClient};
-use crate::types::{GasOptimizationConfig, RecoveryStrategy, TransactionBlueprint};
+use crate::types::{
+    GasOptimizationConfig, OperationTtl, RecoveryStrategy, TransactionBlueprint, TtlConfig,
+    default_ttl_config,
+};
+use crate::utils::time_manager;
 use crate::{Operation, OperationType, ParamType, Parameter, TransactionState};
 
 fn sample_operation(env: &Env, id: u64, deps: Vec<u64>) -> Operation {
@@ -598,7 +607,7 @@ fn test_complex_dependency_resolution() {
 }
 
 #[test]
-#[should_panic(expected = "HostError: Error(Contract, #5)")] // TransactionError::DependencyNotMet
+#[should_panic(expected = "HostError: Error(Contract, #13)")] // TransactionError::CircularDependencyError
 fn test_circular_dependency_detection() {
     let env = Env::default();
     env.mock_all_auths();
@@ -607,9 +616,7 @@ fn test_circular_dependency_detection() {
     let tx_id = client.create_transaction(&creator, &map![&env], &vec![&env]);
 
     // 1 -> 2
-    // 2 -> 1 (Circular)
-    // Note: The preflight check doesn't explicitly check for cycles yet,
-    // but execution will fail when it hits the first unmet dependency.
+    // 2 -> 1 (Circular) — preflight rejects the cycle before execution.
     let op1 = sample_operation(&env, 1, vec![&env, 2]);
     let op2 = sample_operation(&env, 2, vec![&env, 1]);
 
@@ -712,4 +719,408 @@ fn test_batch_execute_partial_success() {
     assert_eq!(result.failed, 1);
     assert_eq!(result.result_ids.len(), 1);
     assert_eq!(result.result_ids.get(0).unwrap(), tx1);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TTL-AWARE DEPENDENCY RESOLUTION TESTS (#290)
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn resolver_topologically_sorts_out_of_order_operations() {
+    let env = Env::default();
+
+    // Input is intentionally in reverse dependency order.
+    let op1 = sample_operation(&env, 1, vec![&env]);
+    let op2 = sample_operation(&env, 2, vec![&env, 1]);
+    let ops = vec![&env, op2, op1];
+
+    let ordered = dependency_resolver::resolve_execution_order(&env, &ops).unwrap();
+    assert_eq!(ordered.len(), 2);
+    assert_eq!(ordered.get(0).unwrap().operation_id, 1);
+    assert_eq!(ordered.get(1).unwrap().operation_id, 2);
+}
+
+#[test]
+fn dependency_graph_orders_diamond_and_tracks_depth() {
+    let env = Env::default();
+
+    let op1 = sample_operation(&env, 1, vec![&env]);
+    let op2 = sample_operation(&env, 2, vec![&env, 1]);
+    let op3 = sample_operation(&env, 3, vec![&env, 1]);
+    let op4 = sample_operation(&env, 4, vec![&env, 2, 3]);
+    let ops = vec![&env, op1, op2, op3, op4];
+
+    let graph = dependency_resolver::DependencyGraph::build(&env, &ops).unwrap();
+    assert_eq!(graph.operation_ids().len(), 4);
+    assert_eq!(graph.max_depth(), 2);
+
+    let order = graph.operation_ids();
+    let mut pos1: i32 = -1;
+    let mut pos4: i32 = -1;
+    for i in 0..order.len() {
+        let id = order.get(i).unwrap();
+        if id == 1 {
+            pos1 = i as i32;
+        }
+        if id == 4 {
+            pos4 = i as i32;
+        }
+    }
+    assert!(
+        pos1 >= 0 && pos4 >= 0 && pos1 < pos4,
+        "dependency must precede dependent"
+    );
+}
+
+#[test]
+fn resolver_rejects_circular_dependencies() {
+    let env = Env::default();
+
+    // 1 -> 2 and 2 -> 1
+    let op1 = sample_operation(&env, 1, vec![&env, 2]);
+    let op2 = sample_operation(&env, 2, vec![&env, 1]);
+    let ops = vec![&env, op1, op2];
+
+    let result = dependency_resolver::resolve_execution_order(&env, &ops);
+    assert_eq!(
+        result.err(),
+        Some(TransactionError::CircularDependencyError)
+    );
+}
+
+#[test]
+fn dependency_graph_rejects_dangling_references() {
+    let env = Env::default();
+    let ops = vec![&env, sample_operation(&env, 1, vec![&env, 99])];
+
+    let result = dependency_resolver::DependencyGraph::build(&env, &ops);
+    assert_eq!(result.err(), Some(TransactionError::DependencyNotMet));
+}
+
+#[test]
+fn ttl_validation_rejects_expired_dependency_output() {
+    let env = Env::default();
+    env.ledger().set_sequence_number(100);
+
+    let dependent = sample_operation(&env, 2, vec![&env, 1]);
+    let completed = vec![&env, 1_u64];
+    let records = vec![
+        &env,
+        OperationTtl {
+            operation_id: 1,
+            satisfied_at_ledger: 100,
+            remaining_ttl_ledgers: 4_096,
+        },
+    ];
+    let config = default_ttl_config(&env);
+
+    // Plenty of TTL remaining right after the dependency completed.
+    assert!(
+        dependency_resolver::validate_dependency_ttl(
+            &env, &completed, &records, &dependent, &config
+        )
+        .is_ok()
+    );
+    assert!(dependency_resolver::dependencies_satisfied_with_ttl(
+        &env, &completed, &records, &dependent, &config
+    ));
+
+    // Fast-forward ~4000 ledgers; the output no longer covers the window.
+    env.ledger().set_sequence_number(100 + 4_000);
+    assert_eq!(
+        dependency_resolver::validate_dependency_ttl(
+            &env, &completed, &records, &dependent, &config
+        )
+        .err(),
+        Some(TransactionError::TTLExpired)
+    );
+    assert!(!dependency_resolver::dependencies_satisfied_with_ttl(
+        &env, &completed, &records, &dependent, &config
+    ));
+}
+
+#[test]
+fn unsigned_dependency_is_not_satisfied() {
+    let env = Env::default();
+    env.ledger().set_sequence_number(10);
+
+    let dependent = sample_operation(&env, 2, vec![&env, 1]);
+    let completed = Vec::<u64>::new(&env);
+    let records = Vec::<OperationTtl>::new(&env);
+    let config = default_ttl_config(&env);
+
+    assert_eq!(
+        dependency_resolver::validate_dependency_ttl(
+            &env, &completed, &records, &dependent, &config
+        )
+        .err(),
+        Some(TransactionError::DependencyNotMet)
+    );
+}
+
+#[test]
+fn min_remaining_ttl_buffer_is_configurable() {
+    let env = Env::default();
+    env.ledger().set_sequence_number(0);
+
+    // Dependent op timeout 300s => 60 ledgers required.
+    let dependent = sample_operation(&env, 2, vec![&env, 1]);
+    let completed = vec![&env, 1_u64];
+    let records = vec![
+        &env,
+        OperationTtl {
+            operation_id: 1,
+            satisfied_at_ledger: 0,
+            remaining_ttl_ledgers: 260,
+        },
+    ];
+
+    let small_buffer = TtlConfig {
+        min_remaining_ttl_buffer: 200,
+        ..default_ttl_config(&env)
+    };
+    assert!(
+        dependency_resolver::validate_dependency_ttl(
+            &env,
+            &completed,
+            &records,
+            &dependent,
+            &small_buffer
+        )
+        .is_ok()
+    );
+
+    let large_buffer = TtlConfig {
+        min_remaining_ttl_buffer: 1_000,
+        ..default_ttl_config(&env)
+    };
+    assert_eq!(
+        dependency_resolver::validate_dependency_ttl(
+            &env,
+            &completed,
+            &records,
+            &dependent,
+            &large_buffer
+        )
+        .err(),
+        Some(TransactionError::TTLExpired)
+    );
+}
+
+#[test]
+fn refresh_dependency_renews_ttl_for_retry() {
+    let env = Env::default();
+    env.ledger().set_sequence_number(5_000);
+
+    let dependent = sample_operation(&env, 2, vec![&env, 1]);
+    let completed = vec![&env, 1_u64];
+    let stale = vec![
+        &env,
+        OperationTtl {
+            operation_id: 1,
+            satisfied_at_ledger: 0,
+            remaining_ttl_ledgers: 1_000,
+        },
+    ];
+    let config = default_ttl_config(&env);
+
+    assert_eq!(
+        dependency_resolver::validate_dependency_ttl(&env, &completed, &stale, &dependent, &config)
+            .err(),
+        Some(TransactionError::TTLExpired)
+    );
+
+    let renewed = dependency_resolver::refresh_dependency(&env, &stale, 1, 4_096).unwrap();
+    assert!(
+        dependency_resolver::validate_dependency_ttl(
+            &env, &completed, &renewed, &dependent, &config
+        )
+        .is_ok()
+    );
+
+    assert_eq!(
+        dependency_resolver::refresh_dependency(&env, &stale, 42, 4_096).err(),
+        Some(TransactionError::DependencyNotMet)
+    );
+}
+
+#[test]
+fn dependency_graph_rejects_window_exceeding_persistent_ttl() {
+    let env = Env::default();
+
+    let mut op = sample_operation(&env, 1, vec![&env]);
+    // Mainnet persistent max is 518_400 ledgers (~2.59M seconds at 5s/ledger).
+    op.timeout_seconds = 3_000_000;
+    let ops = vec![&env, op];
+
+    let graph = dependency_resolver::DependencyGraph::build(&env, &ops).unwrap();
+    let config = default_ttl_config(&env);
+    assert_eq!(
+        graph.validate_ttl_windows(&config).err(),
+        Some(TransactionError::TTLExpired)
+    );
+}
+
+#[test]
+fn ttl_config_respects_mainnet_bounds() {
+    let env = Env::default();
+    let defaults = default_ttl_config(&env);
+    assert_eq!(defaults.temporary_entry_min_ttl, 4_096);
+    assert_eq!(defaults.persistent_entry_max_ttl, 518_400);
+    assert!(dependency_resolver::validate_ttl_config(&defaults).is_ok());
+
+    let too_small_temp = TtlConfig {
+        temporary_entry_min_ttl: 100,
+        ..defaults.clone()
+    };
+    assert!(dependency_resolver::validate_ttl_config(&too_small_temp).is_err());
+
+    let too_large_persistent = TtlConfig {
+        persistent_entry_max_ttl: 600_000,
+        ..defaults.clone()
+    };
+    assert!(dependency_resolver::validate_ttl_config(&too_large_persistent).is_err());
+}
+
+#[test]
+fn time_manager_converts_between_seconds_and_ledgers() {
+    let env = Env::default();
+    env.ledger().set_sequence_number(1_000);
+    env.ledger().set_timestamp(50_000);
+
+    assert_eq!(time_manager::secs_to_ledgers(5, 5), 1);
+    assert_eq!(time_manager::secs_to_ledgers(6, 5), 2);
+    assert_eq!(time_manager::secs_to_ledgers(300, 5), 60);
+    assert_eq!(time_manager::ledgers_to_secs(60, 5), 300);
+    assert_eq!(time_manager::current_ledger(&env), 1_000);
+    assert_eq!(time_manager::ledger_from_now(50, &env), 1_050);
+    assert_eq!(time_manager::deadline_ledger_from_now(300, &env), 1_060);
+    assert_eq!(time_manager::ledgers_elapsed(900, &env), 100);
+    assert!(time_manager::is_ledger_expired(1_000, &env));
+    assert!(!time_manager::is_ledger_expired(1_001, &env));
+    assert!(time_manager::assert_ttl_sufficient(4_096, 60, 1_000).is_ok());
+    assert_eq!(
+        time_manager::assert_ttl_sufficient(1_059, 60, 1_000).err(),
+        Some(TransactionError::TTLExpired)
+    );
+}
+
+#[test]
+fn state_machine_rejects_transitions_past_deadlines() {
+    let env = Env::default();
+    env.ledger().set_sequence_number(100);
+    env.ledger().set_timestamp(1_000);
+
+    assert!(
+        state_machine::validate_transition_with_time(
+            &TransactionState::Draft,
+            &TransactionState::Executing,
+            2_000,
+            &env,
+        )
+        .is_ok()
+    );
+
+    assert_eq!(
+        state_machine::validate_transition_with_time(
+            &TransactionState::Draft,
+            &TransactionState::Executing,
+            500,
+            &env,
+        )
+        .err(),
+        Some(TransactionError::OperationTimedOut)
+    );
+
+    assert_eq!(
+        state_machine::validate_transition_with_ledger(
+            &TransactionState::Draft,
+            &TransactionState::Executing,
+            100,
+            &env,
+        )
+        .err(),
+        Some(TransactionError::TTLExpired)
+    );
+
+    // Invalid transitions are rejected regardless of deadlines.
+    assert_eq!(
+        state_machine::validate_transition_with_time(
+            &TransactionState::Completed,
+            &TransactionState::Executing,
+            9_999,
+            &env,
+        )
+        .err(),
+        Some(TransactionError::InvalidStateTransition)
+    );
+
+    // Cancelling does not open an execution window, so an expired deadline is fine.
+    assert!(
+        state_machine::validate_transition_with_time(
+            &TransactionState::Draft,
+            &TransactionState::Cancelled,
+            0,
+            &env,
+        )
+        .is_ok()
+    );
+}
+
+#[test]
+fn execute_transaction_reorders_out_of_order_dependencies() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, creator) = make_client(&env);
+
+    let tx_id = client.create_transaction(&creator, &map![&env], &vec![&env]);
+    // Add the dependent operation before its dependency.
+    client.add_operation(&tx_id, &sample_operation(&env, 2, vec![&env, 1]));
+    client.add_operation(&tx_id, &sample_operation(&env, 1, vec![&env]));
+
+    let result = client.execute_transaction(&tx_id, &None, &None);
+    assert_eq!(result.final_state, TransactionState::Completed);
+    assert_eq!(result.successful_operations, 2);
+    assert_eq!(result.results.get(0).unwrap().operation_id, 1);
+    assert_eq!(result.results.get(1).unwrap().operation_id, 2);
+}
+
+#[test]
+fn configure_ttl_roundtrip() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _creator) = make_client(&env);
+
+    let defaults = client.get_ttl_config();
+    assert_eq!(defaults.min_remaining_ttl_buffer, 1_000);
+
+    let admin = Address::generate(&env);
+    let config = TtlConfig {
+        min_remaining_ttl_buffer: 200,
+        temporary_entry_min_ttl: 4_096,
+        persistent_entry_max_ttl: 518_400,
+        ledger_close_time_seconds: 5,
+    };
+    client.configure_ttl(&admin, &config);
+
+    let loaded = client.get_ttl_config();
+    assert_eq!(loaded.min_remaining_ttl_buffer, 200);
+    assert_eq!(loaded.ledger_close_time_seconds, 5);
+}
+
+#[test]
+#[should_panic(expected = "HostError: Error(Contract, #4)")] // TransactionError::InvalidOperation
+fn configure_ttl_rejects_out_of_bounds_values() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _creator) = make_client(&env);
+
+    let admin = Address::generate(&env);
+    let bad = TtlConfig {
+        min_remaining_ttl_buffer: 100,
+        temporary_entry_min_ttl: 10, // below mainnet temporary minimum of 4096
+        persistent_entry_max_ttl: 518_400,
+        ledger_close_time_seconds: 5,
+    };
+    client.configure_ttl(&admin, &bad);
 }

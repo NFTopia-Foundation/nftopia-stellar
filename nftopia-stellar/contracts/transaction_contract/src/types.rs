@@ -190,6 +190,38 @@ pub struct TransactionStatus {
     pub error_reason: Option<String>,
 }
 
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TtlConfig {
+    /// Ledgers that must remain on a dependency output *after* the dependent
+    /// operation finishes, absorbing mainnet ledger-close variability.
+    pub min_remaining_ttl_buffer: u32,
+    /// Minimum acceptable TTL for temporary storage entries (mainnet: 4096).
+    pub temporary_entry_min_ttl: u32,
+    /// Maximum acceptable TTL for persistent storage entries (mainnet: 30 days).
+    pub persistent_entry_max_ttl: u32,
+    /// Average ledger close time in seconds used to convert timestamps to ledgers.
+    pub ledger_close_time_seconds: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OperationTtl {
+    pub operation_id: u64,
+    pub satisfied_at_ledger: u32,
+    pub remaining_ttl_ledgers: u32,
+}
+
+pub fn default_ttl_config(_env: &Env) -> TtlConfig {
+    TtlConfig {
+        min_remaining_ttl_buffer: 1_000,
+        temporary_entry_min_ttl: 4_096,
+        // 30 days at one ledger per 5 seconds: 30 * 86_400 / 5.
+        persistent_entry_max_ttl: 518_400,
+        ledger_close_time_seconds: 5,
+    }
+}
+
 pub fn default_gas_config(_env: &Env) -> GasOptimizationConfig {
     GasOptimizationConfig {
         batch_size: 10,
