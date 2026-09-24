@@ -53,6 +53,12 @@ NFTopia Frontend is the browser-based marketplace and creator interface for the 
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
+## 🔄 PWA Update Strategy
+
+The frontend uses `next-pwa` with `skipWaiting: true` configured. When a new version of the service worker is available, a non-intrusive banner appears at the bottom of the screen prompting the user to reload to get the latest version. Clicking the "Reload" button will activate the new service worker and refresh the page.
+
+This ensures that users are prompted to update when a new version is deployed, while still allowing the update to occur automatically on a full page reload if the banner is dismissed.
+
 ## 🗺️ Route Map
 
 Current top-level route areas include:
@@ -159,6 +165,19 @@ nftopia-frontend/
 npm run test
 npm run validate-translations
 ```
+
+### Manual Test Procedure for PWA Updates
+
+1. Build the frontend: `npm run build`
+2. Start the production server: `npm run start`
+3. Visit the app in a supported browser (Chrome, Firefox, Edge) and ensure it loads.
+4. Open the developer tools and go to the Application tab (or Service Workers in Firefox).
+5. Simulate an update by changing something in the frontend (e.g., modify a text string) and rebuild.
+6. Reload the page to trigger the service worker update.
+7. Observe that a banner appears at the bottom of the screen with the message "Update available — refresh to get the latest version" and a "Reload" button.
+8. Click the "Reload" button to verify that the page reloads and the new version is loaded.
+
+You can also test by deploying a new version to a staging environment and visiting the site with an existing service worker.
 
 Useful companion docs in this workspace:
 

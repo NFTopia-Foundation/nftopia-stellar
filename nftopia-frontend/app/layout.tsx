@@ -4,6 +4,8 @@ import ApolloWrapper from "@/lib/graphql/apollo-wrapper";
 import { AuthProvider } from "@/lib/context/AuthContext";
 import dynamic from "next/dynamic";
 import ExperimentProviderWrapper from '@/lib/experiments/ExperimentProvider';
+import { Toast } from '@/components/ui/toast';
+import UpdateToast from '@/components/ui/UpdateToast';
 
 // ─── SAFE COMPILER SEPARATION ──────────────────────────────────────────
 // Pulling in your isolated TelemetryProvider file with SSR disabled.
@@ -94,6 +96,10 @@ export default function RootLayout({
           <AuthProvider>
             <ApolloWrapper>{children}</ApolloWrapper>
           </AuthProvider>
+          {/* Update toast listener */}
+          <UpdateToast />
+          {/* Toast container */}
+          <Toast />
         </ExperimentProviderWrapper>
       </body>
     </html>
