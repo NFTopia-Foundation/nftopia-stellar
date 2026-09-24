@@ -9,4 +9,9 @@ export interface Collection {
     secondary2: string;
   };
   likes: number;
+  floorPrice?: string;
+  totalVolume?: string;
+  description?: string;
+  totalSupply?: number;
+  isVerified?: boolean;
 } 

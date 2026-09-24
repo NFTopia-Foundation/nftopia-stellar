@@ -7,6 +7,8 @@ import { Heart, Loader2 } from 'lucide-react';
 import { Collection } from '@/types';
 import { useLikeCollection } from '@/hooks/graphql/useCollectionQueries';
 
+import { FloorPriceDisplay } from './collection/FloorPriceDisplay';
+
 interface CollectionCardProps {
   collection: Collection;
 }
@@ -123,47 +125,58 @@ const CollectionCard: React.FC<CollectionCardProps> = ({ collection }) => {
         </div>
 
         {/* Card Content */}
-        <div>
-          <h3 className="text-white font-semibold text-lg mb-1 truncate group-hover:text-purple-300 transition-colors">
-            {collection.title}
-          </h3>
-          <div className="flex items-center justify-between text-sm text-gray-400">
-            <div className="flex items-center gap-2">
-              {/* Creator Avatar */}
-              <div className="w-5 h-5 rounded-full overflow-hidden flex-shrink-0">
-                <ImageWithFallback
-                  src={collection.creatorImage}
-                  alt={`${collection.creatorName} avatar`}
-                  width={20}
-                  height={20}
-                  className="rounded-full"
-                  fallbackSrc="/images/fallbacks/avatar-fallback.svg"
-                />
+        <div className="space-y-3">
+          <div>
+            <h3 className="text-white font-semibold text-lg mb-1 truncate group-hover:text-purple-300 transition-colors">
+              {collection.title}
+            </h3>
+            <div className="flex items-center justify-between text-sm text-gray-400">
+              <div className="flex items-center gap-2">
+                {/* Creator Avatar */}
+                <div className="w-5 h-5 rounded-full overflow-hidden flex-shrink-0">
+                  <ImageWithFallback
+                    src={collection.creatorImage}
+                    alt={`${collection.creatorName} avatar`}
+                    width={20}
+                    height={20}
+                    className="rounded-full"
+                    fallbackSrc="/images/fallbacks/avatar-fallback.svg"
+                  />
+                </div>
+                <span className="truncate">{collection.creatorName}</span>
               </div>
-              <span className="truncate">{collection.creatorName}</span>
+              <button
+                onClick={handleLikeClick}
+                disabled={isLoading}
+                aria-pressed={localIsLiked}
+                aria-label={localIsLiked ? 'Unlike collection' : 'Like collection'}
+                className={`p-1 rounded-full transition-all duration-200 z-10 ${
+                  isLoading 
+                    ? 'opacity-50 cursor-not-allowed' 
+                    : 'hover:text-white hover:bg-white/10 focus:outline-none focus:ring-1 focus:ring-white/50'
+                }`}
+              >
+                {isLoading ? (
+                  <Loader2 size={18} className="animate-spin text-purple-400" />
+                ) : (
+                  <Heart
+                    size={18}
+                    fill={localIsLiked ? 'rgb(192, 132, 252)' : 'none'}
+                    stroke={localIsLiked ? 'rgb(192, 132, 252)' : 'currentColor'}
+                    className={`transition-all duration-200 ${localIsLiked ? 'text-purple-400 scale-110' : 'text-gray-500'}`}
+                  />
+                )}
+              </button>
             </div>
-            <button
-              onClick={handleLikeClick}
-              disabled={isLoading}
-              aria-pressed={localIsLiked}
-              aria-label={localIsLiked ? 'Unlike collection' : 'Like collection'}
-              className={`p-1 rounded-full transition-all duration-200 z-10 ${
-                isLoading 
-                  ? 'opacity-50 cursor-not-allowed' 
-                  : 'hover:text-white hover:bg-white/10 focus:outline-none focus:ring-1 focus:ring-white/50'
-              }`}
-            >
-              {isLoading ? (
-                <Loader2 size={18} className="animate-spin text-purple-400" />
-              ) : (
-                <Heart
-                  size={18}
-                  fill={localIsLiked ? 'rgb(192, 132, 252)' : 'none'}
-                  stroke={localIsLiked ? 'rgb(192, 132, 252)' : 'currentColor'}
-                  className={`transition-all duration-200 ${localIsLiked ? 'text-purple-400 scale-110' : 'text-gray-500'}`}
-                />
-              )}
-            </button>
+          </div>
+
+          {/* Floor Price Section */}
+          <div className="pt-2.5 border-t border-purple-900/30 flex items-center justify-between text-xs">
+            <span className="text-gray-400 font-medium">Floor Price</span>
+            <FloorPriceDisplay
+              floorPrice={collection.floorPrice}
+              variant="compact"
+            />
           </div>
         </div>
       </a>
