@@ -17,6 +17,8 @@ export const COLLECTION_FIELDS_FRAGMENT = gql`
     image
     creatorId
     createdAt
+    floorPrice
+    totalVolume
   }
 `;
 

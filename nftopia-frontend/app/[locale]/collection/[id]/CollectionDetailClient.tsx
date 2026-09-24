@@ -17,6 +17,9 @@ interface CollectionData {
   totalVolume?: string;
   floorPrice?: string;
   totalSupply?: number;
+  trendPercentage?: number | null;
+  trendDirection?: "up" | "down" | "neutral";
+  historicalPrices?: number[];
   creator?: {
     id: string;
     username?: string;
@@ -31,6 +34,9 @@ interface CollectionData {
   };
 }
 
+import { FloorPriceDisplay } from "@/components/collection/FloorPriceDisplay";
+import { useCollectionStats } from "@/hooks/useCollectionStats";
+
 export function CollectionDetailClient({
   collection,
   locale,
@@ -40,6 +46,20 @@ export function CollectionDetailClient({
 }) {
   const nfts: NFT[] = collection.nfts?.edges?.map((e) => e.node) || [];
   const totalCount = collection.nfts?.totalCount || nfts.length;
+
+  const { historicalPrices: fetchedHistory, trendPercentage: fetchedTrend, trendDirection: fetchedDirection } =
+    useCollectionStats(collection.id, collection.floorPrice);
+
+  const effectiveHistory =
+    collection.historicalPrices && collection.historicalPrices.length > 0
+      ? collection.historicalPrices
+      : fetchedHistory;
+
+  const effectiveTrend =
+    collection.trendPercentage !== undefined ? collection.trendPercentage : fetchedTrend;
+
+  const effectiveDirection =
+    collection.trendDirection || fetchedDirection;
 
   return (
     <main className="min-h-screen relative text-white overflow-hidden">
@@ -97,27 +117,24 @@ export function CollectionDetailClient({
               <p className="text-gray-300 leading-relaxed">{collection.description}</p>
             )}
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="p-4 rounded-xl bg-[#1E1A45] border border-purple-900/30">
                 <p className="text-xs text-gray-400 mb-1">Items</p>
-                <p className="text-xl font-bold text-white">{totalCount}</p>
+                <p className="text-xl sm:text-2xl font-bold text-white">{totalCount}</p>
               </div>
-              {collection.totalVolume && (
-                <div className="p-4 rounded-xl bg-[#1E1A45] border border-purple-900/30">
-                  <p className="text-xs text-gray-400 mb-1">Volume</p>
-                  <p className="text-xl font-bold text-white">
-                    {parseFloat(collection.totalVolume).toFixed(2)} XLM
-                  </p>
-                </div>
-              )}
-              {collection.floorPrice && (
-                <div className="p-4 rounded-xl bg-[#1E1A45] border border-purple-900/30">
-                  <p className="text-xs text-gray-400 mb-1">Floor</p>
-                  <p className="text-xl font-bold text-white">
-                    {parseFloat(collection.floorPrice).toFixed(2)} XLM
-                  </p>
-                </div>
-              )}
+              <div className="p-4 rounded-xl bg-[#1E1A45] border border-purple-900/30">
+                <p className="text-xs text-gray-400 mb-1">Volume</p>
+                <p className="text-xl sm:text-2xl font-bold text-white">
+                  {collection.totalVolume ? `${parseFloat(collection.totalVolume).toFixed(2)} XLM` : "0.00 XLM"}
+                </p>
+              </div>
+              <FloorPriceDisplay
+                floorPrice={collection.floorPrice}
+                trendPercentage={effectiveTrend}
+                trendDirection={effectiveDirection}
+                historicalPrices={effectiveHistory}
+                variant="stat-card"
+              />
             </div>
           </div>
         </div>
