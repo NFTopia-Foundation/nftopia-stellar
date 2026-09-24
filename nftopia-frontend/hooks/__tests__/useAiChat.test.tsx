@@ -16,7 +16,7 @@ describe("useAiChat", () => {
   it("renders stream chunks incrementally and aborts on unmount", async () => {
     let resolveStream!: (value: { reply: string; sessionId: string }) => void;
     let signal: AbortSignal | undefined;
-    mockedStreamAiChat.mockImplementation(async (_request, handlers, requestSignal) => {
+    mockedStreamAiChat.mockImplementation(async (_request, handlers = {}, requestSignal) => {
       signal = requestSignal;
       handlers.onText?.("Hello");
       await new Promise<{ reply: string; sessionId: string }>((resolve) => {
