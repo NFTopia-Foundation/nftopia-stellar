@@ -18,11 +18,11 @@ describe("useAiChat", () => {
     let signal: AbortSignal | undefined;
     mockedStreamAiChat.mockImplementation(async (_request, handlers = {}, requestSignal) => {
       signal = requestSignal;
-      handlers.onText?.("Hello");
+      handlers?.onText?.("Hello");
       await new Promise<{ reply: string; sessionId: string }>((resolve) => {
         resolveStream = resolve;
       });
-      handlers.onText?.(" world");
+      handlers?.onText?.(" world");
       return { reply: "Hello world", sessionId: "session-1" };
     });
 
