@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useWalletStore } from "@/stores/walletStore";
+import { useToast } from "@/lib/stores";
+import { useAuctionBidSubscription, SubscriptionBid } from "@/hooks/graphql/useAuctionBidSubscription";
 import { CircuitBackground } from "@/components/circuit-background";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -11,7 +13,7 @@ import { API_CONFIG } from "@/lib/config";
 import { cn } from "@/lib/utils";
 import {
   ArrowLeft, Clock, Gavel, User, Award, Wallet, Check, Share2, Heart,
-  TrendingUp, Loader2, Info, Tag,
+  TrendingUp, Loader2, Info, Tag, AlertTriangle, X, Radio,
 } from "lucide-react";
 
 interface AuctionNFTAttribute { traitType: string; value: string; displayType?: string; }
@@ -124,7 +126,8 @@ export default function AuctionDetailClient({
   locale: string;
 }) {
   const { t } = useTranslation();
-  const { connected } = useWalletStore();
+  const { connected, address } = useWalletStore();
+  const { showWarning } = useToast();
   const [auction, setAuction] = useState<AuctionDetail>(initialAuction);
   const [bidAmount, setBidAmount] = useState("");
   const [placingBid, setPlacingBid] = useState(false);
@@ -132,6 +135,15 @@ export default function AuctionDetailClient({
   const [bidSuccess, setBidSuccess] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isWatched, setIsWatched] = useState(false);
+  const [outbidAlert, setOutbidAlert] = useState<{
+    show: boolean;
+    amount: string;
+  }>({ show: false, amount: "" });
+
+  const auctionRef = useRef<AuctionDetail>(auction);
+  useEffect(() => {
+    auctionRef.current = auction;
+  }, [auction]);
 
   const fetchAuction = useCallback(async () => {
     try {
@@ -143,11 +155,83 @@ export default function AuctionDetailClient({
     } catch {}
   }, [initialAuction.id]);
 
+  const handleNewBid = useCallback(
+    (newBid: SubscriptionBid) => {
+      setAuction((prev) => {
+        const existingBids = prev.bids || [];
+        if (existingBids.some((b) => b.id === newBid.id)) {
+          return prev;
+        }
+
+        const formattedBid: BidWithUser = {
+          id: newBid.id,
+          amount: newBid.amount,
+          bidderId: newBid.bidderId,
+          bidder: newBid.bidder
+            ? {
+                id: newBid.bidder.id,
+                username: newBid.bidder.username,
+                walletAddress: newBid.bidder.walletAddress,
+              }
+            : undefined,
+          createdAt: newBid.createdAt || new Date().toISOString(),
+        };
+
+        const currentHighest = prev.highestBid;
+        const newBidNum = parseFloat(formattedBid.amount);
+        const currentHighestNum = currentHighest
+          ? parseFloat(currentHighest.amount)
+          : parseFloat(prev.startPrice);
+
+        const isNewHighest = newBidNum >= currentHighestNum || !currentHighest;
+
+        // Check if current user was previously holding highest bid and got outbid
+        if (connected && address && currentHighest && isNewHighest) {
+          const prevBidderAddress = currentHighest.bidder?.walletAddress?.toLowerCase();
+          const currentAddress = address.toLowerCase();
+          const newBidderAddress = formattedBid.bidder?.walletAddress?.toLowerCase();
+
+          const wasUserHighest = prevBidderAddress === currentAddress;
+          const isFromDifferentUser = newBidderAddress !== currentAddress;
+
+          if (wasUserHighest && isFromDifferentUser) {
+            const outbidText = t("auctionDetail.outbid") || "You've been outbid!";
+            showWarning(`${outbidText} New highest bid: ${formattedBid.amount} XLM`);
+            setOutbidAlert({
+              show: true,
+              amount: formattedBid.amount,
+            });
+          }
+        }
+
+        const updatedBids = [formattedBid, ...existingBids];
+        const nextHighestBid = isNewHighest ? formattedBid : prev.highestBid;
+        const nextCurrentPrice = isNewHighest ? formattedBid.amount : prev.currentPrice;
+
+        return {
+          ...prev,
+          bids: updatedBids,
+          highestBid: nextHighestBid,
+          currentPrice: nextCurrentPrice,
+        };
+      });
+    },
+    [connected, address, showWarning, t]
+  );
+
+  const { isSubscribed, shouldFallbackToPolling } = useAuctionBidSubscription({
+    auctionId: initialAuction.id,
+    skip: auction.status !== "ACTIVE",
+    onBidPlaced: handleNewBid,
+  });
+
+  // Fallback polling: if websocket drops or errors, poll at 15s interval; otherwise keep a slower heartbeat
   useEffect(() => {
     if (auction.status !== "ACTIVE") return;
-    const interval = setInterval(fetchAuction, 15000);
+    const intervalTime = shouldFallbackToPolling || !isSubscribed ? 15000 : 45000;
+    const interval = setInterval(fetchAuction, intervalTime);
     return () => clearInterval(interval);
-  }, [auction.status, fetchAuction]);
+  }, [auction.status, fetchAuction, isSubscribed, shouldFallbackToPolling]);
 
   const handlePlaceBid = useCallback(async () => {
     if (!auction || !bidAmount) return;
@@ -157,7 +241,7 @@ export default function AuctionDetailClient({
     try {
       const minBid = parseFloat(auction.highestBid?.amount || auction.startPrice) + 0.01;
       const bidNum = parseFloat(bidAmount);
-      if (Number.isNaN(bidNum) || bidNum < minBid) throw new Error(`Minimum bid is ${minBid} XLM`);
+      if (Number.isNaN(bidNum) || bidNum < minBid) throw new Error(`Minimum bid is ${minBid.toFixed(2)} XLM`);
 
       const res = await fetch(`${API_CONFIG.baseUrl}/auctions/${auction.id}/bids`, {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
@@ -169,6 +253,7 @@ export default function AuctionDetailClient({
       }
       setBidSuccess(true);
       setBidAmount("");
+      setOutbidAlert({ show: false, amount: "" });
       setTimeout(fetchAuction, 1000);
     } catch (err) {
       setBidError(err instanceof Error ? err.message : "Failed to place bid");
@@ -250,13 +335,33 @@ export default function AuctionDetailClient({
                   </button>
                 </div>
               </div>
-              {auction.status !== "ACTIVE" && (
-                <span className={cn("inline-block mt-2 text-xs font-semibold uppercase tracking-wider px-3 py-1 rounded-full",
-                  auction.status === "COMPLETED" || auction.status === "SETTLED"
-                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
-                    : auction.status === "CANCELLED" ? "bg-red-500/10 text-red-400 border border-red-500/30"
-                    : "bg-gray-700/50 text-gray-400")}>{auction.status}</span>
-              )}
+              <div className="flex items-center gap-2 mt-2">
+                {auction.status !== "ACTIVE" ? (
+                  <span className={cn("inline-block text-xs font-semibold uppercase tracking-wider px-3 py-1 rounded-full",
+                    auction.status === "COMPLETED" || auction.status === "SETTLED"
+                      ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                      : auction.status === "CANCELLED" ? "bg-red-500/10 text-red-400 border border-red-500/30"
+                      : "bg-gray-700/50 text-gray-400")}>{auction.status}</span>
+                ) : (
+                  <span
+                    data-testid="live-status-indicator"
+                    className={cn(
+                      "inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border transition-all",
+                      isSubscribed
+                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                        : "bg-purple-500/10 text-purple-300 border-purple-500/30"
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "w-2 h-2 rounded-full",
+                        isSubscribed ? "bg-emerald-400 animate-pulse" : "bg-purple-400"
+                      )}
+                    />
+                    {isSubscribed ? "Live Bids" : "Auto-Syncing"}
+                  </span>
+                )}
+              </div>
             </div>
 
             {nft?.description && <p className="text-gray-300 leading-relaxed">{nft.description}</p>}
@@ -308,6 +413,29 @@ export default function AuctionDetailClient({
             )}
 
             <div className="p-5 rounded-xl bg-[#1E1A45] border border-purple-900/30 space-y-4">
+              {outbidAlert.show && (
+                <div
+                  data-testid="outbid-notification"
+                  className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 flex items-start justify-between gap-3 text-sm animate-in fade-in slide-in-from-top-2 duration-300"
+                >
+                  <div className="flex items-start gap-2.5">
+                    <AlertTriangle className="h-5 w-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-semibold text-amber-200">{t("auctionDetail.outbid") || "You've been outbid!"}</p>
+                      <p className="text-xs text-amber-300/80 mt-0.5">
+                        A higher bid of <span className="font-bold text-white">{outbidAlert.amount} XLM</span> was just placed.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setOutbidAlert({ show: false, amount: "" })}
+                    className="text-amber-400/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors"
+                    aria-label="Dismiss outbid alert"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
               {connected ? (
                 isEnded ? (
                   <div className="text-center py-3"><p className="text-gray-400 font-medium">{t("auctionDetail.auctionEnded")}</p></div>

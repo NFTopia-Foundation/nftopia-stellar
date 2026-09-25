@@ -3,10 +3,14 @@ import {
   HttpLink,
   InMemoryCache,
   from,
+  split,
   NormalizedCacheObject,
 } from "@apollo/client";
 import { onError } from "@apollo/client/link/error";
 import { setContext } from "@apollo/client/link/context";
+import { GraphQLWsLink } from "@apollo/client/link/subscriptions";
+import { createClient } from "graphql-ws";
+import { getMainDefinition } from "@apollo/client/utilities";
 
 const GRAPHQL_URL =
   process.env.NEXT_PUBLIC_GRAPHQL_URL || "http://localhost:3001/graphql";
@@ -78,8 +82,47 @@ export function createApolloClient(): ApolloClient<NormalizedCacheObject> {
     credentials: "include",
   });
 
+  const httpLinkChain = from([errorLink, authLink, httpLink]);
+
+  let link = httpLinkChain;
+
+  if (typeof window !== "undefined") {
+    try {
+      const wsUrl =
+        process.env.NEXT_PUBLIC_GRAPHQL_WS_URL ||
+        GRAPHQL_URL.replace(/^https:\/\//i, "wss://").replace(/^http:\/\//i, "ws://");
+
+      const wsClient = createClient({
+        url: wsUrl,
+        connectionParams: () => {
+          const token = getAuthToken();
+          return token ? { Authorization: `Bearer ${token}` } : {};
+        },
+        retryAttempts: 5,
+        shouldRetry: () => true,
+      });
+
+      const wsLink = new GraphQLWsLink(wsClient);
+
+      link = split(
+        ({ query }) => {
+          const definition = getMainDefinition(query);
+          return (
+            definition.kind === "OperationDefinition" &&
+            definition.operation === "subscription"
+          );
+        },
+        wsLink,
+        httpLinkChain
+      );
+    } catch (err) {
+      console.warn("[ApolloClient] WebSocket link initialization failed, falling back to HTTP:", err);
+      link = httpLinkChain;
+    }
+  }
+
   return new ApolloClient({
-    link: from([errorLink, authLink, httpLink]),
+    link,
     cache: new InMemoryCache({
       typePolicies: {
         Query: {

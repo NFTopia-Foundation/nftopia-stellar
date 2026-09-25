@@ -47,6 +47,7 @@
     "firebase": "^11.9.1",
     "framer-motion": "^12.5.0",
     "graphql": "^16.11.0",
+    "graphql-ws": "^6.3.0",
     "gsap": "^3.12.7",
     "immer": "^10.1.1",
     "localforage": "^1.10.0",
