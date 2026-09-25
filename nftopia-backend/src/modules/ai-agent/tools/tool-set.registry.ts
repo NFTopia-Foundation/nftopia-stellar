@@ -15,7 +15,7 @@ import {
   type ModerationToolsDeps,
 } from './moderation.tools';
 
-const registry = new Map<ToolSetName, ToolSetRegistration>();
+const registry = new Map<ToolSetName, ToolSetRegistration<any>>();
 
 /**
  * Registers a tool set builder along with the exact tool names it's allowed

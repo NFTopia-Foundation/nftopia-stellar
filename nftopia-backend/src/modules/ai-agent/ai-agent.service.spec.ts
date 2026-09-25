@@ -17,6 +17,8 @@ import type { OrderService } from '../order/order.service';
 import type { AuctionService } from '../auction/auction.service';
 import type { AiUsageService } from './ai-usage.service';
 import type { ChatSessionService } from './chat-session.service';
+import type { Repository } from 'typeorm';
+import type { AiToolCallLog } from './entities/ai-tool-call-log.entity';
 
 describe('AiAgentService', () => {
   let service: AiAgentService;
@@ -50,6 +52,10 @@ describe('AiAgentService', () => {
       {} as AuctionService,
       aiUsageService as unknown as AiUsageService,
       chatSessionService as unknown as ChatSessionService,
+      {
+        save: jest.fn().mockResolvedValue(undefined),
+        createQueryBuilder: jest.fn(),
+      } as unknown as Repository<AiToolCallLog>,
     );
   });
 

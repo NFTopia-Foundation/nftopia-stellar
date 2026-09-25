@@ -10,6 +10,7 @@ export const MODERATION_TOOL_NAMES = ['flag_content'] as const;
 
 export interface ModerationToolsDeps {
   contentFlagService: ContentFlagService;
+  toolLogger?: import('./tool-set.types').ToolLogger;
 }
 
 /**
@@ -21,7 +22,45 @@ export interface ModerationToolsDeps {
 export function buildModerationTools(deps: ModerationToolsDeps) {
   const { contentFlagService } = deps;
 
-  const flagContent = betaZodTool({
+  const createTool = <T extends z.ZodTypeAny>(config: {
+    name: string;
+    description: string;
+    inputSchema: T;
+    run: (input: z.infer<T>) => Promise<string>;
+  }) => {
+    const originalRun = config.run;
+    config.run = async (input: z.infer<T>) => {
+      const start = Date.now();
+      try {
+        const res = await originalRun(input);
+        if (deps.toolLogger) {
+          const resStr = typeof res === 'string' ? res : JSON.stringify(res);
+          const summary =
+            resStr.substring(0, 100) + (resStr.length > 100 ? '...' : '');
+          deps.toolLogger(
+            config.name,
+            input as Record<string, unknown>,
+            summary,
+            Date.now() - start,
+          );
+        }
+        return res;
+      } catch (err) {
+        if (deps.toolLogger) {
+          deps.toolLogger(
+            config.name,
+            input as Record<string, unknown>,
+            `Error: ${(err as Error).message}`,
+            Date.now() - start,
+          );
+        }
+        throw err;
+      }
+    };
+    return betaZodTool(config);
+  };
+
+  const flagContent = createTool({
     name: 'flag_content',
     description:
       'Flag a listing, NFT, or collection for human moderation review — e.g. prohibited imagery, scam indicators, or IP infringement. This does NOT hide or remove the content; it only queues it in content_flags for a human moderator to act on via the admin flags queue.',

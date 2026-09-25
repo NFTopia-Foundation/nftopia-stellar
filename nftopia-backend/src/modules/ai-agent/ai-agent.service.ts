@@ -12,6 +12,8 @@ import type {
   BetaMessage,
   BetaMessageParam,
 } from '@anthropic-ai/sdk/resources/beta/messages';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { NftService } from '../nft/nft.service';
 import { ListingService } from '../listing/listing.service';
 import { CollectionService } from '../collection/collection.service';
@@ -21,6 +23,7 @@ import { resolveToolSet } from './tools/tool-set.registry';
 import type { ToolSetName } from './tools/tool-set.types';
 import { AiUsageService } from './ai-usage.service';
 import { ChatSessionService } from './chat-session.service';
+import { AiToolCallLog } from './entities/ai-tool-call-log.entity';
 
 const SYSTEM_PROMPT = `You are the NFTopia marketplace assistant. You help users find NFTs, \
 listings, and collections on the NFTopia Stellar marketplace, answer questions about the \
@@ -44,7 +47,42 @@ export class AiAgentService {
     private readonly auctionService: AuctionService,
     private readonly aiUsageService: AiUsageService,
     private readonly chatSessionService: ChatSessionService,
+    @InjectRepository(AiToolCallLog)
+    private readonly toolCallLogRepo: Repository<AiToolCallLog>,
   ) {}
+
+  private getToolLogger(userId: string, sessionId: string) {
+    return (
+      toolName: string,
+      args: Record<string, unknown>,
+      resultSummary: string,
+      durationMs: number,
+    ) => {
+      const redactedArgs = { ...args };
+      // Redaction policy: Redact free-text user inputs which might contain PII or abuse
+      const sensitiveFields = ['search', 'reason', 'message', 'content'];
+      for (const field of sensitiveFields) {
+        if (typeof redactedArgs[field] === 'string') {
+          redactedArgs[field] = '[REDACTED]';
+        }
+      }
+
+      this.toolCallLogRepo
+        .save({
+          userId,
+          sessionId,
+          toolName,
+          args: redactedArgs,
+          resultSummary,
+          durationMs,
+        })
+        .catch((err) => {
+          this.logger.error(
+            `Failed to save tool call log: ${(err as Error).message}`,
+          );
+        });
+    };
+  }
 
   async chat(
     userId: string,
@@ -66,6 +104,7 @@ export class AiAgentService {
       orderService: this.orderService,
       auctionService: this.auctionService,
       userId,
+      toolLogger: this.getToolLogger(userId, session.id),
     });
 
     const messages: BetaMessageParam[] = [
@@ -152,6 +191,7 @@ export class AiAgentService {
             orderService: this.orderService,
             auctionService: this.auctionService,
             userId,
+            toolLogger: this.getToolLogger(userId, session.id),
           });
 
           const messages: BetaMessageParam[] = [
@@ -273,5 +313,31 @@ export class AiAgentService {
     }
     this.logger.error('Unexpected error in AI assistant', error as Error);
     return new InternalServerErrorException('AI assistant failed to respond');
+  }
+
+  async getToolLogs(query: {
+    userId?: string;
+    sessionId?: string;
+    toolName?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{ data: AiToolCallLog[]; total: number }> {
+    const qb = this.toolCallLogRepo.createQueryBuilder('log');
+    if (query.userId)
+      qb.andWhere('log.userId = :userId', { userId: query.userId });
+    if (query.sessionId)
+      qb.andWhere('log.sessionId = :sessionId', { sessionId: query.sessionId });
+    if (query.toolName)
+      qb.andWhere('log.toolName = :toolName', { toolName: query.toolName });
+
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 50;
+
+    qb.orderBy('log.createdAt', 'DESC');
+    qb.skip((page - 1) * limit);
+    qb.take(limit);
+
+    const [data, total] = await qb.getManyAndCount();
+    return { data, total };
   }
 }

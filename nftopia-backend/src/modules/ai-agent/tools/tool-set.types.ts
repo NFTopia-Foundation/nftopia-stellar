@@ -25,8 +25,15 @@ export type ToolSetName =
  */
 export type RunnableToolLike = BetaRunnableTool<any>;
 
+export type ToolLogger = (
+  toolName: string,
+  args: Record<string, unknown>,
+  resultSummary: string,
+  durationMs: number,
+) => void;
+
 export type ToolSetBuilder<TDeps = unknown> = (
-  deps: TDeps,
+  deps: TDeps & { toolLogger?: ToolLogger },
 ) => RunnableToolLike[];
 
 export interface ToolSetRegistration<TDeps = unknown> {

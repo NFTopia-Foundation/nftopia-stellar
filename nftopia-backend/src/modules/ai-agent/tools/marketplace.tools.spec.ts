@@ -120,6 +120,66 @@ describe('marketplace.tools — order tools (#488)', () => {
 
       expect(JSON.parse(result as string)).toEqual(payload);
     });
+
+    it('produces exactly one log entry when toolLogger is provided', async () => {
+      orderService.findAllForUser.mockResolvedValue({
+        items: [],
+        totalCount: 0,
+        page: 1,
+        limit: 20,
+        hasNextPage: false,
+      });
+      const toolLogger = jest.fn();
+      const tools = buildMarketplaceTools({
+        ...otherDeps,
+        orderService: orderService as never,
+        userId: 'user-1',
+        toolLogger,
+      });
+      const tool = tools.find((t) => t.name === 'search_orders');
+
+      await (
+        tool as unknown as {
+          run: (input: { status?: OrderStatus }) => Promise<unknown>;
+        }
+      ).run({ status: OrderStatus.COMPLETED });
+
+      expect(toolLogger).toHaveBeenCalledTimes(1);
+      expect(toolLogger).toHaveBeenCalledWith(
+        'search_orders',
+        { status: OrderStatus.COMPLETED },
+        expect.any(String),
+        expect.any(Number),
+      );
+    });
+
+    it('produces a log entry even if the tool invocation fails', async () => {
+      orderService.findAllForUser.mockRejectedValue(new Error('DB failure'));
+      const toolLogger = jest.fn();
+      const tools = buildMarketplaceTools({
+        ...otherDeps,
+        orderService: orderService as never,
+        userId: 'user-1',
+        toolLogger,
+      });
+      const tool = tools.find((t) => t.name === 'search_orders');
+
+      await expect(
+        (
+          tool as unknown as {
+            run: (input: { status?: OrderStatus }) => Promise<unknown>;
+          }
+        ).run({ status: OrderStatus.COMPLETED }),
+      ).rejects.toThrow('DB failure');
+
+      expect(toolLogger).toHaveBeenCalledTimes(1);
+      expect(toolLogger).toHaveBeenCalledWith(
+        'search_orders',
+        { status: OrderStatus.COMPLETED },
+        'Error: DB failure',
+        expect.any(Number),
+      );
+    });
   });
 
   describe('get_order', () => {
