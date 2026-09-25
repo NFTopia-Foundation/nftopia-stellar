@@ -23,8 +23,9 @@ function authHeaders(): Record<string, string> {
     'Content-Type': 'application/json',
     Accept: 'text/event-stream, application/json',
   };
-  // apiClient keeps the bearer token; mirror it for raw fetch streams
-  const token = apiClient.getToken?.() ?? (apiClient as { token?: string | null }).token;
+  // apiClient keeps the bearer token; mirror it for raw fetch streams.
+  // Use the public getter rather than accessing a private field.
+  const token = typeof (apiClient as any).getToken === 'function' ? (apiClient as any).getToken() : undefined;
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }

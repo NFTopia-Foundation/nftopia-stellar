@@ -7,6 +7,7 @@ const DEBOUNCE_MS = 400;
 
 export interface MarketplaceSearchBarProps {
   onSearchChange: (query: string) => void;
+  onSubmit?: (query: string) => void;
   testID?: string;
 }
 
@@ -35,6 +36,13 @@ const MarketplaceSearchBar: React.FC<MarketplaceSearchBarProps> = ({ onSearchCha
     }, DEBOUNCE_MS);
   };
 
+  const handleSubmitEditing = () => {
+    const q = value.trim();
+    if (q && typeof onSubmit === 'function') {
+      onSubmit(q);
+    }
+  };
+
   const handleClear = () => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     setValue('');
@@ -48,6 +56,7 @@ const MarketplaceSearchBar: React.FC<MarketplaceSearchBarProps> = ({ onSearchCha
         style={styles.input}
         value={value}
         onChangeText={handleChangeText}
+        onSubmitEditing={handleSubmitEditing}
         placeholder={t('marketplace.searchPlaceholder')}
         placeholderTextColor={colors.textTertiary}
         returnKeyType="search"
