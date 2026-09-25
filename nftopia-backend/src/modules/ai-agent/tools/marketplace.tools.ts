@@ -67,7 +67,7 @@ export function buildMarketplaceTools(deps: MarketplaceToolsDeps) {
     name: string;
     description: string;
     inputSchema: T;
-    run: (input: z.infer<T>) => Promise<unknown>;
+    run: (input: z.infer<T>) => Promise<string>;
   }) => {
     const originalRun = config.run;
     config.run = async (input: z.infer<T>) => {

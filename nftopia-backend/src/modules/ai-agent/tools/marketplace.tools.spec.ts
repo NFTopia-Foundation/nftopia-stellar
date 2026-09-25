@@ -138,7 +138,7 @@ describe('marketplace.tools — order tools (#488)', () => {
       });
       const tool = tools.find((t) => t.name === 'search_orders');
 
-      await tool!.run({ status: OrderStatus.COMPLETED });
+      await (tool as any).run({ status: OrderStatus.COMPLETED });
 
       expect(toolLogger).toHaveBeenCalledTimes(1);
       expect(toolLogger).toHaveBeenCalledWith(
@@ -161,7 +161,7 @@ describe('marketplace.tools — order tools (#488)', () => {
       const tool = tools.find((t) => t.name === 'search_orders');
 
       await expect(
-        tool!.run({ status: OrderStatus.COMPLETED }),
+        (tool as any).run({ status: OrderStatus.COMPLETED }),
       ).rejects.toThrow('DB failure');
 
       expect(toolLogger).toHaveBeenCalledTimes(1);
