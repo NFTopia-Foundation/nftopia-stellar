@@ -17,7 +17,7 @@ export interface MarketplaceSearchBarProps {
  * cross-entity Search screen against a different API client) — keeping this
  * self-contained avoids entangling the two search experiences.
  */
-const MarketplaceSearchBar: React.FC<MarketplaceSearchBarProps> = ({ onSearchChange, testID }) => {
+const MarketplaceSearchBar: React.FC<MarketplaceSearchBarProps> = ({ onSearchChange, onSubmit, testID }) => {
   const { t } = useTranslation();
   const [value, setValue] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
