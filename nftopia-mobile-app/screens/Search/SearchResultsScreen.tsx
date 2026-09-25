@@ -73,9 +73,10 @@ function LoadingSkeleton() {
   );
 }
 
-export default function SearchResultsScreen({ navigation }: any) {
-  const { query, results, filters, loading, error, recentSearches, setFilters, clearSearch, clearRecentSearches } = useSearchStore();
+export default function SearchResultsScreen({ navigation, route }: any) {
+  const { query, results, filters, loading, error, recentSearches, setFilters, clearSearch, clearRecentSearches, search, setQuery } = useSearchStore();
   const [activeTab, setActiveTab] = useState<TabType>('all');
+  const routeQuery: string | undefined = route?.params?.query;
 
   const tabs: { key: TabType; label: string }[] = [
     { key: 'all', label: 'All' },
@@ -83,6 +84,13 @@ export default function SearchResultsScreen({ navigation }: any) {
     { key: 'collections', label: 'Collections' },
     { key: 'creators', label: 'Creators' },
   ];
+
+  useEffect(() => {
+    if (routeQuery && routeQuery.trim() && routeQuery !== query) {
+      setQuery(routeQuery);
+      search(routeQuery);
+    }
+  }, [routeQuery]);
 
   useEffect(() => {
     apiClient.trackEvent('search_results_view', { query, tab: activeTab });

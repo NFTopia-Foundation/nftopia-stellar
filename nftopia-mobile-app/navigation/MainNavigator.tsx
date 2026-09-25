@@ -16,6 +16,18 @@ import MarketplaceScreen from '@/screens/Marketplace/MarketplaceScreen';
 import NFTDetailScreen from '@/screens/Marketplace/NFTDetailScreen';
 import FavoritesScreen from '@/screens/Favorites/FavoritesScreen';
 
+// Auction Screens
+import AuctionsScreen from '@/screens/Auctions/AuctionsScreen';
+import AuctionDetailScreen from '@/screens/Auctions/AuctionDetailScreen';
+import CreateAuctionScreen from '@/screens/Auctions/CreateAuctionScreen';
+
+// Collection & Search Screens
+import CollectionsScreen from '@/screens/Collections/CollectionsScreen';
+import SearchResultsScreen from '@/screens/Search/SearchResultsScreen';
+
+// AI Assistant
+import AssistantScreen from '@/screens/Assistant/AssistantScreen';
+
 // Creator Screens
 import CreatorDashboardScreen from '@/screens/Creator/CreatorDashboardScreen';
 import MyNFTsScreen from '@/screens/Creator/MyNFTsScreen';
@@ -42,6 +54,12 @@ export type MainStackParamList = {
   CreateCollection: undefined;
   NFTDetail: { nftId: string };
   CollectionDetail: { collectionId: string };
+  Collections: undefined;
+  SearchResults: { query: string };
+  Auctions: undefined;
+  AuctionDetail: { auctionId: string };
+  CreateAuction: undefined;
+  Assistant: undefined;
   Earnings: undefined;
   Transactions: undefined;
   Notifications: undefined;
@@ -49,7 +67,7 @@ export type MainStackParamList = {
   Settings: undefined;
   Send: { prefilledAddress?: string } | undefined;
   Marketplace: { category?: string } | undefined;
-BackupReminder: undefined;
+  BackupReminder: undefined;
   Favorites: undefined;
 };
 
@@ -253,6 +271,55 @@ export default function MainNavigator() {
         <Stack.Screen name="Settings" options={getTransitionConfig('modal')}>
           {(props) => <ScreenErrorBoundary name="SettingsScreen"><SettingsScreen {...props} /></ScreenErrorBoundary>}
         </Stack.Screen>
+
+        {/* Auctions */}
+        <Stack.Screen name="Auctions">
+          {(props) => (
+            <ScreenErrorBoundary name="AuctionsScreen">
+              <AuctionsScreen {...props} />
+            </ScreenErrorBoundary>
+          )}
+        </Stack.Screen>
+        <Stack.Screen name="AuctionDetail">
+          {(props) => (
+            <ScreenErrorBoundary name="AuctionDetailScreen">
+              <AuctionDetailScreen {...props} />
+            </ScreenErrorBoundary>
+          )}
+        </Stack.Screen>
+        <Stack.Screen name="CreateAuction">
+          {(props) => (
+            <ScreenErrorBoundary name="CreateAuctionScreen">
+              <CreateAuctionScreen {...props} />
+            </ScreenErrorBoundary>
+          )}
+        </Stack.Screen>
+
+        {/* Collections & Search */}
+        <Stack.Screen name="Collections">
+          {(props) => (
+            <ScreenErrorBoundary name="CollectionsScreen">
+              <CollectionsScreen {...props} />
+            </ScreenErrorBoundary>
+          )}
+        </Stack.Screen>
+        <Stack.Screen name="SearchResults">
+          {(props) => (
+            <ScreenErrorBoundary name="SearchResultsScreen">
+              <SearchResultsScreen {...props} />
+            </ScreenErrorBoundary>
+          )}
+        </Stack.Screen>
+
+        {/* AI Assistant */}
+        <Stack.Screen name="Assistant" options={getTransitionConfig('modal')}>
+          {(props) => (
+            <ScreenErrorBoundary name="AssistantScreen">
+              <AssistantScreen {...props} />
+            </ScreenErrorBoundary>
+          )}
+        </Stack.Screen>
+
       </Stack.Navigator>
     </View>
   );
