@@ -13,6 +13,7 @@ import { useAuthStore } from "@/lib/stores/auth-store";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useLocalizedRoute } from "@/lib/routing";
 import { getValidationFieldMessage } from "@/utils/fetchUtils";
+import { TransactionFeePreview } from "@/components/wallet/TransactionFeePreview";
 
 /** shape matching backend CreateNftDto blended with pricing updates */
 interface CreateNftDto {
@@ -388,6 +389,8 @@ export default function MintNFTPage() {
             </p>
           )}
         </div>
+
+        <TransactionFeePreview label="Estimated Minting Fee" />
 
         <button
           type="submit"

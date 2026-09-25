@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { API_CONFIG } from "@/lib/config";
 import { cn } from "@/lib/utils";
+import { TransactionFeePreview } from "@/components/wallet/TransactionFeePreview";
 import {
   ArrowLeft, Clock, Gavel, User, Award, Wallet, Check, Share2, Heart,
   TrendingUp, Loader2, Info, Tag, AlertTriangle, X, Radio,
@@ -452,6 +453,7 @@ export default function AuctionDetailClient({
                       </div>
                       <p className="text-xs text-gray-500 mt-1.5">{t("auctionDetail.minBid")}: {minBid.toFixed(2)} XLM</p>
                     </div>
+                    <TransactionFeePreview compact />
                     {bidError && <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">{bidError}</div>}
                     {bidSuccess && <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm">{t("auctionDetail.bidSuccess")}</div>}
                     <Button onClick={handlePlaceBid} disabled={!bidAmount || placingBid}

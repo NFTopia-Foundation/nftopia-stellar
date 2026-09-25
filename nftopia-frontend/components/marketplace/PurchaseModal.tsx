@@ -8,6 +8,7 @@ import { Loader2 } from "lucide-react";
 import { useWalletStore } from "@/stores/walletStore";
 import { useToast } from "@/lib/stores";
 import { useRouter } from "next/navigation";
+import { TransactionFeePreview } from "@/components/wallet/TransactionFeePreview";
 
 type PurchaseModalProps = {
   isOpen: boolean;
@@ -98,6 +99,7 @@ export function PurchaseModal({
                 <span className="text-gray-400">Platform Fee</span>
                 <span>0.00 {currency}</span>
               </div>
+              <TransactionFeePreview compact />
               <div className="flex justify-between pt-3 border-t border-purple-900/30 font-semibold">
                 <span>Total</span>
                 <span className="text-purple-400">{price} {currency}</span>

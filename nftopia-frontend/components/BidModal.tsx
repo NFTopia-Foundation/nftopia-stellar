@@ -9,6 +9,7 @@ import { useWalletStore } from '@/stores/walletStore';
 import { usePlaceBidMutation } from '@/hooks/graphql/useMutations';
 import { useToast } from '@/lib/stores';
 import { cn } from '@/lib/utils';
+import { TransactionFeePreview } from '@/components/wallet/TransactionFeePreview';
 
 interface BidModalProps {
   isOpen: boolean;
@@ -152,6 +153,9 @@ export function BidModal({
               <span>Please connect your wallet to place a bid</span>
             </div>
           )}
+
+          {/* Network Fee Preview */}
+          <TransactionFeePreview compact />
 
           {/* Submit */}
           <Button
