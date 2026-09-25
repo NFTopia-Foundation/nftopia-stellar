@@ -107,3 +107,26 @@ export const PLACE_BID_MUTATION = gql`
     }
   }
 `;
+
+/**
+ * Subscription for real-time bid updates on an auction
+ */
+export const AUCTION_BID_PLACED_SUBSCRIPTION = gql`
+  subscription OnAuctionBidPlaced($auctionId: ID!) {
+    auctionBidPlaced(auctionId: $auctionId) {
+      id
+      auctionId
+      bidderId
+      amount
+      createdAt
+      bidder {
+        id
+        username
+        walletAddress
+      }
+    }
+  }
+`;
+
+export const ON_AUCTION_BID_PLACED_SUBSCRIPTION = AUCTION_BID_PLACED_SUBSCRIPTION;
+export const BID_PLACED_SUBSCRIPTION = AUCTION_BID_PLACED_SUBSCRIPTION;

@@ -577,3 +577,11 @@ type User {
   sales(pagination: PaginationInput): OrderConnection
 }
 
+type Subscription {
+  """Subscribe to new bids placed on an auction"""
+  auctionBidPlaced(auctionId: ID!): Bid!
+
+  """Subscribe to new bids placed on an auction (alias)"""
+  bidPlaced(auctionId: ID!): Bid!
+}
+
