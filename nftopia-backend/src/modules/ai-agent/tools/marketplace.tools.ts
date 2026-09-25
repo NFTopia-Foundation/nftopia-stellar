@@ -45,6 +45,7 @@ export interface MarketplaceToolsDeps {
    * filter (#488).
    */
   userId: string;
+  toolLogger?: import('./tool-set.types').ToolLogger;
 }
 
 /**
@@ -62,7 +63,29 @@ export function buildMarketplaceTools(deps: MarketplaceToolsDeps) {
     userId,
   } = deps;
 
-  const searchNfts = betaZodTool({
+  const createTool = (config: any) => {
+    const originalRun = config.run;
+    config.run = async (input: any) => {
+      const start = Date.now();
+      try {
+        const res = await originalRun(input);
+        if (deps.toolLogger) {
+          const resStr = typeof res === 'string' ? res : JSON.stringify(res);
+          const summary = resStr.substring(0, 100) + (resStr.length > 100 ? '...' : '');
+          deps.toolLogger(config.name, input, summary, Date.now() - start);
+        }
+        return res;
+      } catch (err) {
+        if (deps.toolLogger) {
+          deps.toolLogger(config.name, input, `Error: ${(err as Error).message}`, Date.now() - start);
+        }
+        throw err;
+      }
+    };
+    return betaZodTool(config);
+  };
+
+  const searchNfts = createTool({
     name: 'search_nfts',
     description:
       'Search NFTs by owner, creator, collection, or free-text title/description match. Returns a paginated list.',
@@ -77,7 +100,7 @@ export function buildMarketplaceTools(deps: MarketplaceToolsDeps) {
       page: z.number().int().min(1).optional(),
       limit: z.number().int().min(1).max(100).optional(),
     }),
-    run: async (input) => {
+    run: async (input: any) => {
       const result = await nftService.findAll({
         search: input.search,
         ownerId: input.ownerId,
@@ -90,17 +113,17 @@ export function buildMarketplaceTools(deps: MarketplaceToolsDeps) {
     },
   });
 
-  const getNft = betaZodTool({
+  const getNft = createTool({
     name: 'get_nft',
     description: 'Get full details for a single NFT by its id.',
     inputSchema: z.object({ id: z.string().uuid() }),
-    run: async (input) => {
+    run: async (input: any) => {
       const nft = await nftService.findById(input.id);
       return JSON.stringify(nft);
     },
   });
 
-  const searchListings = betaZodTool({
+  const searchListings = createTool({
     name: 'search_listings',
     description:
       'Search marketplace listings by status, seller, or the NFT contract/token they list. Defaults to active listings.',
@@ -118,7 +141,7 @@ export function buildMarketplaceTools(deps: MarketplaceToolsDeps) {
     },
   });
 
-  const getListing = betaZodTool({
+  const getListing = createTool({
     name: 'get_listing',
     description:
       'Get full details for a single listing by its id, including price and status.',
@@ -129,7 +152,7 @@ export function buildMarketplaceTools(deps: MarketplaceToolsDeps) {
     },
   });
 
-  const searchCollections = betaZodTool({
+  const searchCollections = createTool({
     name: 'search_collections',
     description: 'Search NFT collections by creator or free-text name match.',
     inputSchema: z.object({
@@ -149,7 +172,7 @@ export function buildMarketplaceTools(deps: MarketplaceToolsDeps) {
     },
   });
 
-  const getCollection = betaZodTool({
+  const getCollection = createTool({
     name: 'get_collection',
     description: 'Get full details for a single collection by its id.',
     inputSchema: z.object({ id: z.string().uuid() }),
@@ -159,7 +182,7 @@ export function buildMarketplaceTools(deps: MarketplaceToolsDeps) {
     },
   });
 
-  const getCollectionStats = betaZodTool({
+  const getCollectionStats = createTool({
     name: 'get_collection_stats',
     description:
       'Get aggregate stats (floor price, total volume, supply, owner count) for a collection.',
@@ -170,7 +193,7 @@ export function buildMarketplaceTools(deps: MarketplaceToolsDeps) {
     },
   });
 
-  const getTopCollections = betaZodTool({
+  const getTopCollections = createTool({
     name: 'get_top_collections',
     description: 'Get the top collections ranked by trading volume.',
     inputSchema: z.object({
@@ -184,7 +207,7 @@ export function buildMarketplaceTools(deps: MarketplaceToolsDeps) {
     },
   });
 
-  const searchOrders = betaZodTool({
+  const searchOrders = createTool({
     name: 'search_orders',
     description:
       "Search the caller's own past orders (purchases or sales), optionally filtered by NFT, type, status, or date range. Always scoped to the authenticated user as either buyer or seller — never returns other users' orders, regardless of what's asked.",
@@ -213,7 +236,7 @@ export function buildMarketplaceTools(deps: MarketplaceToolsDeps) {
     },
   });
 
-  const getOrder = betaZodTool({
+  const getOrder = createTool({
     name: 'get_order',
     description:
       "Get full details for a single order by its id — but only if the caller is that order's buyer or seller. Use this to check the status of a specific order the caller has already mentioned.",
@@ -224,7 +247,7 @@ export function buildMarketplaceTools(deps: MarketplaceToolsDeps) {
     },
   });
 
-  const searchAuctions = betaZodTool({
+  const searchAuctions = createTool({
     name: 'search_auctions',
     description:
       'Search marketplace auctions by status, seller, or the NFT contract/token being auctioned. Defaults to active (non-expired) auctions. Does not include bid history — use get_auction_bids for that.',
@@ -242,7 +265,7 @@ export function buildMarketplaceTools(deps: MarketplaceToolsDeps) {
     },
   });
 
-  const getAuction = betaZodTool({
+  const getAuction = createTool({
     name: 'get_auction',
     description:
       "Get full details for a single auction by its id (current price, reserve, start/end time, status). Does NOT include bid history or the current highest bidder — call get_auction_bids for that; don't assume bid state from this alone.",
@@ -253,7 +276,7 @@ export function buildMarketplaceTools(deps: MarketplaceToolsDeps) {
     },
   });
 
-  const getAuctionBids = betaZodTool({
+  const getAuctionBids = createTool({
     name: 'get_auction_bids',
     description:
       'Get the full bid history for an auction, most recent first — including the current highest bid. Call this whenever a question depends on actual bid activity (e.g. "what is the highest bid", "has anyone bid on this"); get_auction alone is not enough to answer those.',

@@ -9,6 +9,8 @@ import type { OrderService } from '../order/order.service';
 import type { AuctionService } from '../auction/auction.service';
 import type { AiUsageService } from './ai-usage.service';
 import type { ChatSessionService } from './chat-session.service';
+import type { Repository } from 'typeorm';
+import type { AiToolCallLog } from './entities/ai-tool-call-log.entity';
 
 // Anthropic() reads ANTHROPIC_API_KEY at construction time — see
 // ai-agent.service.spec.ts for why this must be set before import.
@@ -124,6 +126,10 @@ describe('AiAgentService.chatStream', () => {
       {} as AuctionService,
       aiUsageService as unknown as AiUsageService,
       chatSessionService as unknown as ChatSessionService,
+      {
+        save: jest.fn().mockResolvedValue(undefined),
+        createQueryBuilder: jest.fn(),
+      } as unknown as Repository<AiToolCallLog>,
     );
   });
 

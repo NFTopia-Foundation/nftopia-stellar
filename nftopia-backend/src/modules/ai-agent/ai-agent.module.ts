@@ -16,6 +16,7 @@ import { AiUsageRecord } from './entities/ai-usage-record.entity';
 import { ChatSession } from './entities/chat-session.entity';
 import { ChatMessage } from './entities/chat-message.entity';
 import { ContentFlag } from './entities/content-flag.entity';
+import { AiToolCallLog } from './entities/ai-tool-call-log.entity';
 import { AiChatRateLimitGuard } from '../../common/guards/ai-chat-rate-limit.guard';
 import { aiChatRateLimiterProvider } from '../../common/guards/ai-chat-rate-limiter.provider';
 import { ListingCreatedListener } from './listeners/listing-created.listener';
@@ -31,6 +32,7 @@ import { AuditModule } from '../../common/audit/audit.module';
       ChatSession,
       ChatMessage,
       ContentFlag,
+      AiToolCallLog,
     ]),
     BullModule.registerQueue({ name: AI_MODERATION_QUEUE_NAME }),
     AuditModule,

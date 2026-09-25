@@ -110,5 +110,64 @@ describe('moderation.tools', () => {
         }),
       ).rejects.toThrow('db down');
     });
+
+    it('produces exactly one log entry when toolLogger is provided', async () => {
+      const savedFlag = { id: 'flag-2', status: 'pending', entityType: 'nft', entityId: 'nft-1' };
+      contentFlagService.createFlag.mockResolvedValue(savedFlag);
+      const toolLogger = jest.fn();
+      
+      const tools = buildModerationTools({
+        contentFlagService: contentFlagService as never,
+        toolLogger,
+      });
+      const tool = tools.find((t) => t.name === 'flag_content')!;
+      
+      const input = {
+        entityType: 'nft' as const,
+        entityId: '123e4567-e89b-12d3-a456-426614174000',
+        reason: 'spam',
+        severity: 'low' as const,
+        confidence: 0.8,
+      };
+      
+      await tool.run(input);
+      
+      expect(toolLogger).toHaveBeenCalledTimes(1);
+      expect(toolLogger).toHaveBeenCalledWith(
+        'flag_content',
+        input,
+        expect.any(String),
+        expect.any(Number)
+      );
+    });
+
+    it('produces a log entry even if the tool invocation fails', async () => {
+      contentFlagService.createFlag.mockRejectedValue(new Error('db down'));
+      const toolLogger = jest.fn();
+      
+      const tools = buildModerationTools({
+        contentFlagService: contentFlagService as never,
+        toolLogger,
+      });
+      const tool = tools.find((t) => t.name === 'flag_content')!;
+      
+      const input = {
+        entityType: 'nft' as const,
+        entityId: '123e4567-e89b-12d3-a456-426614174000',
+        reason: 'spam',
+        severity: 'low' as const,
+        confidence: 0.8,
+      };
+      
+      await expect(tool.run(input)).rejects.toThrow('db down');
+      
+      expect(toolLogger).toHaveBeenCalledTimes(1);
+      expect(toolLogger).toHaveBeenCalledWith(
+        'flag_content',
+        input,
+        'Error: db down',
+        expect.any(Number)
+      );
+    });
   });
 });

@@ -8,6 +8,7 @@ import {
   Sse,
   UnauthorizedException,
   UseGuards,
+  Query,
 } from '@nestjs/common';
 import type { MessageEvent } from '@nestjs/common';
 import { METHOD_METADATA } from '@nestjs/common/constants';
@@ -24,6 +25,8 @@ import {
 } from './ai-agent-health.service';
 import { ChatRequestDto } from './dto/chat-request.dto';
 import type { ToolSetName } from './tools/tool-set.types';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { UserRole } from '../../common/enums/user-role.enum';
 
 type RequestWithUser = Request & { user?: { userId: string } };
 
@@ -114,5 +117,24 @@ export class AiAgentController {
       throw new UnauthorizedException('Invalid JWT payload');
     }
     return this.aiUsageService.getUsageSummary(req.user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Roles(UserRole.ADMIN)
+  @Get('admin/tool-logs')
+  async getToolLogs(
+    @Query('userId') userId?: string,
+    @Query('sessionId') sessionId?: string,
+    @Query('toolName') toolName?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.aiAgentService.getToolLogs({
+      userId,
+      sessionId,
+      toolName,
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 50,
+    });
   }
 }

@@ -289,4 +289,46 @@ describe('AiAgentController', () => {
       });
     });
   });
+  describe('getToolLogs', () => {
+    it('applies JwtAuthGuard and Roles guard to the tool logs route', () => {
+      const guards = Reflect.getMetadata(
+        GUARDS_METADATA,
+        controller.getToolLogs,
+      ) as unknown[] | undefined;
+
+      expect(guards).toContain(JwtAuthGuard);
+    });
+
+    it('delegates to AiAgentService.getToolLogs with defaults', async () => {
+      const expectedResult = { data: [], total: 0 };
+      (aiAgentService as any).getToolLogs = jest.fn().mockResolvedValue(expectedResult);
+
+      const result = await controller.getToolLogs();
+
+      expect((aiAgentService as any).getToolLogs).toHaveBeenCalledWith({
+        userId: undefined,
+        sessionId: undefined,
+        toolName: undefined,
+        page: 1,
+        limit: 50,
+      });
+      expect(result).toEqual(expectedResult);
+    });
+
+    it('delegates to AiAgentService.getToolLogs parsing page and limit', async () => {
+      const expectedResult = { data: [], total: 0 };
+      (aiAgentService as any).getToolLogs = jest.fn().mockResolvedValue(expectedResult);
+
+      const result = await controller.getToolLogs('user-1', 'session-1', 'tool-1', '2', '20');
+
+      expect((aiAgentService as any).getToolLogs).toHaveBeenCalledWith({
+        userId: 'user-1',
+        sessionId: 'session-1',
+        toolName: 'tool-1',
+        page: 2,
+        limit: 20,
+      });
+      expect(result).toEqual(expectedResult);
+    });
+  });
 });
