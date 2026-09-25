@@ -122,7 +122,13 @@ describe('marketplace.tools — order tools (#488)', () => {
     });
 
     it('produces exactly one log entry when toolLogger is provided', async () => {
-      orderService.findAllForUser.mockResolvedValue({ items: [], totalCount: 0, page: 1, limit: 20, hasNextPage: false });
+      orderService.findAllForUser.mockResolvedValue({
+        items: [],
+        totalCount: 0,
+        page: 1,
+        limit: 20,
+        hasNextPage: false,
+      });
       const toolLogger = jest.fn();
       const tools = buildMarketplaceTools({
         ...otherDeps,
@@ -131,15 +137,15 @@ describe('marketplace.tools — order tools (#488)', () => {
         toolLogger,
       });
       const tool = tools.find((t) => t.name === 'search_orders');
-      
+
       await tool!.run({ status: OrderStatus.COMPLETED });
-      
+
       expect(toolLogger).toHaveBeenCalledTimes(1);
       expect(toolLogger).toHaveBeenCalledWith(
         'search_orders',
         { status: OrderStatus.COMPLETED },
         expect.any(String),
-        expect.any(Number)
+        expect.any(Number),
       );
     });
 
@@ -153,15 +159,17 @@ describe('marketplace.tools — order tools (#488)', () => {
         toolLogger,
       });
       const tool = tools.find((t) => t.name === 'search_orders');
-      
-      await expect(tool!.run({ status: OrderStatus.COMPLETED })).rejects.toThrow('DB failure');
-      
+
+      await expect(
+        tool!.run({ status: OrderStatus.COMPLETED }),
+      ).rejects.toThrow('DB failure');
+
       expect(toolLogger).toHaveBeenCalledTimes(1);
       expect(toolLogger).toHaveBeenCalledWith(
         'search_orders',
         { status: OrderStatus.COMPLETED },
         'Error: DB failure',
-        expect.any(Number)
+        expect.any(Number),
       );
     });
   });

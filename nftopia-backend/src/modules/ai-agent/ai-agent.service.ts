@@ -52,7 +52,12 @@ export class AiAgentService {
   ) {}
 
   private getToolLogger(userId: string, sessionId: string) {
-    return (toolName: string, args: any, resultSummary: string, durationMs: number) => {
+    return (
+      toolName: string,
+      args: Record<string, unknown>,
+      resultSummary: string,
+      durationMs: number,
+    ) => {
       const redactedArgs = { ...args };
       // Redaction policy: Redact free-text user inputs which might contain PII or abuse
       const sensitiveFields = ['search', 'reason', 'message', 'content'];
@@ -61,17 +66,21 @@ export class AiAgentService {
           redactedArgs[field] = '[REDACTED]';
         }
       }
-      
-      this.toolCallLogRepo.save({
-        userId,
-        sessionId,
-        toolName,
-        args: redactedArgs,
-        resultSummary,
-        durationMs,
-      }).catch(err => {
-        this.logger.error(`Failed to save tool call log: ${(err as Error).message}`);
-      });
+
+      this.toolCallLogRepo
+        .save({
+          userId,
+          sessionId,
+          toolName,
+          args: redactedArgs,
+          resultSummary,
+          durationMs,
+        })
+        .catch((err) => {
+          this.logger.error(
+            `Failed to save tool call log: ${(err as Error).message}`,
+          );
+        });
     };
   }
 
@@ -306,27 +315,28 @@ export class AiAgentService {
     return new InternalServerErrorException('AI assistant failed to respond');
   }
 
-  async getToolLogs(
-    query: {
-      userId?: string;
-      sessionId?: string;
-      toolName?: string;
-      page?: number;
-      limit?: number;
-    }
-  ): Promise<{ data: AiToolCallLog[]; total: number }> {
+  async getToolLogs(query: {
+    userId?: string;
+    sessionId?: string;
+    toolName?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{ data: AiToolCallLog[]; total: number }> {
     const qb = this.toolCallLogRepo.createQueryBuilder('log');
-    if (query.userId) qb.andWhere('log.userId = :userId', { userId: query.userId });
-    if (query.sessionId) qb.andWhere('log.sessionId = :sessionId', { sessionId: query.sessionId });
-    if (query.toolName) qb.andWhere('log.toolName = :toolName', { toolName: query.toolName });
-    
+    if (query.userId)
+      qb.andWhere('log.userId = :userId', { userId: query.userId });
+    if (query.sessionId)
+      qb.andWhere('log.sessionId = :sessionId', { sessionId: query.sessionId });
+    if (query.toolName)
+      qb.andWhere('log.toolName = :toolName', { toolName: query.toolName });
+
     const page = query.page ?? 1;
     const limit = query.limit ?? 50;
-    
+
     qb.orderBy('log.createdAt', 'DESC');
     qb.skip((page - 1) * limit);
     qb.take(limit);
-    
+
     const [data, total] = await qb.getManyAndCount();
     return { data, total };
   }

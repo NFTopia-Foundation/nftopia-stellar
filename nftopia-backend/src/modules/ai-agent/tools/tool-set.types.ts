@@ -27,7 +27,7 @@ export type RunnableToolLike = BetaRunnableTool<any>;
 
 export type ToolLogger = (
   toolName: string,
-  args: any,
+  args: Record<string, unknown>,
   resultSummary: string,
   durationMs: number,
 ) => void;

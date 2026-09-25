@@ -17,6 +17,7 @@ describe('AiAgentController', () => {
   const aiAgentService = {
     chat: jest.fn(),
     chatStream: jest.fn(),
+    getToolLogs: jest.fn(),
   };
 
   const aiUsageService = {
@@ -301,11 +302,11 @@ describe('AiAgentController', () => {
 
     it('delegates to AiAgentService.getToolLogs with defaults', async () => {
       const expectedResult = { data: [], total: 0 };
-      (aiAgentService as any).getToolLogs = jest.fn().mockResolvedValue(expectedResult);
+      aiAgentService.getToolLogs.mockResolvedValue(expectedResult);
 
       const result = await controller.getToolLogs();
 
-      expect((aiAgentService as any).getToolLogs).toHaveBeenCalledWith({
+      expect(aiAgentService.getToolLogs).toHaveBeenCalledWith({
         userId: undefined,
         sessionId: undefined,
         toolName: undefined,
@@ -317,11 +318,17 @@ describe('AiAgentController', () => {
 
     it('delegates to AiAgentService.getToolLogs parsing page and limit', async () => {
       const expectedResult = { data: [], total: 0 };
-      (aiAgentService as any).getToolLogs = jest.fn().mockResolvedValue(expectedResult);
+      aiAgentService.getToolLogs.mockResolvedValue(expectedResult);
 
-      const result = await controller.getToolLogs('user-1', 'session-1', 'tool-1', '2', '20');
+      const result = await controller.getToolLogs(
+        'user-1',
+        'session-1',
+        'tool-1',
+        '2',
+        '20',
+      );
 
-      expect((aiAgentService as any).getToolLogs).toHaveBeenCalledWith({
+      expect(aiAgentService.getToolLogs).toHaveBeenCalledWith({
         userId: 'user-1',
         sessionId: 'session-1',
         toolName: 'tool-1',

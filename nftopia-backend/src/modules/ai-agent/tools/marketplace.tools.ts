@@ -63,21 +63,37 @@ export function buildMarketplaceTools(deps: MarketplaceToolsDeps) {
     userId,
   } = deps;
 
-  const createTool = (config: any) => {
+  const createTool = <T extends z.ZodTypeAny>(config: {
+    name: string;
+    description: string;
+    inputSchema: T;
+    run: (input: z.infer<T>) => Promise<unknown>;
+  }) => {
     const originalRun = config.run;
-    config.run = async (input: any) => {
+    config.run = async (input: z.infer<T>) => {
       const start = Date.now();
       try {
         const res = await originalRun(input);
         if (deps.toolLogger) {
           const resStr = typeof res === 'string' ? res : JSON.stringify(res);
-          const summary = resStr.substring(0, 100) + (resStr.length > 100 ? '...' : '');
-          deps.toolLogger(config.name, input, summary, Date.now() - start);
+          const summary =
+            resStr.substring(0, 100) + (resStr.length > 100 ? '...' : '');
+          deps.toolLogger(
+            config.name,
+            input as Record<string, unknown>,
+            summary,
+            Date.now() - start,
+          );
         }
         return res;
       } catch (err) {
         if (deps.toolLogger) {
-          deps.toolLogger(config.name, input, `Error: ${(err as Error).message}`, Date.now() - start);
+          deps.toolLogger(
+            config.name,
+            input as Record<string, unknown>,
+            `Error: ${(err as Error).message}`,
+            Date.now() - start,
+          );
         }
         throw err;
       }
@@ -100,7 +116,7 @@ export function buildMarketplaceTools(deps: MarketplaceToolsDeps) {
       page: z.number().int().min(1).optional(),
       limit: z.number().int().min(1).max(100).optional(),
     }),
-    run: async (input: any) => {
+    run: async (input) => {
       const result = await nftService.findAll({
         search: input.search,
         ownerId: input.ownerId,
@@ -117,7 +133,7 @@ export function buildMarketplaceTools(deps: MarketplaceToolsDeps) {
     name: 'get_nft',
     description: 'Get full details for a single NFT by its id.',
     inputSchema: z.object({ id: z.string().uuid() }),
-    run: async (input: any) => {
+    run: async (input) => {
       const nft = await nftService.findById(input.id);
       return JSON.stringify(nft);
     },
