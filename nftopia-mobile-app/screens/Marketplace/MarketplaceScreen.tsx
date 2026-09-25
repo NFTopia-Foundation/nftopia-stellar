@@ -78,6 +78,13 @@ function MarketplaceContent() {
     }
   };
 
+  const handleSearchSubmit = (query: string) => {
+    const q = (query || search).trim();
+    if (!q) return;
+    track(ANALYTICS_EVENTS.SEARCH, { screen: 'marketplace', query: q, action: 'submit' });
+    navigation.navigate('SearchResults', { query: q });
+  };
+
   const handleSortChange = (option: MarketplaceSortOption) => {
     setSortBy(option);
     track(ANALYTICS_EVENTS.SEARCH_FILTER, { screen: 'marketplace', sortBy: option });
@@ -179,7 +186,15 @@ function MarketplaceContent() {
       <View style={styles.filters}>
         <View style={styles.filtersTopRow}>
           <View style={styles.searchWrapper}>
-            <MarketplaceSearchBar onSearchChange={handleSearchChange} testID="marketplace-search" />
+            <MarketplaceSearchBar onSearchChange={handleSearchChange} onSubmit={handleSearchSubmit} testID="marketplace-search" />
+            <TouchableOpacity
+              onPress={() => handleSearchSubmit(search)}
+              accessibilityRole="button"
+              accessibilityLabel="Search"
+              style={{ marginLeft: 8, padding: 8 }}
+            >
+              <Text style={{ color: '#6C5CE7', fontWeight: '600' }}>Go</Text>
+            </TouchableOpacity>
           </View>
           <TouchableOpacity
             style={styles.filterTrigger}

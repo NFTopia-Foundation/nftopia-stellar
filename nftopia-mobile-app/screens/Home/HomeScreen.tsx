@@ -258,6 +258,33 @@ function HomeContent() {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.actionCard}
+            onPress={() => navigation.navigate('Auctions')}
+            accessibilityRole="button"
+            accessibilityLabel="Auctions"
+          >
+            <Text style={styles.actionIcon} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">🔨</Text>
+            <Text style={styles.actionLabel}>Auctions</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionCard}
+            onPress={() => navigation.navigate('Collections')}
+            accessibilityRole="button"
+            accessibilityLabel="Collections"
+          >
+            <Text style={styles.actionIcon} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">📚</Text>
+            <Text style={styles.actionLabel}>Collections</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionCard}
+            onPress={() => navigation.navigate('Assistant')}
+            accessibilityRole="button"
+            accessibilityLabel="AI Assistant"
+          >
+            <Text style={styles.actionIcon} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">🤖</Text>
+            <Text style={styles.actionLabel}>Assistant</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionCard}
             onPress={() => navigation.navigate('Send')}
             accessibilityRole="button"
             accessibilityLabel={t('home.actions.send')}

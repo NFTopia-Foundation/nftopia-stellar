@@ -30,6 +30,10 @@ class ApiClient {
     this.token = token;
   }
 
+  getToken(): string | null {
+    return this.token;
+  }
+
   async submitModerationReport(payload: {
     targetType: 'nft' | 'collection' | 'profile';
     targetId: string;
