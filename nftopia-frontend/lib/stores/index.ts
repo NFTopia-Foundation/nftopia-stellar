@@ -19,6 +19,9 @@ export {
   useWatchlist,
 } from "./preferences-store";
 
+// Marketplace assistant (chat widget) state
+export { useAiChatStore } from "./ai-chat-store";
+
 // App Store
 export {
   useAppState,
