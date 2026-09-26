@@ -5,6 +5,7 @@ import { TopSellers } from "@/components/top-sellers";
 import { TodaysPicks } from "@/components/todays-picks";
 import PopularCollection from "@/components/PopularCollection";
 import { MarketplaceSkeleton } from "@/components/Skeleton/MarketplaceSkeleton";
+import { MarketplaceListings } from "@/components/marketplace/MarketplaceListings";
 
 export default function MarketplacePage() {
   return (
@@ -19,6 +20,15 @@ export default function MarketplacePage() {
           <TopSellers />
           <TodaysPicks />
           <PopularCollection />
+
+          {/* Cursor-paginated catalogue: infinite scroll plus a "Load more"
+              fallback, with the current cursor mirrored into the URL. */}
+          <section aria-labelledby="all-listings-heading" className="space-y-6">
+            <h2 id="all-listings-heading" className="text-2xl font-bold">
+              All listings
+            </h2>
+            <MarketplaceListings />
+          </section>
         </Suspense>
       </div>
     </main>
