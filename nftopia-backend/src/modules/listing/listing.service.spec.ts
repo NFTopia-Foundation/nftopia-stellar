@@ -9,11 +9,17 @@ import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { CreateListingDto } from './dto/create-listing.dto';
 import { BuyNftDto } from './dto/buy-nft.dto';
 import { Listing } from './entities/listing.entity';
 import { ListingStatus } from './interfaces/listing.interface';
 import { ListingService } from './listing.service';
+import {
+  LISTING_UNAVAILABLE_CODE,
+  ListingUnavailableException,
+  ListingUnavailableReason,
+} from './exceptions/listing-unavailable.exception';
 import { StellarNft } from '../../nft/entities/stellar-nft.entity';
 import { MarketplaceSettlementClient } from '../stellar/marketplace-settlement.client';
 import { TransactionState } from '../transaction/enums/transaction-state.enum';
@@ -28,8 +34,10 @@ type MockQb = {
   addOrderBy: jest.Mock;
   skip: jest.Mock;
   take: jest.Mock;
+  select: jest.Mock;
   getMany: jest.Mock;
   getCount: jest.Mock;
+  getRawMany: jest.Mock;
   leftJoinAndSelect: jest.Mock;
 };
 
@@ -56,8 +64,10 @@ const makeQb = (): MockQb => {
   qb.addOrderBy = jest.fn().mockReturnValue(qb);
   qb.skip = jest.fn().mockReturnValue(qb);
   qb.take = jest.fn().mockReturnValue(qb);
+  qb.select = jest.fn().mockReturnValue(qb);
   qb.getMany = jest.fn().mockResolvedValue([]);
   qb.getCount = jest.fn().mockResolvedValue(0);
+  qb.getRawMany = jest.fn().mockResolvedValue([]);
   qb.leftJoinAndSelect = jest.fn().mockReturnValue(qb);
   return qb as MockQb;
 };
@@ -70,12 +80,36 @@ describe('ListingService', () => {
     find: jest.fn(),
     create: jest.fn(),
     save: jest.fn(),
+    update: jest.fn().mockResolvedValue({ affected: 1 }),
     createQueryBuilder: jest.fn(),
   };
 
   const nftRepo = {
     findOne: jest.fn(),
     save: jest.fn(),
+  };
+
+  /**
+   * The claim transaction reads the row through the same repository mock each
+   * test stubs (`findOne`), so the whole spec file sees one shared "table row".
+   * The single-threaded unit tests here cannot exercise real lock contention;
+   * `listing.purchase-concurrency.spec.ts` covers serialisation explicitly.
+   */
+  const manager = {
+    findOne: jest.fn(
+      (..._args: unknown[]): Promise<Listing | null> =>
+        listingRepo.findOne() as Promise<Listing | null>,
+    ),
+    save: jest.fn(
+      (_entity: unknown, entity: Listing): Promise<Listing> =>
+        Promise.resolve(entity),
+    ),
+  };
+
+  const dataSource = {
+    transaction: jest.fn(
+      (work: (m: typeof manager) => unknown): unknown => work(manager),
+    ),
   };
 
   const configService = {
@@ -111,6 +145,7 @@ describe('ListingService', () => {
         { provide: MarketplaceSettlementClient, useValue: settlementClient },
         { provide: TransactionService, useValue: transactionService },
         { provide: EventEmitter2, useValue: eventEmitter },
+        { provide: DataSource, useValue: dataSource },
       ],
     }).compile();
 
@@ -493,16 +528,57 @@ describe('ListingService', () => {
       sellerId: 'seller-1',
       status: ListingStatus.ACTIVE,
     } as Listing;
-    listingRepo.findOne.mockResolvedValue(listing);
-    listingRepo.save.mockResolvedValue({
-      ...listing,
-      status: ListingStatus.CANCELLED,
-    });
+    listingRepo.findOne
+      .mockResolvedValueOnce(listing)
+      .mockResolvedValueOnce({ ...listing, status: ListingStatus.CANCELLED });
 
     const result = await service.cancel('listing-1', 'seller-1');
 
     expect(result.status).toBe(ListingStatus.CANCELLED);
-    expect(listingRepo.save).toHaveBeenCalled();
+    // Conditional update: only cancels while still ACTIVE and unreserved.
+    expect(listingRepo.update).toHaveBeenCalledWith(
+      {
+        id: 'listing-1',
+        status: ListingStatus.ACTIVE,
+        reservedAt: expect.anything(),
+      },
+      { status: ListingStatus.CANCELLED },
+    );
+  });
+
+  it('cancel refuses to cancel a listing with an in-flight purchase', async () => {
+    listingRepo.findOne.mockResolvedValue({
+      id: 'listing-1',
+      sellerId: 'seller-1',
+      status: ListingStatus.ACTIVE,
+      reservedAt: new Date(),
+      reservedBy: 'buyer-1',
+    });
+
+    await expect(
+      service.cancel('listing-1', 'seller-1'),
+    ).rejects.toBeInstanceOf(ListingUnavailableException);
+    expect(listingRepo.update).not.toHaveBeenCalled();
+  });
+
+  it('cancel loses the race when a purchase claims the listing first', async () => {
+    listingRepo.findOne.mockResolvedValue({
+      id: 'listing-1',
+      sellerId: 'seller-1',
+      status: ListingStatus.ACTIVE,
+      reservedAt: null,
+    });
+    // The conditional update matched no row because the reservation landed.
+    listingRepo.update.mockResolvedValueOnce({ affected: 0 });
+
+    const error = await service
+      .cancel('listing-1', 'seller-1')
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ListingUnavailableException);
+    expect((error as ListingUnavailableException).code).toBe(
+      LISTING_UNAVAILABLE_CODE,
+    );
   });
 
   it('buy executes transaction and returns completed payload with default payment method', async () => {
@@ -718,26 +794,120 @@ describe('ListingService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('buy throws 400 when listing is not active', async () => {
+  it('buy rejects with LISTING_UNAVAILABLE when the listing is not active', async () => {
     listingRepo.findOne.mockResolvedValue({
       id: 'listing-1',
       status: ListingStatus.CANCELLED,
     });
 
-    await expect(service.buy('listing-1', 'buyer-1')).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
+    const error = await service
+      .buy('listing-1', 'buyer-1')
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ListingUnavailableException);
+    const unavailable = error as ListingUnavailableException;
+    expect(unavailable.code).toBe(LISTING_UNAVAILABLE_CODE);
+    expect(unavailable.reason).toBe(ListingUnavailableReason.NOT_ACTIVE);
+    expect(unavailable.getStatus()).toBe(409);
+    // Nothing may be settled for a listing that is not purchasable.
+    expect(
+      transactionService.createAndExecuteListingPurchaseWithPayment,
+    ).not.toHaveBeenCalled();
   });
 
-  it('buy throws 400 when listing has expired', async () => {
+  it('buy rejects with LISTING_UNAVAILABLE when the listing has expired', async () => {
     listingRepo.findOne.mockResolvedValue({
       id: 'listing-1',
       status: ListingStatus.ACTIVE,
       expiresAt: new Date(Date.now() - 60_000),
     });
 
+    const error = await service
+      .buy('listing-1', 'buyer-1')
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ListingUnavailableException);
+    expect((error as ListingUnavailableException).reason).toBe(
+      ListingUnavailableReason.EXPIRED,
+    );
+    expect(
+      transactionService.createAndExecuteListingPurchaseWithPayment,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('buy rejects with LISTING_UNAVAILABLE when another buyer holds the reservation', async () => {
+    listingRepo.findOne.mockResolvedValue({
+      id: 'listing-1',
+      status: ListingStatus.ACTIVE,
+      expiresAt: new Date(Date.now() + 60_000),
+      reservedAt: new Date(),
+      reservedBy: 'buyer-2',
+    });
+
+    const error = await service
+      .buy('listing-1', 'buyer-1')
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ListingUnavailableException);
+    expect((error as ListingUnavailableException).reason).toBe(
+      ListingUnavailableReason.RESERVED,
+    );
+    expect(
+      transactionService.createAndExecuteListingPurchaseWithPayment,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('buy reserves the listing inside the transaction before settling', async () => {
+    listingRepo.findOne.mockResolvedValue({
+      id: 'listing-1',
+      status: ListingStatus.ACTIVE,
+      expiresAt: new Date(Date.now() + 60_000),
+      price: 100,
+    });
+    transactionService.createAndExecuteListingPurchaseWithPayment.mockResolvedValue(
+      { id: 99, state: TransactionState.COMPLETED },
+    );
+
+    await service.buy('listing-1', 'buyer-1');
+
+    // Availability check + reservation write share one row-locked transaction.
+    expect(dataSource.transaction).toHaveBeenCalled();
+    expect(manager.save).toHaveBeenCalledWith(
+      Listing,
+      expect.objectContaining({
+        reservedBy: 'buyer-1',
+        reservedAt: expect.any(Date),
+      }),
+    );
+    // Winner flips the listing to SOLD and clears the reservation.
+    expect(listingRepo.update).toHaveBeenCalledWith(
+      { id: 'listing-1' },
+      expect.objectContaining({ status: ListingStatus.SOLD }),
+    );
+  });
+
+  it('buy releases the reservation when settlement fails so the listing is not stranded', async () => {
+    listingRepo.findOne.mockResolvedValue({
+      id: 'listing-1',
+      status: ListingStatus.ACTIVE,
+      expiresAt: new Date(Date.now() + 60_000),
+      price: 100,
+    });
+    transactionService.createAndExecuteListingPurchaseWithPayment.mockRejectedValue(
+      new ConflictException('Already finalized'),
+    );
+
     await expect(service.buy('listing-1', 'buyer-1')).rejects.toBeInstanceOf(
-      BadRequestException,
+      ConflictException,
+    );
+
+    expect(listingRepo.update).toHaveBeenCalledWith(
+      {
+        id: 'listing-1',
+        reservedBy: 'buyer-1',
+        status: ListingStatus.ACTIVE,
+      },
+      { reservedAt: null, reservedBy: null },
     );
   });
 
@@ -769,6 +939,47 @@ describe('ListingService', () => {
     await expect(service.buy('listing-1', 'buyer-1')).rejects.toBeInstanceOf(
       UnauthorizedException,
     );
+  });
+
+  it('expireListings releases stale purchase reservations', async () => {
+    const qb = makeQb();
+    qb.getRawMany.mockResolvedValue([{ id: 'stale-1' }, { id: 'stale-2' }]);
+    qb.getMany.mockResolvedValue([]);
+    listingRepo.createQueryBuilder.mockReturnValue(qb);
+
+    await service.expireListings();
+
+    expect(qb.andWhere).toHaveBeenCalledWith('l.reservedAt IS NOT NULL');
+    expect(listingRepo.update).toHaveBeenCalledWith(
+      { id: expect.anything(), status: ListingStatus.ACTIVE },
+      { reservedAt: null, reservedBy: null },
+    );
+  });
+
+  it('expireListings skips the reservation sweep when nothing is stale', async () => {
+    const qb = makeQb();
+    qb.getRawMany.mockResolvedValue([]);
+    qb.getMany.mockResolvedValue([]);
+    listingRepo.createQueryBuilder.mockReturnValue(qb);
+
+    await service.expireListings();
+
+    expect(listingRepo.update).not.toHaveBeenCalled();
+  });
+
+  it('expireListings logs and continues when reservation recovery throws', async () => {
+    const qb = makeQb();
+    qb.getRawMany.mockRejectedValue(new Error('db down'));
+    qb.getMany.mockResolvedValue([]);
+    listingRepo.createQueryBuilder.mockReturnValue(qb);
+    const loggerHost = service as unknown as {
+      logger: { error: (...args: unknown[]) => void };
+    };
+    const errorSpy = jest.spyOn(loggerHost.logger, 'error');
+
+    await service.expireListings();
+
+    expect(errorSpy).toHaveBeenCalled();
   });
 
   it('expireListings marks active expired listings', async () => {
