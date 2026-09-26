@@ -5,7 +5,7 @@ export const REPORT_REASONS_LIST = [
   'scam',
 ] as const;
 
-export type ReportReason = Typeof REPORT_REASONS_LIST[number];
+export type ReportReason = typeof REPORT_REASONS_LIST[number];
 
 export const REPORT_REASON_LABELS: Record<ReportReason, string> = {
   spam: 'Spam',
