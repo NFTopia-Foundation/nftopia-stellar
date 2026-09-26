@@ -154,6 +154,34 @@ impl From<SwapTimeoutError> for SettlementError {
     }
 }
 
+// Separate enum for withdrawal-anomaly detection
+//
+// Like `SwapTimeoutError`, this lives outside `SettlementError` (which is at the
+// 50-case spec limit). `WithdrawalPatternMonitor` returns these codes directly so
+// an operator can tell "your thresholds are invalid" apart from "this account is
+// on a hold"; the `From` impl collapses them onto the closest settlement-level
+// code for callers that need a single error type.
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+pub enum WithdrawalAnomalyError {
+    /// The supplied `WithdrawalAnomalyConfig` would disable detection.
+    InvalidConfig = 1,
+    /// A previous anomaly already put this account on a withdrawal hold.
+    HoldActive = 2,
+    /// No hold is outstanding for this account.
+    NoHold = 3,
+}
+
+impl From<WithdrawalAnomalyError> for SettlementError {
+    fn from(err: WithdrawalAnomalyError) -> Self {
+        match err {
+            WithdrawalAnomalyError::InvalidConfig => SettlementError::InvalidState,
+            WithdrawalAnomalyError::HoldActive => SettlementError::CooldownActive,
+            WithdrawalAnomalyError::NoHold => SettlementError::NotFound,
+        }
+    }
+}
+
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum EmergencyWithdrawalReason {

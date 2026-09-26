@@ -1,3 +1,4 @@
+use crate::security::frontrun_protection::WithdrawalAnomalyKind;
 use crate::types::*;
 use soroban_sdk::{contracttype, symbol_short, Address, Bytes, Env, Symbol, Vec};
 
@@ -249,6 +250,21 @@ pub struct ReentrancyDetectedEvent {
 pub struct FrontRunningDetectedEvent {
     pub suspicious_address: Address,
     pub pattern: Bytes,
+    pub timestamp: u64,
+}
+
+/// Emitted whenever `WithdrawalPatternMonitor` flags or holds a withdrawal.
+/// `blocked` distinguishes a hard hold (withdrawal must not proceed) from a
+/// flag-only observation.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WithdrawalAnomalyEvent {
+    pub user: Address,
+    pub amount: i128,
+    /// Channel the withdrawal was attempted through, e.g. `withdraw_losing_bid`.
+    pub withdrawal_type: Bytes,
+    pub reason: WithdrawalAnomalyKind,
+    pub blocked: bool,
     pub timestamp: u64,
 }
 
@@ -541,6 +557,12 @@ pub fn emit_reentrancy_detected(env: &Env, event: ReentrancyDetectedEvent) {
 pub fn emit_front_running_detected(env: &Env, event: FrontRunningDetectedEvent) {
     env.events()
         .publish(("MarketplaceSettlement", symbol_short!("frontrun")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_withdrawal_anomaly(env: &Env, event: WithdrawalAnomalyEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("wd_anom")), event);
 }
 
 #[allow(deprecated)]
