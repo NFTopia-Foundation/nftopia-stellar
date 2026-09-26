@@ -14,6 +14,14 @@ interface ErrorResponse {
   timestamp: string;
   path: string;
   errors?: Record<string, string[]>;
+  /**
+   * Optional stable, machine-readable error code supplied by the thrown
+   * exception (e.g. `LISTING_UNAVAILABLE`). Present only when the exception
+   * was constructed with one.
+   */
+  code?: string;
+  /** Optional structured reason accompanying `code`. */
+  reason?: string;
 }
 
 @Catch(HttpException)
@@ -58,6 +66,19 @@ export class HttpExceptionFilter implements ExceptionFilter {
       errorResponse.message = responseObj.message || exception.message;
     } else {
       errorResponse.message = exception.message;
+    }
+
+    // Preserve machine-readable metadata (e.g. `LISTING_UNAVAILABLE`) carried by
+    // the exception, so clients can branch on a stable code instead of parsing a
+    // human-readable message.
+    if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
+      const meta = exceptionResponse as { code?: unknown; reason?: unknown };
+      if (typeof meta.code === 'string') {
+        errorResponse.code = meta.code;
+      }
+      if (typeof meta.reason === 'string') {
+        errorResponse.reason = meta.reason;
+      }
     }
 
     const logContext = {

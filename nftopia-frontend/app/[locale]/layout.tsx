@@ -12,6 +12,7 @@ import { Toast } from "@/components/ui/toast";
 import { usePathname } from "next/navigation";
 import { useTranslation } from "@/hooks/useTranslation";
 import { ClientBody } from "@/components/layout/ClientBody";
+import { AiChatWidget } from "@/components/ai-chat/AiChatWidget";
 
 const inter = localFont({
   src: "../../public/fonts/inter-var.woff2",
@@ -114,6 +115,7 @@ export default function LocaleLayout({ children, params }: LocaleLayoutProps) {
                 </main>
               </div>
             )}
+            <AiChatWidget />
             <Toast />
           </StellarWalletProvider>
         </StoreProvider>

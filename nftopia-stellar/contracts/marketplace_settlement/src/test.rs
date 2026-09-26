@@ -2313,3 +2313,347 @@ fn test_xlm_payment_failed_error() {
     let err2 = SettlementError::NativeAssetBalanceFailed;
     assert_eq!(err2 as u32, 305);
 }
+
+// ---------------------------------------------------------------------------
+// Withdrawal anomaly monitoring (issue #554)
+// ---------------------------------------------------------------------------
+//
+// These cover both sides of the criteria: a normal withdrawal pattern must not
+// be flagged, and constructed anomalous patterns must be detected and handled.
+//
+// Soroban only allows storage access from inside a contract frame, so every
+// monitor call is wrapped in `env.as_contract` (see the helpers below).
+mod withdrawal_anomaly_tests {
+    use super::*;
+    use crate::error::WithdrawalAnomalyError;
+    use crate::security::frontrun_protection::{
+        WithdrawalAnomalyConfig, WithdrawalAnomalyDecision, WithdrawalAnomalyKind,
+        WithdrawalHistory, WithdrawalHold, WithdrawalPatternMonitor,
+    };
+
+    const CHANNEL: &str = "withdraw_losing_bid";
+
+    /// `(env, contract_id, user)`, with the monitor's storage reachable through
+    /// `contract_id`.
+    fn monitor_env() -> (Env, Address, Address) {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(MarketplaceSettlement, ());
+        let user = Address::generate(&env);
+        (env, contract_id, user)
+    }
+
+    fn monitor(
+        env: &Env,
+        contract_id: &Address,
+        user: &Address,
+        amount: i128,
+    ) -> WithdrawalAnomalyDecision {
+        env.as_contract(contract_id, || {
+            WithdrawalPatternMonitor::monitor_withdrawal(env, user, amount, CHANNEL).unwrap()
+        })
+    }
+
+    fn preflight(
+        env: &Env,
+        contract_id: &Address,
+        user: &Address,
+        amount: i128,
+    ) -> WithdrawalAnomalyDecision {
+        env.as_contract(contract_id, || {
+            WithdrawalPatternMonitor::check_unusual_pattern(env, user, amount).unwrap()
+        })
+    }
+
+    fn is_held(env: &Env, contract_id: &Address, user: &Address) -> bool {
+        env.as_contract(contract_id, || WithdrawalPatternMonitor::is_held(env, user))
+    }
+
+    fn hold_of(env: &Env, contract_id: &Address, user: &Address) -> Option<WithdrawalHold> {
+        env.as_contract(contract_id, || {
+            WithdrawalPatternMonitor::get_hold(env, user)
+        })
+    }
+
+    fn history_of(env: &Env, contract_id: &Address, user: &Address) -> WithdrawalHistory {
+        env.as_contract(contract_id, || {
+            WithdrawalPatternMonitor::get_history(env, user)
+        })
+    }
+
+    fn clear(
+        env: &Env,
+        contract_id: &Address,
+        user: &Address,
+    ) -> Result<(), WithdrawalAnomalyError> {
+        env.as_contract(contract_id, || {
+            WithdrawalPatternMonitor::clear_hold(env, user)
+        })
+    }
+
+    fn configure(
+        env: &Env,
+        contract_id: &Address,
+        config: WithdrawalAnomalyConfig,
+    ) -> Result<(), WithdrawalAnomalyError> {
+        env.as_contract(contract_id, || {
+            WithdrawalPatternMonitor::set_config(env, config)
+        })
+    }
+
+    fn config_of(env: &Env, contract_id: &Address) -> WithdrawalAnomalyConfig {
+        env.as_contract(contract_id, || WithdrawalPatternMonitor::get_config(env))
+    }
+
+    #[test]
+    fn test_withdrawal_monitor_allows_normal_pattern() {
+        let (env, contract_id, user) = monitor_env();
+
+        // One withdrawal per day, identical amounts: never more than one
+        // withdrawal inside the velocity window, never rapid, never a spike.
+        let mut now = 86_400u64;
+        for _ in 0..6 {
+            env.ledger().set_timestamp(now);
+            assert_eq!(
+                monitor(&env, &contract_id, &user, 1_000),
+                WithdrawalAnomalyDecision::Allowed
+            );
+            now += 86_400;
+        }
+
+        assert!(!is_held(&env, &contract_id, &user));
+        assert!(hold_of(&env, &contract_id, &user).is_none());
+
+        let history = history_of(&env, &contract_id, &user);
+        assert_eq!(history.total_withdrawals, 6);
+        assert_eq!(history.timestamps.len(), 6);
+    }
+
+    #[test]
+    fn test_withdrawal_monitor_holds_velocity_anomaly() {
+        let (env, contract_id, user) = monitor_env();
+
+        // Default max_withdrawals_per_window is 5. Space them wider than the
+        // 5s minimum gap so velocity, not rapidity, is what trips the check.
+        let mut now = 1_000u64;
+        for _ in 0..5 {
+            env.ledger().set_timestamp(now);
+            assert_eq!(
+                monitor(&env, &contract_id, &user, 100),
+                WithdrawalAnomalyDecision::Allowed
+            );
+            now += 10;
+        }
+
+        env.ledger().set_timestamp(now);
+        assert_eq!(
+            monitor(&env, &contract_id, &user, 100),
+            WithdrawalAnomalyDecision::Held(WithdrawalAnomalyKind::Velocity)
+        );
+        assert!(is_held(&env, &contract_id, &user));
+
+        let hold = hold_of(&env, &contract_id, &user).unwrap();
+        assert_eq!(hold.reason, WithdrawalAnomalyKind::Velocity);
+        assert_eq!(hold.amount, 100);
+    }
+
+    #[test]
+    fn test_withdrawal_monitor_holds_rapid_sequence_anomaly() {
+        let (env, contract_id, user) = monitor_env();
+
+        env.ledger().set_timestamp(10_000);
+        assert_eq!(
+            monitor(&env, &contract_id, &user, 100),
+            WithdrawalAnomalyDecision::Allowed
+        );
+
+        // One second later: far faster than the 5s minimum spacing.
+        env.ledger().set_timestamp(10_001);
+        assert_eq!(
+            monitor(&env, &contract_id, &user, 100),
+            WithdrawalAnomalyDecision::Held(WithdrawalAnomalyKind::RapidSequence)
+        );
+        assert!(is_held(&env, &contract_id, &user));
+    }
+
+    #[test]
+    fn test_withdrawal_monitor_flags_amount_spike_without_holding() {
+        let (env, contract_id, user) = monitor_env();
+
+        // Build a clean history of three small withdrawals.
+        let mut now = 1_000u64;
+        for _ in 0..3 {
+            env.ledger().set_timestamp(now);
+            assert_eq!(
+                monitor(&env, &contract_id, &user, 100),
+                WithdrawalAnomalyDecision::Allowed
+            );
+            now += 1_000;
+        }
+
+        // Average is 100 and the default multiplier is 10x, so the threshold is
+        // 1_000; 50_000 is above both the ratio and the absolute floor.
+        env.ledger().set_timestamp(now);
+        assert_eq!(
+            monitor(&env, &contract_id, &user, 50_000),
+            WithdrawalAnomalyDecision::Flagged(WithdrawalAnomalyKind::AmountSpike)
+        );
+        // Flagged, not blocked: the withdrawal may still proceed.
+        assert!(!is_held(&env, &contract_id, &user));
+    }
+
+    #[test]
+    fn test_withdrawal_monitor_ignores_dust_spike_below_floor() {
+        let (env, contract_id, user) = monitor_env();
+
+        let mut now = 1_000u64;
+        for _ in 0..3 {
+            env.ledger().set_timestamp(now);
+            assert_eq!(
+                monitor(&env, &contract_id, &user, 1),
+                WithdrawalAnomalyDecision::Allowed
+            );
+            now += 1_000;
+        }
+
+        // 100x the average of 1, but far below min_spike_amount (1_000), so it is
+        // not worth flagging.
+        env.ledger().set_timestamp(now);
+        assert_eq!(
+            monitor(&env, &contract_id, &user, 100),
+            WithdrawalAnomalyDecision::Allowed
+        );
+    }
+
+    #[test]
+    fn test_withdrawal_hold_persists_until_cleared_by_an_operator() {
+        let (env, contract_id, user) = monitor_env();
+
+        // Rapid sequence raises a hold.
+        env.ledger().set_timestamp(10_000);
+        monitor(&env, &contract_id, &user, 100);
+        env.ledger().set_timestamp(10_001);
+        monitor(&env, &contract_id, &user, 100);
+        assert!(is_held(&env, &contract_id, &user));
+
+        // A later, well-spaced, small withdrawal is still refused: the account
+        // stays held until an operator clears it.
+        env.ledger().set_timestamp(1_000_000);
+        assert!(matches!(
+            monitor(&env, &contract_id, &user, 100),
+            WithdrawalAnomalyDecision::Held(_)
+        ));
+        assert!(matches!(
+            preflight(&env, &contract_id, &user, 100),
+            WithdrawalAnomalyDecision::Held(_)
+        ));
+
+        // Refused attempts are not recorded (the withdrawal never happened).
+        assert_eq!(history_of(&env, &contract_id, &user).total_withdrawals, 2);
+
+        assert_eq!(clear(&env, &contract_id, &user), Ok(()));
+        assert!(!is_held(&env, &contract_id, &user));
+        // History is retained for auditors even after the hold is lifted.
+        assert_eq!(history_of(&env, &contract_id, &user).total_withdrawals, 2);
+        // Clearing a hold that does not exist is an error.
+        assert_eq!(
+            clear(&env, &contract_id, &user),
+            Err(WithdrawalAnomalyError::NoHold)
+        );
+    }
+
+    #[test]
+    fn test_withdrawal_anomaly_config_validation_and_application() {
+        let (env, contract_id, _user) = monitor_env();
+
+        assert_eq!(
+            configure(
+                &env,
+                &contract_id,
+                WithdrawalAnomalyConfig {
+                    window_seconds: 0,
+                    ..WithdrawalAnomalyConfig::default()
+                }
+            ),
+            Err(WithdrawalAnomalyError::InvalidConfig)
+        );
+
+        assert_eq!(
+            configure(
+                &env,
+                &contract_id,
+                WithdrawalAnomalyConfig {
+                    min_spike_amount: -1,
+                    ..WithdrawalAnomalyConfig::default()
+                }
+            ),
+            Err(WithdrawalAnomalyError::InvalidConfig)
+        );
+
+        // A retention shorter than the velocity window would silently disable
+        // velocity detection, so it is rejected too.
+        assert_eq!(
+            configure(
+                &env,
+                &contract_id,
+                WithdrawalAnomalyConfig {
+                    max_withdrawals_per_window: 5,
+                    history_limit: 2,
+                    ..WithdrawalAnomalyConfig::default()
+                }
+            ),
+            Err(WithdrawalAnomalyError::InvalidConfig)
+        );
+
+        // Detection is active with defaults before an admin configures anything.
+        assert_eq!(
+            config_of(&env, &contract_id),
+            WithdrawalAnomalyConfig::default()
+        );
+
+        let strict = WithdrawalAnomalyConfig {
+            window_seconds: 60,
+            max_withdrawals_per_window: 2,
+            min_withdrawal_gap_seconds: 1,
+            spike_multiplier: 100,
+            min_spike_amount: 1_000_000,
+            min_history_for_spike: 5,
+            history_limit: 4,
+        };
+        assert_eq!(configure(&env, &contract_id, strict.clone()), Ok(()));
+        assert_eq!(config_of(&env, &contract_id), strict);
+    }
+
+    #[test]
+    fn test_withdrawal_history_respects_configured_limit() {
+        let (env, contract_id, user) = monitor_env();
+
+        assert_eq!(
+            configure(
+                &env,
+                &contract_id,
+                WithdrawalAnomalyConfig {
+                    max_withdrawals_per_window: 2,
+                    min_withdrawal_gap_seconds: 1,
+                    history_limit: 2,
+                    ..WithdrawalAnomalyConfig::default()
+                }
+            ),
+            Ok(())
+        );
+
+        let mut now = 100_000u64;
+        for _ in 0..4 {
+            env.ledger().set_timestamp(now);
+            monitor(&env, &contract_id, &user, 10);
+            now += 10_000;
+        }
+
+        let history = history_of(&env, &contract_id, &user);
+        assert_eq!(history.timestamps.len(), 2);
+        assert_eq!(history.amounts.len(), 2);
+        // Totals keep counting even though only the recent window is retained.
+        assert_eq!(history.total_withdrawals, 4);
+        assert_eq!(history.total_amount, 40);
+    }
+}

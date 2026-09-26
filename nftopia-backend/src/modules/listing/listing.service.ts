@@ -6,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, Repository } from 'typeorm';
+import { Brackets, DataSource, In, IsNull, Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Listing } from './entities/listing.entity';
@@ -21,11 +21,24 @@ import { TransactionService } from '../transaction/transaction.service';
 import { TransactionState } from '../transaction/enums/transaction-state.enum';
 import { Transaction } from '../transaction/entities/transaction.entity';
 import { PaymentMethod } from '../payment/enums/payment-method.enum';
+import {
+  ListingUnavailableException,
+  ListingUnavailableReason,
+} from './exceptions/listing-unavailable.exception';
 
 type ListingCursorPayload = {
   createdAt: string;
   id: string;
 };
+
+/**
+ * How long a purchase reservation may stay open before the sweeper in
+ * `expireListings()` releases it. Guards against a process that crashed
+ * between claiming a listing and reporting the settlement outcome, and against
+ * off-chain payment intents that are never confirmed. Overridable with
+ * `LISTING_RESERVATION_TTL_SECONDS`.
+ */
+const DEFAULT_LISTING_RESERVATION_TTL_SECONDS = 30 * 60;
 
 @Injectable()
 export class ListingService {
@@ -40,6 +53,11 @@ export class ListingService {
     private readonly settlementClient: MarketplaceSettlementClient,
     private readonly transactionService: TransactionService,
     private readonly eventEmitter: EventEmitter2,
+    /**
+     * Used to run the purchase claim (availability check + reservation write)
+     * inside a single database transaction with a row-level lock.
+     */
+    private readonly dataSource: DataSource,
   ) {}
 
   async create(dto: CreateListingDto, sellerId: string) {
@@ -374,8 +392,31 @@ export class ListingService {
     const ls = listing.status as ListingStatus;
     if (ls !== ListingStatus.ACTIVE)
       throw new BadRequestException('Listing not active');
-    listing.status = ListingStatus.CANCELLED;
-    return this.listingRepo.save(listing);
+
+    if (listing.reservedAt) {
+      throw new ListingUnavailableException(
+        id,
+        ListingUnavailableReason.RESERVED,
+        'a purchase is currently in flight',
+      );
+    }
+
+    // Conditional update rather than `save()`: a purchase that claims the
+    // listing between the read above and this write must win the race instead
+    // of being cancelled out from under the buyer.
+    const result = await this.listingRepo.update(
+      { id, status: ListingStatus.ACTIVE, reservedAt: IsNull() },
+      { status: ListingStatus.CANCELLED },
+    );
+    if (!result.affected) {
+      throw new ListingUnavailableException(
+        id,
+        ListingUnavailableReason.RESERVED,
+        'a purchase started while the cancellation was being processed',
+      );
+    }
+
+    return this.findOne(id);
   }
 
   /**
@@ -384,24 +425,72 @@ export class ListingService {
    * - XLM/USDC: On-chain settlement via Soroban
    * - BUNDLE: Apply bundle discount logic
    * - CREDIT_CARD/STRIPE: Off-chain payment flow with webhook confirmation
+   *
+   * Concurrency: the listing is *claimed* first (see `claimListing`) with an
+   * atomic availability check inside a row-locked transaction. Only the winner
+   * of two simultaneous buyers ever reaches settlement, so a listing yields
+   * exactly one success and can never trigger duplicate on-chain settlement.
+   * The loser gets a 409 `LISTING_UNAVAILABLE` with reason `RESERVED`.
    */
   async buy(id: string, buyerId: string, dto?: BuyNftDto) {
-    const listing = await this.findOne(id);
-    const ls = listing.status as ListingStatus;
-    if (ls !== ListingStatus.ACTIVE)
-      throw new BadRequestException('Listing not active');
-    if (listing.expiresAt && new Date(listing.expiresAt) <= new Date())
-      throw new BadRequestException('Listing expired');
-
     // Determine payment method with default
     const paymentMethod = dto?.paymentMethod || PaymentMethod.XLM;
-    const finalPrice = this.calculateFinalPrice(listing.price, dto);
 
-    // Validate payment method is supported
+    // Validate the payment method *before* claiming, so a malformed request can
+    // never leave a reservation behind.
     this.validatePaymentMethod(paymentMethod, dto);
 
-    // Handle different payment methods
+    // Atomic availability check + reservation. Throws when the buyer lost the
+    // race, or the listing is not active / expired / already reserved.
+    const listing = await this.claimListing(id, buyerId);
+    const finalPrice = this.calculateFinalPrice(listing.price, dto);
+
     let transaction: Transaction | undefined;
+    try {
+      transaction = await this.settleListingPurchase(id, listing, buyerId, dto);
+    } catch (error) {
+      // Settlement never committed - hand the listing back to the marketplace
+      // so a failed purchase does not strand it.
+      await this.releaseReservation(id, buyerId);
+      throw error;
+    }
+
+    if (transaction?.state === TransactionState.COMPLETED) {
+      await this.markListingSold(id);
+    } else if (
+      transaction?.state === TransactionState.FAILED ||
+      transaction?.state === TransactionState.CANCELLED ||
+      transaction?.state === TransactionState.ROLLED_BACK
+    ) {
+      await this.releaseReservation(id, buyerId);
+    }
+    // PENDING (credit card / Stripe) intentionally keeps the reservation until
+    // the payment webhook confirms or fails; releasing it early would let a
+    // second buyer pay for an NFT that is already being paid for.
+
+    return {
+      success: transaction?.state === TransactionState.COMPLETED,
+      listingId: id,
+      buyer: buyerId,
+      transactionId: transaction?.id,
+      transactionState: transaction?.state,
+      paymentMethod,
+      amount: finalPrice,
+    };
+  }
+
+  /**
+   * Payment-method specific settlement dispatch. Extracted so `buy()` stays
+   * readable around its claim/release bookkeeping.
+   */
+  private async settleListingPurchase(
+    id: string,
+    listing: Listing,
+    buyerId: string,
+    dto?: BuyNftDto,
+  ): Promise<Transaction | undefined> {
+    const paymentMethod = dto?.paymentMethod || PaymentMethod.XLM;
+    const finalPrice = this.calculateFinalPrice(listing.price, dto);
     const tokenAddress = dto?.tokenAddress;
 
     switch (paymentMethod) {
@@ -414,17 +503,14 @@ export class ListingService {
             'tokenAddress is required for USDC payments',
           );
         }
-        // Use the existing method with options
         // For XLM/USDC payments
-        transaction =
-          await this.transactionService.createAndExecuteListingPurchaseWithPayment(
-            id, // listingId
-            buyerId, // buyerId
-            paymentMethod, // paymentMethod
-            tokenAddress, // tokenAddress
-            undefined, // maxGas (optional)
-          );
-        break;
+        return this.transactionService.createAndExecuteListingPurchaseWithPayment(
+          id, // listingId
+          buyerId, // buyerId
+          paymentMethod, // paymentMethod
+          tokenAddress, // tokenAddress
+          undefined, // maxGas (optional)
+        );
       }
 
       case PaymentMethod.CREDIT_CARD:
@@ -436,18 +522,16 @@ export class ListingService {
             'stripePaymentIntentId is required for credit card/stripe payments',
           );
         }
-        transaction =
-          await this.transactionService.createOffchainPaymentTransaction(
-            id,
-            buyerId,
-            {
-              amount: finalPrice,
-              paymentMethod,
-              stripePaymentIntentId: dto.stripePaymentIntentId,
-              paymentIntentSecret: dto.paymentIntentSecret,
-            },
-          );
-        break;
+        return this.transactionService.createOffchainPaymentTransaction(
+          id,
+          buyerId,
+          {
+            amount: finalPrice,
+            paymentMethod,
+            stripePaymentIntentId: dto.stripePaymentIntentId,
+            paymentIntentSecret: dto.paymentIntentSecret,
+          },
+        );
       }
 
       case PaymentMethod.BUNDLE: {
@@ -457,18 +541,16 @@ export class ListingService {
             'bundleItemIds are required for bundle payments',
           );
         }
-        transaction =
-          await this.transactionService.createAndExecuteBundlePurchase(
-            id,
-            buyerId,
-            {
-              amount: finalPrice,
-              paymentMethod,
-              bundleItemIds: dto.bundleItemIds,
-              discountPercentage: dto.discountPercentage || 0,
-            },
-          );
-        break;
+        return this.transactionService.createAndExecuteBundlePurchase(
+          id,
+          buyerId,
+          {
+            amount: finalPrice,
+            paymentMethod,
+            bundleItemIds: dto.bundleItemIds,
+            discountPercentage: dto.discountPercentage || 0,
+          },
+        );
       }
 
       default:
@@ -476,22 +558,142 @@ export class ListingService {
           `Unsupported payment method: ${String(paymentMethod)}`,
         );
     }
+  }
 
-    // Update listing status if transaction completed
-    if (transaction?.state === TransactionState.COMPLETED) {
-      listing.status = ListingStatus.SOLD;
-      await this.listingRepo.save(listing);
+  /**
+   * Atomically claim `listingId` for `buyerId`.
+   *
+   * The availability check *and* the reservation write happen inside a single
+   * database transaction that holds a row-level `SELECT ... FOR UPDATE` lock on
+   * the listing row. That is what makes concurrent buyers mutually exclusive:
+   * the first to take the lock sets `reservedAt`, the second blocks on the
+   * lock, then observes `reservedAt` set and is rejected.
+   *
+   * The lock is released as soon as this short transaction commits - the slow
+   * Soroban settlement deliberately runs *outside* it, so a pooled connection is
+   * never held open across a network round trip (and we cannot deadlock against
+   * `TransactionService`, which writes to the same row while settling). This is
+   * still safe: the reservation is durable *before* settlement is attempted,
+   * which is exactly what prevents duplicate on-chain settlement.
+   *
+   * `status` is intentionally left ACTIVE so the downstream settlement call -
+   * which only accepts ACTIVE listings - still works.
+   */
+  private async claimListing(id: string, buyerId: string): Promise<Listing> {
+    return this.dataSource.transaction(async (manager) => {
+      const listing = await manager.findOne(Listing, {
+        where: { id },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!listing) {
+        throw new NotFoundException('Listing not found');
+      }
+
+      const status = listing.status as ListingStatus;
+      if (status !== ListingStatus.ACTIVE) {
+        throw new ListingUnavailableException(
+          id,
+          ListingUnavailableReason.NOT_ACTIVE,
+          `current status is ${status}`,
+        );
+      }
+
+      if (listing.reservedAt) {
+        throw new ListingUnavailableException(
+          id,
+          ListingUnavailableReason.RESERVED,
+          'another buyer has already claimed this listing',
+        );
+      }
+
+      if (listing.expiresAt && new Date(listing.expiresAt) <= new Date()) {
+        // Not persisted here: throwing rolls the transaction back, and the
+        // expiry cron owns the ACTIVE -> EXPIRED transition.
+        throw new ListingUnavailableException(
+          id,
+          ListingUnavailableReason.EXPIRED,
+        );
+      }
+
+      listing.reservedAt = new Date();
+      listing.reservedBy = buyerId;
+      return manager.save(Listing, listing);
+    });
+  }
+
+  /**
+   * Clear a reservation held by `buyerId`, returning the listing to the pool.
+   * Owner and ACTIVE status are part of the update condition, so a release can
+   * never resurrect a listing that has since been sold.
+   */
+  private async releaseReservation(id: string, buyerId: string): Promise<void> {
+    const result = await this.listingRepo.update(
+      { id, reservedBy: buyerId, status: ListingStatus.ACTIVE },
+      { reservedAt: null, reservedBy: null },
+    );
+    if (result.affected) {
+      this.logger.log(`Released purchase reservation on listing ${id}`);
     }
+  }
 
-    return {
-      success: transaction?.state === TransactionState.COMPLETED,
-      listingId: id,
-      buyer: buyerId,
-      transactionId: transaction?.id,
-      transactionState: transaction?.state,
-      paymentMethod,
-      amount: finalPrice,
-    };
+  /**
+   * Persist the winning outcome of a completed purchase.
+   *
+   * Deliberately a plain conditional update instead of a version-checked
+   * `save()`: settlement already moved the row (it marks the listing SOLD
+   * itself), so an optimistic check against our claim-time snapshot would fail
+   * spuriously. The reservation makes this write exclusive anyway.
+   */
+  private async markListingSold(id: string): Promise<void> {
+    await this.listingRepo.update(
+      { id },
+      { status: ListingStatus.SOLD, reservedAt: null, reservedBy: null },
+    );
+  }
+
+  /**
+   * Release purchase reservations that were never resolved - a process that
+   * crashed between claiming and reporting, or an off-chain payment intent that
+   * was never confirmed - so the listing becomes purchasable again instead of
+   * being stranded forever.
+   *
+   * TTL is `LISTING_RESERVATION_TTL_SECONDS` (default 30 minutes).
+   */
+  private async releaseStaleReservations(): Promise<void> {
+    const configured = Number(
+      this.configService.get<string>('LISTING_RESERVATION_TTL_SECONDS'),
+    );
+    const ttlSeconds =
+      Number.isFinite(configured) && configured > 0
+        ? configured
+        : DEFAULT_LISTING_RESERVATION_TTL_SECONDS;
+    const cutoff = new Date(Date.now() - ttlSeconds * 1000);
+
+    try {
+      const stale = await this.listingRepo
+        .createQueryBuilder('l')
+        .select('l.id', 'id')
+        .where('l.status = :status', { status: ListingStatus.ACTIVE })
+        .andWhere('l.reservedAt IS NOT NULL')
+        .andWhere('l.reservedAt < :cutoff', { cutoff })
+        .getRawMany<{ id: string }>();
+
+      if (stale.length === 0) return;
+
+      const result = await this.listingRepo.update(
+        { id: In(stale.map((row) => row.id)), status: ListingStatus.ACTIVE },
+        { reservedAt: null, reservedBy: null },
+      );
+
+      this.logger.warn(
+        `Released ${result.affected ?? 0} stale listing reservation(s) older than ${ttlSeconds}s`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to release stale listing reservations: ${(error as Error).message}`,
+      );
+    }
   }
 
   /**
@@ -551,6 +753,10 @@ export class ListingService {
 
   @Cron(CronExpression.EVERY_MINUTE)
   async expireListings() {
+    // Recover listings stranded by a crashed/abandoned purchase before expiring
+    // anything, so a reservation can never outlive the listing itself.
+    await this.releaseStaleReservations();
+
     this.logger.debug('Checking for expired listings');
     const now = new Date();
     const expired = await this.listingRepo
