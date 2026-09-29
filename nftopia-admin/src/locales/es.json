@@ -66,10 +66,48 @@
     },
     "error": {
       "invalid_credentials": "Correo o contraseña incorrectos.",
-      "invalid_code": "Código de verificación inválido o caducado.",
+      "invalid_code": "Código de verificación invalido o caducado.",
       "not_admin": "Esta cuenta no tiene acceso de administrador. Solo los administradores de NFTopia pueden iniciar sesión aquí.",
       "network": "No se pudo conectar con el servidor de NFTopia. Comprueba tu conexión e inténtalo de nuevo.",
       "unknown": "Error al iniciar sesión. Inténtalo de nuevo."
+    }
+  },
+  "aiFlags": {
+    "title": "Banderas de contenido de IA",
+    "description": "Revisa y resuelve los contenidos marcados por la moderación de IA.",
+    "empty": "No hay banderas pendientes.",
+    "loading": "Cargando banderas…",
+    "error": "No se pudieron cargar las banderas. Inténtalo de nuevo.",
+    "columns": {
+      "item": "Elemento",
+      "reason": "Motivo",
+      "confidence": "Confianza",
+      "createdAt": "Fecha",
+      "actions": "Acciones"
+    },
+    "actions": {
+      "resolve": "Resolver",
+      "bulkResolve": "Resolver seleccionadas",
+      "approve": "Aprobar",
+      "reject": "Rechazar",
+      "dismiss": "Desestimar",
+      "cancel": "Cancelar",
+      "confirm": "Confirmar resolución",
+      "submitting": "Resolviendo…"
+    },
+    "form": {
+      "title": "Resolver bandera",
+      "bulkTitle": "Resolver banderas seleccionadas",
+      "outcome": "Resultado",
+      "reason": "Motivo (opcional)",
+      "reasonPlaceholder": "Añade contexto para la resolución...",
+      "selectedCount": "{{count}} banderas seleccionadas",
+      "confirmation": "±Estás seguro de que quieres resolver esta bandera con el resultado \"{{outcome}}\"? Esta acción no se puede deshacer.",
+      "bulkConfirmation": "±Estás seguro de que quieres resolver {{count}} banderas con el resultado \"{{outcome}}\"? Esta acción no se puede deshacer.",
+      "success": "Bandera resuelta correctamente.",
+      "bulkSuccess": "{{count}} banderas resueltas correctamente.",
+      "error": "No se pudo resolver la bandera. Inténtalo de nuevo.",
+      "bulkError": "No se pudieron resolver las banderas. Inténtalo de nuevo."
     }
   }
 }

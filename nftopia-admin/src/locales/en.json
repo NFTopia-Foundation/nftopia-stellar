@@ -33,7 +33,8 @@
   "nav": {
     "dashboard": "Dashboard",
     "collections": "Collections",
-    "settings": "Settings"
+    "settings": "Settings",
+    "contentFlags": "Content Flags"
   },
   "table": {
     "header": {
@@ -70,6 +71,65 @@
       "not_admin": "This account does not have admin access. Only NFTopia administrators can sign in here.",
       "network": "Unable to reach the NFTopia server. Check your connection and try again.",
       "unknown": "Sign-in failed. Please try again."
+    }
+  },
+  "contentFlags": {
+    "title": "Content Flags",
+    "description": "Review and resolve AI-flagged content.",
+    "empty": "No pending flags.",
+    "error": {
+      "load": "Unable to load content flags.",
+      "resolve": "Unable to resolve the flag. Please try again.",
+      "bulkResolve": "Unable to bulk resolve the selected flags. Please try again."
+    },
+    "columns": {
+      "select": "Select",
+      "item": "Item",
+      "reason": "Reason",
+      "confidence": "Confidence",
+      "status": "Status",
+      "created": "Created",
+      "actions": "Actions"
+    },
+    "actions": {
+      "resolve": "Resolve",
+      "approve": "Approve",
+      "reject": "Reject",
+      "dismiss": "Dismiss",
+      "bulkResolve": "Bulk resolve"
+    },
+    "form": {
+      "title": "Resolve flag",
+      "description": "Choose a resolution outcome for this flagged item.",
+      "outcome": "Outcome",
+      "outcomePlaceholder": "Select an outcome",
+      "reason": "Reason (optional)",
+      "reasonPlaceholder": "Explain your decision (optional)",
+      "submit": "Resolve",
+      "submitting": "Resolving…",
+      "cancel": "Cancel"
+    },
+    "bulkForm": {
+      "title": "Bulk resolve flags",
+      "description": "Resolve {{count}} selected flags with the same outcome.",
+      "outcome": "Outcome",
+      "outcomePlaceholder": "Select an outcome",
+      "reason": "Reason (optional)",
+      "reasonPlaceholder": "Explain your decision (optional)",
+      "submit": "Resolve selected",
+      "submitting": "Resolving…",
+      "cancel": "Cancel"
+    },
+    "confirm": {
+      "title": "Confirm resolution",
+      "message": "Are you sure you want to resolve this flag as {{outcome}}? This action will remove it from the pending queue.",
+      "bulkMessage": "Are you sure you want to resolve {{count}} selected flags as {{outcome}}? This action will remove them from the pending queue.",
+      "confirm": "Confirm",
+      "cancel": "Cancel"
+    },
+    "success": {
+      "resolve": "Flag resolved.",
+      "bulkResolve": "{{count}} flags resolved."
     }
   }
 }

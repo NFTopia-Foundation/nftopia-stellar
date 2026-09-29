@@ -1,6 +1,7 @@
-import { useTranslation } from 'react-i18next'
+import { useTranslation } from 'react-i18n'
 import { useAuth } from './auth/useAuth'
 import LoginPage from './pages/LoginPage'
+import { ContentFlagsQueuePage } from './pages/ContentFlagsQueuePage'
 
 function App() {
   const { t } = useTranslation()
@@ -60,6 +61,8 @@ function App() {
             <p className="mt-2 text-lg font-semibold text-white">{t('wallet.address.label')}</p>
           </article>
         </section>
+
+        <ContentFlagsQueuePage />
       </div>
     </main>
   )
