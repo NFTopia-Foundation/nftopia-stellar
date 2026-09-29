@@ -29,6 +29,16 @@ describe('EmailTemplateService', () => {
     expect(html).toContain('Reset your password');
   });
 
+  it('renders the password-changed security notification', () => {
+    const { html, text } = service.render('password-changed', {
+      username: 'builder',
+    });
+
+    expect(html).toContain('Hi builder');
+    expect(html).toContain('password for your NFTopia account was changed');
+    expect(text).toContain('contact NFTopia support');
+  });
+
   it('renders the bid-notification template with interpolated values', () => {
     const { html } = service.render('bid-notification', {
       username: 'seller1',

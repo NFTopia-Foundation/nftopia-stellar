@@ -4,6 +4,7 @@ export const SEND_EMAIL_JOB = 'send';
 export type EmailJobType =
   | 'verification'
   | 'password_reset'
+  | 'password_changed'
   | 'bid_notification'
   | 'auction_won';
 

@@ -80,6 +80,21 @@ export class EmailService {
     );
   }
 
+  async sendPasswordChangedEmail(to: string, username?: string): Promise<void> {
+    const { html, text } = this.templateService.render('password-changed', {
+      username: username || 'there',
+    });
+
+    await this.enqueue(
+      EmailType.PASSWORD_CHANGED,
+      to,
+      'Your NFTopia password was changed',
+      html,
+      text,
+      {},
+    );
+  }
+
   async sendBidNotificationEmail(
     to: string,
     auctionId: string,

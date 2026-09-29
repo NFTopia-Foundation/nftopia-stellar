@@ -78,8 +78,11 @@ export class AuthController {
   @UseGuards(EmailRateLimitGuard)
   @Post('password-reset/request')
   @ApiOperation({ summary: 'Request a password reset email' })
-  async requestPasswordReset(@Body() dto: RequestPasswordResetDto) {
-    const res = await this.authService.requestPasswordReset(dto);
+  async requestPasswordReset(
+    @Body() dto: RequestPasswordResetDto,
+    @Req() req: Request,
+  ) {
+    const res = await this.authService.requestPasswordReset(dto, req.ip);
     return {
       data: {
         success: true,
@@ -90,8 +93,11 @@ export class AuthController {
 
   @Post('password-reset/confirm')
   @ApiOperation({ summary: 'Reset password using a reset token' })
-  async confirmPasswordReset(@Body() dto: ResetPasswordDto) {
-    const res = await this.authService.resetPassword(dto);
+  async confirmPasswordReset(
+    @Body() dto: ResetPasswordDto,
+    @Req() req: Request,
+  ) {
+    const res = await this.authService.resetPassword(dto, req.ip);
     return {
       data: {
         success: true,
@@ -110,6 +116,27 @@ export class AuthController {
         data: res,
       },
     };
+  }
+
+  @UseGuards(EmailRateLimitGuard)
+  @Post('forgot-password')
+  @ApiOperation({ summary: 'Request a password reset email' })
+  async forgotPassword(
+    @Body() dto: RequestPasswordResetDto,
+    @Req() req: Request,
+  ) {
+    const res = await this.authService.requestPasswordReset(dto, req.ip);
+    return { data: { success: true, data: res } };
+  }
+
+  @Post('reset-password')
+  @ApiOperation({ summary: 'Reset password using a reset token' })
+  async resetPassword(
+    @Body() dto: ResetPasswordDto,
+    @Req() req: Request,
+  ) {
+    const res = await this.authService.resetPassword(dto, req.ip);
+    return { data: { success: true, data: res } };
   }
 
   @Post('refresh')

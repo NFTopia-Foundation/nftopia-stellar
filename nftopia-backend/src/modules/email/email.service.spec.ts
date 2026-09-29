@@ -113,6 +113,19 @@ describe('EmailService', () => {
     });
   });
 
+  describe('sendPasswordChangedEmail', () => {
+    it('queues a password-change notification', async () => {
+      await service.sendPasswordChangedEmail('user@nftopia.io', 'builder');
+
+      expect(templateService.render).toHaveBeenCalledWith(
+        'password-changed',
+        { username: 'builder' },
+      );
+      const savedLog = emailLogRepo.save.mock.calls[0][0];
+      expect(savedLog.type).toBe(EmailType.PASSWORD_CHANGED);
+    });
+  });
+
   describe('sendBidNotificationEmail', () => {
     it('renders the bid-notification template and enqueues a send job', async () => {
       await service.sendBidNotificationEmail(
