@@ -21,12 +21,12 @@ export class Auction {
   @Column()
   nftTokenId: string;
 
-  @Column()
-  sellerId: string;
+  @Column({ nullable: true })
+  sellerId?: string | null;
 
-  @ManyToOne(() => User, { eager: true })
+  @ManyToOne(() => User, { eager: true, nullable: true })
   @JoinColumn({ name: 'sellerId' })
-  seller: User;
+  seller?: User | null;
 
   @Column({ type: 'decimal', precision: 20, scale: 7 })
   startPrice: number;

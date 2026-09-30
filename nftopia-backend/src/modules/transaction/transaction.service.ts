@@ -188,6 +188,9 @@ export class TransactionService {
     if (!auction) {
       throw new NotFoundException('Auction not found');
     }
+    if (!auction.sellerId) {
+      throw new BadRequestException('Auction seller is no longer available');
+    }
 
     return this.createAndExecutePurchase(buyerId, {
       sellerId: auction.sellerId,
@@ -956,11 +959,13 @@ export class TransactionService {
       });
       if (auction) {
         auction.status = AuctionStatus.SETTLED;
-        auction.winnerId = transaction.buyerId;
+        auction.winnerId = transaction.buyerId ?? undefined;
         auction.currentPrice = Number(transaction.amount);
         await this.auctionRepo.save(auction);
       }
     }
+
+    if (!transaction.buyerId) return;
 
     const buyer = await this.usersService.findById(transaction.buyerId);
     const buyerStellarAddress = buyer?.walletAddress || buyer?.address;
@@ -1164,13 +1169,11 @@ export class TransactionService {
   }
 
   private async invalidateCaches(transaction: Transaction): Promise<void> {
+    const userHistoryKeys = [transaction.buyerId, transaction.sellerId]
+      .filter((userId): userId is string => Boolean(userId))
+      .map((userId) => this.getUserHistoryCacheKey(userId, {}));
     await Promise.all([
-      this.cacheManager.del(
-        this.getUserHistoryCacheKey(transaction.buyerId, {}),
-      ),
-      this.cacheManager.del(
-        this.getUserHistoryCacheKey(transaction.sellerId, {}),
-      ),
+      ...userHistoryKeys.map((key) => this.cacheManager.del(key)),
       this.cacheManager.del(`tx-history:nft:${transaction.nftId || ''}`),
       this.cacheManager.del(
         `tx-history:nft:${transaction.nftContractId}:${transaction.nftTokenId}`,
@@ -1442,6 +1445,10 @@ export class TransactionService {
     };
 
     await this.transactionRepo.save(transaction);
+
+    if (!transaction.buyerId) {
+      throw new ConflictException('Payment account is no longer available');
+    }
 
     try {
       const executed = await this.execute(transaction.id, transaction.buyerId, {

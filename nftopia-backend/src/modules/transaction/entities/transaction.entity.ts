@@ -22,19 +22,19 @@ export class Transaction {
   @Column({ type: 'bigint', unique: true })
   contractTxId: string;
 
-  @Column({ type: 'uuid' })
-  buyerId: string;
+  @Column({ type: 'uuid', nullable: true })
+  buyerId?: string | null;
 
-  @ManyToOne(() => User, { eager: true })
+  @ManyToOne(() => User, { eager: true, nullable: true })
   @JoinColumn({ name: 'buyerId' })
-  buyer: User;
+  buyer?: User | null;
 
-  @Column({ type: 'uuid' })
-  sellerId: string;
+  @Column({ type: 'uuid', nullable: true })
+  sellerId?: string | null;
 
-  @ManyToOne(() => User, { eager: true })
+  @ManyToOne(() => User, { eager: true, nullable: true })
   @JoinColumn({ name: 'sellerId' })
-  seller: User;
+  seller?: User | null;
 
   @Column({ type: 'uuid', nullable: true })
   nftId?: string;

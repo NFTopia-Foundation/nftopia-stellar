@@ -189,6 +189,7 @@ export class NftResolver {
     @Parent() nft: GraphqlNft,
     @Context() context: GraphqlContext,
   ): Promise<GraphqlUserType | null> {
+    if (!nft.ownerId) return null;
     const owner = await context.loaders.userById.load(nft.ownerId);
     if (!owner) {
       return null;
@@ -206,6 +207,7 @@ export class NftResolver {
     @Parent() nft: GraphqlNft,
     @Context() context: GraphqlContext,
   ): Promise<GraphqlUserType | null> {
+    if (!nft.creatorId) return null;
     const creator = await context.loaders.userById.load(nft.creatorId);
     if (!creator) {
       return null;

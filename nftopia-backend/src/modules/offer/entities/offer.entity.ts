@@ -25,20 +25,20 @@ export class Offer {
   nftTokenId: string;
 
   /** User who made the offer */
-  @Column()
-  bidderId: string;
+  @Column({ nullable: true })
+  bidderId?: string | null;
 
-  @ManyToOne(() => User, { eager: true })
+  @ManyToOne(() => User, { eager: true, nullable: true })
   @JoinColumn({ name: 'bidderId' })
-  bidder: User;
+  bidder?: User | null;
 
   /** Current owner of the NFT at the time of offer creation */
-  @Column()
-  ownerId: string;
+  @Column({ nullable: true })
+  ownerId?: string | null;
 
-  @ManyToOne(() => User, { eager: true })
+  @ManyToOne(() => User, { eager: true, nullable: true })
   @JoinColumn({ name: 'ownerId' })
-  owner: User;
+  owner?: User | null;
 
   @Column({ type: 'decimal', precision: 20, scale: 7 })
   amount: number;

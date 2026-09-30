@@ -37,7 +37,7 @@ export function TransactionSigner({
 }: TransactionSignerProps) {
   const { provider, network, address } = useWalletStore();
   const { signing, submitting, txHash, error, signAndSubmit, clearState } =
-    useStellarTransaction(provider, network);
+    useStellarTransaction(provider, network, type);
 
   const [done, setDone] = useState(false);
 

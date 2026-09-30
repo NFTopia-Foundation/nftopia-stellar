@@ -49,12 +49,12 @@ export class Collection {
   })
   bannerImageUrl?: string | null;
 
-  @Column({ name: 'creator_id', type: 'uuid' })
-  creatorId: string;
+  @Column({ name: 'creator_id', type: 'uuid', nullable: true })
+  creatorId?: string | null;
 
-  @ManyToOne(() => User, { nullable: false })
+  @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'creator_id' })
-  creator: User;
+  creator?: User | null;
 
   @Column({ name: 'total_supply', type: 'integer', default: 0 })
   totalSupply: number;

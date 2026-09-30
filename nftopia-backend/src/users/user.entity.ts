@@ -28,6 +28,15 @@ export class User {
   @Column({ name: 'last_login_at', type: 'timestamp', nullable: true })
   lastLoginAt?: Date | null;
 
+  @Column({ name: 'deletion_requested_at', type: 'timestamptz', nullable: true })
+  deletionRequestedAt?: Date | null;
+
+  @Column({ name: 'deletion_last_requested_at', type: 'timestamptz', nullable: true })
+  deletionLastRequestedAt?: Date | null;
+
+  @Column({ name: 'anonymized_at', type: 'timestamptz', nullable: true })
+  anonymizedAt?: Date | null;
+
   @Column({ type: 'varchar', length: 50, nullable: true })
   username?: string;
 

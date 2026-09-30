@@ -5,6 +5,7 @@ export type EmailJobType =
   | 'verification'
   | 'password_reset'
   | 'password_changed'
+  | 'account_deletion_verification'
   | 'bid_notification'
   | 'auction_won';
 

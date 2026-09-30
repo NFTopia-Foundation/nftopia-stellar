@@ -26,8 +26,8 @@ export interface PaymentReceiptDto {
   amount: string;
   currency: string;
   paymentMethod?: string;
-  buyerId: string;
-  sellerId: string;
+  buyerId?: string | null;
+  sellerId?: string | null;
   order: PaymentReceiptOrderSummary | null;
   webhookEvents: PaymentReceiptWebhookEventSummary[];
 }

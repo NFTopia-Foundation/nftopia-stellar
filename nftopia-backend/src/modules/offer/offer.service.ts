@@ -144,6 +144,9 @@ export class OfferService {
       await this.offerRepo.save(offer);
       throw new BadRequestException('This offer has expired');
     }
+    if (!offer.bidderId) {
+      throw new BadRequestException('Offer account is no longer available');
+    }
 
     let transactionXdr: string | undefined;
 

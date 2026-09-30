@@ -11,6 +11,7 @@ export enum EmailType {
   VERIFICATION = 'verification',
   PASSWORD_RESET = 'password_reset',
   PASSWORD_CHANGED = 'password_changed',
+  ACCOUNT_DELETION_VERIFICATION = 'account_deletion_verification',
   BID_NOTIFICATION = 'bid_notification',
   AUCTION_WON = 'auction_won',
 }

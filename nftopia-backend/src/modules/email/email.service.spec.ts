@@ -126,6 +126,26 @@ describe('EmailService', () => {
     });
   });
 
+  describe('sendAccountDeletionVerificationEmail', () => {
+    it('queues a time-limited account deletion verification email', async () => {
+      await service.sendAccountDeletionVerificationEmail(
+        'user@nftopia.io',
+        'deletion-token',
+        'builder',
+      );
+
+      expect(templateService.render).toHaveBeenCalledWith(
+        'account-deletion-verification',
+        expect.objectContaining({
+          username: 'builder',
+          verificationUrl: expect.stringContaining('/account/deletion?token='),
+        }),
+      );
+      const savedLog = emailLogRepo.save.mock.calls[0][0];
+      expect(savedLog.type).toBe(EmailType.ACCOUNT_DELETION_VERIFICATION);
+    });
+  });
+
   describe('sendBidNotificationEmail', () => {
     it('renders the bid-notification template and enqueues a send job', async () => {
       await service.sendBidNotificationEmail(

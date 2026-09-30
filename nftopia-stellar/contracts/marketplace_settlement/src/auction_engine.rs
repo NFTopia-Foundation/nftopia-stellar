@@ -2,14 +2,17 @@ use crate::error::SettlementError;
 use crate::events::{
     emit_auction_cancelled_with_refunds, emit_auction_created, emit_auction_ended,
     emit_auction_extended, emit_bid_below_minimum_increment, emit_bid_escrowed, emit_bid_placed,
-    emit_bid_refunded, emit_bid_revealed, AuctionCancelledWithRefundsEvent, AuctionCreatedEvent,
+    emit_bid_refunded, emit_bid_revealed, emit_invalid_bid_amount,
+    AuctionCancelledWithRefundsEvent, AuctionCreatedEvent,
     AuctionEndedEvent, AuctionExtendedEvent, BidBelowMinimumIncrementEvent, BidEscrowedEvent,
-    BidPlacedEvent, BidRefundedEvent, BidRevealedEvent,
+    BidPlacedEvent, BidRefundedEvent, BidRevealedEvent, InvalidBidAmountEvent,
 };
 use crate::fee_manager::FeeManager;
 use crate::royalty_distributor::RoyaltyDistributor;
 use crate::security::frontrun_protection::{CommitRevealScheme, FrontRunningDetector};
-use crate::storage::auction_store::{AuctionStore, DutchAuctionStore};
+use crate::storage::auction_store::{
+    AuctionStore, DutchAuctionStore, MAX_BIDS_PER_AUCTION,
+};
 use crate::types::{
     Asset, AuctionTransaction, AuctionType, Bid, DutchAuctionData, RoyaltyDistribution,
     TransactionState,
@@ -19,6 +22,7 @@ use soroban_sdk::{contracttype, symbol_short, Address, Bytes, Env, Map, Symbol, 
 
 // Storage keys
 const AUCTION_CONFIG: Symbol = symbol_short!("auc_cfg");
+pub const MINIMUM_BID_AMOUNT: i128 = 100_000;
 
 /// Auction configuration
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -154,6 +158,10 @@ impl AuctionEngine {
             return Err(SettlementError::AuctionAlreadyEnded);
         }
 
+        if AuctionStore::get_bids(env, auction_id).len() >= MAX_BIDS_PER_AUCTION {
+            return Err(SettlementError::InvalidState);
+        }
+
         // Validate bid amount
         Self::validate_bid_amount(&auction, bid_amount, bidder, env)?;
 
@@ -281,6 +289,9 @@ impl AuctionEngine {
         bid_amount: i128,
         salt: &Bytes,
     ) -> Result<(), SettlementError> {
+        let mut auction = AuctionStore::get(env, auction_id)?;
+        Self::validate_bid_amount(&auction, bid_amount, bidder, env)?;
+
         let config = Self::get_auction_config(env)?;
         if config.commit_reveal_enabled == 0 {
             return Err(SettlementError::InvalidState);
@@ -288,8 +299,6 @@ impl AuctionEngine {
 
         // Verify commitment
         CommitRevealScheme::reveal_commitment(env, bidder, auction_id, bid_amount, salt)?;
-
-        let mut auction = AuctionStore::get(env, auction_id)?;
 
         // Process the revealed bid
         let timestamp = env.ledger().timestamp();
@@ -711,6 +720,20 @@ impl AuctionEngine {
         bidder: &Address,
         env: &Env,
     ) -> Result<(), SettlementError> {
+        if bid_amount <= 0 || bid_amount < MINIMUM_BID_AMOUNT {
+            emit_invalid_bid_amount(
+                env,
+                InvalidBidAmountEvent {
+                    auction_id: auction.auction_id,
+                    bidder: bidder.clone(),
+                    bid_amount,
+                    minimum_bid_amount: MINIMUM_BID_AMOUNT,
+                    timestamp: env.ledger().timestamp(),
+                },
+            );
+            return Err(SettlementError::InvalidAmount);
+        }
+
         let config = Self::get_auction_config(env)?;
 
         // Must be higher than current highest bid
