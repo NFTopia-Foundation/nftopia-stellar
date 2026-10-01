@@ -117,10 +117,9 @@ describe('EmailService', () => {
     it('queues a password-change notification', async () => {
       await service.sendPasswordChangedEmail('user@nftopia.io', 'builder');
 
-      expect(templateService.render).toHaveBeenCalledWith(
-        'password-changed',
-        { username: 'builder' },
-      );
+      expect(templateService.render).toHaveBeenCalledWith('password-changed', {
+        username: 'builder',
+      });
       const savedLog = emailLogRepo.save.mock.calls[0][0];
       expect(savedLog.type).toBe(EmailType.PASSWORD_CHANGED);
     });
@@ -134,12 +133,13 @@ describe('EmailService', () => {
         'builder',
       );
 
+      const expectedTemplateVars: Record<string, unknown> = {
+        username: 'builder',
+        verificationUrl: expect.stringContaining('/account/deletion?token='),
+      };
       expect(templateService.render).toHaveBeenCalledWith(
         'account-deletion-verification',
-        expect.objectContaining({
-          username: 'builder',
-          verificationUrl: expect.stringContaining('/account/deletion?token='),
-        }),
+        expect.objectContaining(expectedTemplateVars),
       );
       const savedLog = emailLogRepo.save.mock.calls[0][0];
       expect(savedLog.type).toBe(EmailType.ACCOUNT_DELETION_VERIFICATION);
