@@ -11,7 +11,8 @@ import { test, expect, type Page, type APIRequestContext } from "@playwright/tes
  *   - REST bid placement / refetch via `page.route`
  *   - the `auctionBidPlaced` subscription via `page.routeWebSocket`
  * so the suite covers bid placement, being outbid, and settlement without
- * depending on a live backend, a wallet extension, or wall-clock timing.
+ * depending on a live backend or wall-clock timing. The Freighter extension is
+ * stubbed per test by `connectWallet` below.
  */
 
 const MOCK_API = process.env.E2E_MOCK_API_URL || "http://127.0.0.1:4321";
@@ -41,16 +42,85 @@ const rivalUser = {
   walletAddress: RIVAL_ADDRESS,
 };
 
-/** Seed a connected wallet before the app boots (zustand `persist` state). */
+/**
+ * Boot the app as a connected Freighter wallet.
+ *
+ * A localStorage seed on its own is not enough, which is why this helper also
+ * stands in for the extension:
+ *
+ *   1. `StellarWalletProvider` rehydrates a persisted `freighter` session on
+ *      mount and calls `setDisconnected()` the moment `isFreighterConnected()`
+ *      reports false — which is always the case in a bare Chromium, so the
+ *      seeded session survives for only one paint.
+ *   2. `@stellar/freighter-api` v6 resolves `isConnected()` straight from
+ *      `window.freighter`; everything else is a `window.postMessage`
+ *      handshake with the extension that gives up after 2s with
+ *      `isConnected: false`.
+ *
+ * The stub answers only the identity/network handshakes: this flow never signs
+ * anything, because the bid POST is stubbed with `page.route`.
+ */
 async function connectWallet(page: Page, address = BIDDER_ADDRESS): Promise<void> {
   await page.addInitScript((seededAddress) => {
+    // 1. `isConnected()` short-circuits to `{ isConnected: window.freighter }`.
+    (window as unknown as { freighter: boolean }).freighter = true;
+
+    // 2. Answer the extension handshakes. Requests carry `messageId`; the v6
+    //    responder check reads `messagedId` (sic) off the reply, so echo both.
+    window.addEventListener("message", (event: MessageEvent) => {
+      const request = event.data as
+        | { source?: string; type?: string; messageId?: number }
+        | null;
+      if (!request || request.source !== "FREIGHTER_EXTERNAL_MSG_REQUEST") return;
+
+      const respond = (payload: Record<string, unknown>) => {
+        window.postMessage(
+          {
+            source: "FREIGHTER_EXTERNAL_MSG_RESPONSE",
+            messageId: request.messageId,
+            messagedId: request.messageId,
+            ...payload,
+          },
+          window.location.origin,
+        );
+      };
+
+      switch (request.type) {
+        case "REQUEST_CONNECTION_STATUS":
+          respond({ isConnected: true, publicKey: seededAddress });
+          break;
+        case "REQUEST_PUBLIC_KEY":
+        case "REQUEST_ACCESS":
+          respond({ publicKey: seededAddress, isConnected: true });
+          break;
+        case "REQUEST_NETWORK":
+        case "REQUEST_NETWORK_DETAILS":
+          respond({
+            network: "TESTNET",
+            networkDetails: {
+              network: "TESTNET",
+              networkName: "Testnet",
+              networkUrl: "https://horizon-testnet.stellar.org",
+              networkPassphrase: "Test SDF Network ; September 2015",
+            },
+          });
+          break;
+        case "REQUEST_ALLOWED_STATUS":
+          respond({ isAllowed: true });
+          break;
+        default:
+          respond({});
+      }
+    });
+
+    // 3. Persisted zustand state, so the bid form is connected on first paint.
     window.localStorage.setItem(
       "stellar-wallet-store",
       JSON.stringify({
         state: {
           address: seededAddress,
           provider: "freighter",
-          network: "TESTNET",
+          network: "testnet",
           connected: true,
         },
         version: 0,
