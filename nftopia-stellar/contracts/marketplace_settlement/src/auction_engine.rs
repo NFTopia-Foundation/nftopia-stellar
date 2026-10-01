@@ -3,16 +3,14 @@ use crate::events::{
     emit_auction_cancelled_with_refunds, emit_auction_created, emit_auction_ended,
     emit_auction_extended, emit_bid_below_minimum_increment, emit_bid_escrowed, emit_bid_placed,
     emit_bid_refunded, emit_bid_revealed, emit_invalid_bid_amount,
-    AuctionCancelledWithRefundsEvent, AuctionCreatedEvent,
-    AuctionEndedEvent, AuctionExtendedEvent, BidBelowMinimumIncrementEvent, BidEscrowedEvent,
-    BidPlacedEvent, BidRefundedEvent, BidRevealedEvent, InvalidBidAmountEvent,
+    AuctionCancelledWithRefundsEvent, AuctionCreatedEvent, AuctionEndedEvent, AuctionExtendedEvent,
+    BidBelowMinimumIncrementEvent, BidEscrowedEvent, BidPlacedEvent, BidRefundedEvent,
+    BidRevealedEvent, InvalidBidAmountEvent,
 };
 use crate::fee_manager::FeeManager;
 use crate::royalty_distributor::RoyaltyDistributor;
 use crate::security::frontrun_protection::{CommitRevealScheme, FrontRunningDetector};
-use crate::storage::auction_store::{
-    AuctionStore, DutchAuctionStore, MAX_BIDS_PER_AUCTION,
-};
+use crate::storage::auction_store::{AuctionStore, DutchAuctionStore, MAX_BIDS_PER_AUCTION};
 use crate::types::{
     Asset, AuctionTransaction, AuctionType, Bid, DutchAuctionData, RoyaltyDistribution,
     TransactionState,
