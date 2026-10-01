@@ -26,6 +26,7 @@ import {
 } from '@/src/services/stellar/wallet.service';
 import ConfirmationDialog from '@/components/wallet/ConfirmationDialog';
 import TransactionFeeSummary from '@/components/wallet/TransactionFeeSummary';
+import { haptics } from '@/lib/haptics';
 
 interface SendScreenProps {
   navigation?: any;
@@ -106,10 +107,12 @@ export function SendScreen({ navigation, route, onSend }: SendScreenProps) {
   const validateAddress = (addr: string): boolean => {
     if (!addr.trim()) {
       setAddressError('Recipient address is required');
+      haptics.error();
       return false;
     }
     if (!isValidStellarAddress(addr.trim())) {
       setAddressError('Invalid Stellar address');
+      haptics.error();
       return false;
     }
     setAddressError(null);
@@ -148,10 +151,12 @@ export function SendScreen({ navigation, route, onSend }: SendScreenProps) {
   const handleSend = async () => {
     if (!validateAddress(recipient)) return;
     if (!amount.trim() || isNaN(Number(amount)) || Number(amount) <= 0) {
+      haptics.error();
       Alert.alert('Error', 'Enter a valid amount');
       return;
     }
     if (!onSend && !wallets.find((item) => item.publicKey === activePublicKey)) {
+      haptics.error();
       Alert.alert('Error', 'Connect a wallet before sending');
       return;
     }
@@ -206,12 +211,14 @@ export function SendScreen({ navigation, route, onSend }: SendScreenProps) {
         );
         Alert.alert('Sent', `${amount.trim()} XLM sent successfully`);
       }
+      haptics.success();
       addRecentRecipient(recipient.trim());
       setShowConfirm(false);
       if (navigation?.goBack) navigation.goBack();
     } catch (e) {
       const message =
         e instanceof WalletError ? e.message : e instanceof Error ? e.message : 'Unknown error';
+      haptics.error();
       Alert.alert('Send failed', message);
     } finally {
       setSending(false);

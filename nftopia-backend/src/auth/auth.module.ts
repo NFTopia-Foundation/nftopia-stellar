@@ -16,6 +16,11 @@ import { RefreshTokenFamily } from './entities/refresh-token-family.entity';
 import { User } from '../users/user.entity';
 import { TwoFactorModule } from './two-factor.module';
 import { EmailModule } from '../modules/email/email.module';
+import Redis from 'ioredis';
+import {
+  RedisWalletNonceStore,
+  WALLET_NONCE_STORE,
+} from './wallet-nonce.store';
 
 @Module({
   imports: [
@@ -33,7 +38,13 @@ import { EmailModule } from '../modules/email/email.module';
         },
       }),
     }),
-    TypeOrmModule.forFeature([User, UserWallet, WalletSession, RefreshToken, RefreshTokenFamily]),
+    TypeOrmModule.forFeature([
+      User,
+      UserWallet,
+      WalletSession,
+      RefreshToken,
+      RefreshTokenFamily,
+    ]),
     forwardRef(() => TwoFactorModule),
     EmailModule,
   ],
@@ -44,6 +55,21 @@ import { EmailModule } from '../modules/email/email.module';
     StellarSignatureStrategy,
     StellarSignatureGuard,
     JwtAuthGuard,
+    {
+      // Wallet-auth nonces live in Redis so a challenge survives restarts and
+      // can be completed on any backend instance (#572).
+      provide: WALLET_NONCE_STORE,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) =>
+        new RedisWalletNonceStore(
+          new Redis({
+            host: config.get<string>('REDIS_HOST') || 'localhost',
+            port: parseInt(config.get<string>('REDIS_PORT') || '6379', 10),
+            password: config.get<string>('REDIS_PASSWORD') || undefined,
+            db: parseInt(config.get<string>('REDIS_DB') || '0', 10),
+          }),
+        ),
+    },
   ],
   exports: [AuthService, JwtStrategy, StellarSignatureStrategy, JwtAuthGuard],
 })

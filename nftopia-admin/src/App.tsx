@@ -1,18 +1,34 @@
+import { lazy, Suspense } from 'react'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { useTranslation } from 'react-i18n'
 import { useAuth } from './auth/useAuth'
+import { AppShell } from './components/AppShell'
 import LoginPage from './pages/LoginPage'
 import { ContentFlagsQueuePage } from './pages/ContentFlagsQueuePage'
 
+// Route-level code splitting — each page is loaded only when navigated to.
+const DashboardPage = lazy(() => import('./pages/DashboardPage'))
+const CollectionsPage = lazy(() => import('./pages/CollectionsPage'))
+const SettingsPage = lazy(() => import('./pages/SettingsPage'))
+
+/** Minimal loading indicator shown during lazy-page suspense. */
+function PageSpinner() {
+  return (
+    <div className="flex flex-1 items-center justify-center text-slate-500 text-sm">
+      Loading…
+    </div>
+  )
+}
+
 function App() {
-  const { t } = useTranslation()
-  const { state, store } = useAuth()
+  const { state } = useAuth()
 
   if (state.status !== 'authenticated') {
     return <LoginPage />
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(1200px_circle_at_100%_0%,#123d63_0%,transparent_45%),radial-gradient(900px_circle_at_0%_100%,#1e3a8a_0%,transparent_40%),#020617] p-6 md:p-10">
+<main className="min-h-screen bg-[radial-gradient(1200px_circle_at_100%_0%,#123d63_0%,transparent_45%),radial-gradient(900px_circle_at_0%_100%,#1e3a8a_0%,transparent_40%),#020617] p-6 md:p-10">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 rounded-2xl border border-white/10 bg-slate-900/70 p-6 shadow-2xl backdrop-blur md:p-8">
         <header className="flex flex-col gap-3 border-b border-white/10 pb-5 md:flex-row md:items-end md:justify-between">
           <div>

@@ -7,7 +7,7 @@ import { colors, spacing, borderRadius } from '@/constants/theme';
 import { KeyboardAwareScreen } from '@/src/components/KeyboardAwareScreen';
 import SecureInput from '@/components/wallet/SecureInput';
 import MnemonicInput from '@/components/wallet/MnemonicInput';
-import ValidationError from '@/screens/Auth/components/ValidationError';
+import ValidationError from '@/components/ui/ValidationError';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'WalletImport'>;
 

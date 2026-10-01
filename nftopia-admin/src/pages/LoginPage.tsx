@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth/useAuth'
+import { GradientBackground } from '../components/GradientBackground'
 
 const inputClass =
   'mt-1 w-full rounded-lg border border-white/10 bg-slate-800/70 px-3 py-2 text-sm text-white outline-none focus:border-cyan-400'
@@ -27,7 +28,8 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[radial-gradient(1200px_circle_at_100%_0%,#123d63_0%,transparent_45%),radial-gradient(900px_circle_at_0%_100%,#1e3a8a_0%,transparent_40%),#020617] p-6">
+    <GradientBackground>
+    <main className="flex min-h-screen items-center justify-center p-6">
       <form
         onSubmit={onSubmit}
         className="flex w-full max-w-sm flex-col gap-4 rounded-2xl border border-white/10 bg-slate-900/70 p-6 shadow-2xl backdrop-blur"
@@ -121,5 +123,6 @@ export default function LoginPage() {
         )}
       </form>
     </main>
+    </GradientBackground>
   )
 }

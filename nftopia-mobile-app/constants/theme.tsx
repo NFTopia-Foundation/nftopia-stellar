@@ -44,6 +44,23 @@ export const listState = {
   actionSpacing: spacing.md,
 };
 
+/**
+ * Border/background per input state (#468) — the single place TextField
+ * and its variants (FormInput, SecureInput, MnemonicInput, AmountField,
+ * SelectField) read focus/error/disabled colors from, so every form input
+ * in the app stays visually consistent by construction instead of each
+ * component hardcoding its own hex values.
+ */
+export const fieldColors = {
+  border: lightColors.border,
+  borderFocused: lightColors.borderFocused,
+  borderError: lightColors.error,
+  background: lightColors.surface,
+  backgroundFocused: lightColors.background,
+  backgroundError: lightColors.errorBackground,
+  backgroundDisabled: lightColors.surfaceHover,
+};
+
 export const shadows = {
   sm: {
     shadowOffset: { width: 0, height: 1 },

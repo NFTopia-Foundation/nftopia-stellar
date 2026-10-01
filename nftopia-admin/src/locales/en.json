@@ -36,6 +36,11 @@
     "settings": "Settings",
     "contentFlags": "Content Flags"
   },
+  "shell": {
+    "openSidebar": "Open sidebar",
+    "closeSidebar": "Close sidebar",
+    "localeSwitcher": "Language switcher"
+  },
   "table": {
     "header": {
       "name": "Name",

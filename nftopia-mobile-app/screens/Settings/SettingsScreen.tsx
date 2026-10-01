@@ -3,6 +3,7 @@ import { Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from '
 import Constants from 'expo-constants';
 import { usePreferencesStore, ThemeMode } from '@/stores/preferencesStore';
 import { colors, spacing, borderRadius } from '@/constants/theme';
+import { haptics } from '@/lib/haptics';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { MainStackParamList } from '@/navigation/MainNavigator';
 
@@ -54,6 +55,10 @@ export default function SettingsScreen({ navigation }: Props) {
         <Pressable accessibilityRole="button" style={styles.link} onPress={() => navigation.navigate('WalletManagement')}><Text style={styles.linkText}>Manage and export wallets →</Text></Pressable>
       </Section>
 
+      <Section title="Accessibility">
+        <Toggle label="Reduce haptics" value={preferences.reduceHaptics} onChange={preferences.setReduceHaptics} />
+      </Section>
+
       <Section title="About">
         <Text style={styles.value}>Version {version}</Text>
         <Pressable accessibilityRole="link" style={styles.link} onPress={() => Linking.openURL('mailto:support@nftopia.io')}><Text style={styles.linkText}>Contact support →</Text></Pressable>
@@ -67,7 +72,11 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function Toggle({ label, value, onChange }: { label: string; value: boolean; onChange: (value: boolean) => void }) {
-  return <View style={styles.row}><Text style={styles.label}>{label}</Text><Switch accessibilityLabel={label} value={value} onValueChange={onChange} /></View>;
+  const handleChange = (next: boolean) => {
+    onChange(next);
+    (next ? haptics.toggleOn : haptics.toggleOff)();
+  };
+  return <View style={styles.row}><Text style={styles.label}>{label}</Text><Switch accessibilityLabel={label} value={value} onValueChange={handleChange} /></View>;
 }
 
 const styles = StyleSheet.create({
