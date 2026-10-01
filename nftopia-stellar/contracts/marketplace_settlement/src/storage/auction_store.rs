@@ -7,6 +7,7 @@ pub const AUCTIONS: Symbol = symbol_short!("auctions");
 pub const AUCTION_BIDS: Symbol = symbol_short!("auc_bids");
 pub const DUTCH_AUCTIONS: Symbol = symbol_short!("dutch_auc");
 pub const NEXT_AUCTION_ID: Symbol = symbol_short!("next_auc");
+pub const MAX_BIDS_PER_AUCTION: u32 = 100;
 
 /// Storage manager for auction transactions
 pub struct AuctionStore;
@@ -111,6 +112,9 @@ impl AuctionStore {
             .unwrap_or(Map::new(env));
 
         let mut auction_bids = all_bids.get(auction_id).unwrap_or(Vec::new(env));
+        if auction_bids.len() >= MAX_BIDS_PER_AUCTION {
+            return Err(SettlementError::InvalidState);
+        }
         auction_bids.push_back(bid.clone());
 
         all_bids.set(auction_id, auction_bids);

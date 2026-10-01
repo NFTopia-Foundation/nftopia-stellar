@@ -37,6 +37,7 @@ export class BidResolver {
     @Parent() bid: GraphqlBid,
     @Context() context: GraphqlContext,
   ): Promise<GraphqlUserType | null> {
+    if (!bid.bidderId) return null;
     const bidder = await context.loaders.userById.load(bid.bidderId);
     if (!bidder) {
       return null;

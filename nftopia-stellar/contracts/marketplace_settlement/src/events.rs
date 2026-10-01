@@ -87,6 +87,16 @@ pub struct BidBelowMinimumIncrementEvent {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InvalidBidAmountEvent {
+    pub auction_id: u64,
+    pub bidder: Address,
+    pub bid_amount: i128,
+    pub minimum_bid_amount: i128,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AuctionEndedEvent {
     pub auction_id: u64,
     pub winner: Option<Address>,
@@ -793,6 +803,12 @@ pub fn emit_auction_cancelled_with_refunds(env: &Env, event: AuctionCancelledWit
 pub fn emit_bid_below_minimum_increment(env: &Env, event: BidBelowMinimumIncrementEvent) {
     env.events()
         .publish(("MarketplaceSettlement", symbol_short!("bid_min")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_invalid_bid_amount(env: &Env, event: InvalidBidAmountEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("bid_inv")), event);
 }
 
 #[allow(deprecated)]

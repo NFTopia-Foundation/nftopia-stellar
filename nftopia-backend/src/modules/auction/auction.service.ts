@@ -226,6 +226,9 @@ export class AuctionService {
       throw new BadRequestException('Auction is not active');
     if (new Date(auction.endTime) <= new Date())
       throw new BadRequestException('Auction expired');
+    if (!auction.sellerId) {
+      throw new BadRequestException('Auction seller is no longer available');
+    }
 
     const amount = dto.amount;
     if (amount <= Number(auction.currentPrice))
@@ -256,6 +259,9 @@ export class AuctionService {
     const auction = await this.findOne(auctionId);
     if (auction.status !== AuctionStatus.ACTIVE)
       throw new BadRequestException('Auction not active');
+    if (!auction.sellerId) {
+      throw new BadRequestException('Auction seller is no longer available');
+    }
     const now = new Date();
     if (
       now < new Date(auction.endTime) &&
@@ -277,6 +283,15 @@ export class AuctionService {
       auction.status = AuctionStatus.COMPLETED;
       await this.auctionRepo.save(auction);
       return { settled: false, reason: 'No bids' };
+    }
+
+    if (!highest.bidderId) {
+      auction.status = AuctionStatus.COMPLETED;
+      await this.auctionRepo.save(auction);
+      return {
+        settled: false,
+        reason: 'Winning bidder account is no longer available',
+      };
     }
 
     // Reserve enforcement

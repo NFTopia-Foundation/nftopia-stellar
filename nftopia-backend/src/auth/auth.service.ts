@@ -197,6 +197,7 @@ export class AuthService {
    */
   async requestPasswordReset(
     dto: RequestPasswordResetDto,
+    requestIp?: string,
   ): Promise<{ success: boolean }> {
     const normalizedEmail = this.normalizeEmail(dto.email);
     const user = await this.userRepository.findOne({
@@ -204,7 +205,17 @@ export class AuthService {
     });
 
     if (!user || !user.email) {
+      this.logPasswordResetAudit('request', null, requestIp, true);
       return { success: true };
+    }
+
+    if (!user.passwordHash) {
+      this.logPasswordResetAudit('request', user.id, requestIp, false, {
+        reason: 'wallet_only_account',
+      });
+      throw new BadRequestException(
+        'This account uses wallet authentication. Sign in with your Stellar wallet to recover access.',
+      );
     }
 
     const token = crypto.randomBytes(32).toString('hex');
@@ -228,23 +239,53 @@ export class AuthService {
       );
     }
 
+    this.logPasswordResetAudit('request', user.id, requestIp, true);
+
     return { success: true };
   }
 
   /**
    * Consume a password reset token and update the user's password hash.
    */
-  async resetPassword(dto: ResetPasswordDto): Promise<{ success: boolean }> {
+  async resetPassword(
+    dto: ResetPasswordDto,
+    requestIp?: string,
+  ): Promise<{ success: boolean }> {
     const key = `password-reset:${this.hashToken(dto.token)}`;
     const cached = await this.cacheManager.get<{ userId: string }>(key);
 
     if (!cached) {
+      this.logPasswordResetAudit('complete', null, requestIp, false, {
+        reason: 'invalid_or_expired_token',
+      });
+      throw new UnauthorizedException('Invalid or expired reset token');
+    }
+
+    const user = await this.userRepository.findOne({
+      where: { id: cached.userId },
+    });
+    if (!user?.email) {
+      await this.cacheManager.del(key);
+      this.logPasswordResetAudit('complete', cached.userId, requestIp, false, {
+        reason: 'account_unavailable',
+      });
       throw new UnauthorizedException('Invalid or expired reset token');
     }
 
     const passwordHash = await this.hashPassword(dto.newPassword);
     await this.userRepository.update({ id: cached.userId }, { passwordHash });
     await this.cacheManager.del(key);
+    try {
+      await this.emailService.sendPasswordChangedEmail(
+        user.email,
+        user.username ?? undefined,
+      );
+    } catch (err) {
+      this.logger.error(
+        `Failed to enqueue password changed notification for user ${user.id}: ${(err as Error).message}`,
+      );
+    }
+    this.logPasswordResetAudit('complete', cached.userId, requestIp, true);
 
     return { success: true };
   }
@@ -983,6 +1024,25 @@ export class AuthService {
 
   private normalizeEmail(email: string): string {
     return email.trim().toLowerCase();
+  }
+
+  private logPasswordResetAudit(
+    event: 'request' | 'complete',
+    userId: string | null,
+    ipAddress?: string,
+    success = true,
+    details?: Record<string, string>,
+  ): void {
+    this.logger.log(
+      `Password reset audit: ${JSON.stringify({
+        event,
+        timestamp: new Date().toISOString(),
+        userId,
+        ipAddress: ipAddress ?? null,
+        success,
+        ...details,
+      })}`,
+    );
   }
 
   private async hashPassword(password: string): Promise<string> {

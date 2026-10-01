@@ -113,6 +113,39 @@ describe('EmailService', () => {
     });
   });
 
+  describe('sendPasswordChangedEmail', () => {
+    it('queues a password-change notification', async () => {
+      await service.sendPasswordChangedEmail('user@nftopia.io', 'builder');
+
+      expect(templateService.render).toHaveBeenCalledWith('password-changed', {
+        username: 'builder',
+      });
+      const savedLog = emailLogRepo.save.mock.calls[0][0];
+      expect(savedLog.type).toBe(EmailType.PASSWORD_CHANGED);
+    });
+  });
+
+  describe('sendAccountDeletionVerificationEmail', () => {
+    it('queues a time-limited account deletion verification email', async () => {
+      await service.sendAccountDeletionVerificationEmail(
+        'user@nftopia.io',
+        'deletion-token',
+        'builder',
+      );
+
+      const expectedTemplateVars: Record<string, unknown> = {
+        username: 'builder',
+        verificationUrl: expect.stringContaining('/account/deletion?token='),
+      };
+      expect(templateService.render).toHaveBeenCalledWith(
+        'account-deletion-verification',
+        expect.objectContaining(expectedTemplateVars),
+      );
+      const savedLog = emailLogRepo.save.mock.calls[0][0];
+      expect(savedLog.type).toBe(EmailType.ACCOUNT_DELETION_VERIFICATION);
+    });
+  });
+
   describe('sendBidNotificationEmail', () => {
     it('renders the bid-notification template and enqueues a send job', async () => {
       await service.sendBidNotificationEmail(

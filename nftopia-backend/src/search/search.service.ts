@@ -49,6 +49,11 @@ export class SearchService {
     await this.profileIndex().addDocuments([this.toProfileDocument(user)]);
   }
 
+  async removeUser(id: string): Promise<void> {
+    await this.ensureSettings();
+    await this.profileIndex().deleteDocument(id);
+  }
+
   async search(query: SearchQueryDto): Promise<SearchResponsePayload> {
     await this.ensureSettings();
 

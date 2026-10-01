@@ -166,11 +166,11 @@ export class GraphqlNft {
   @Field(() => [GraphqlNftAttribute])
   attributes: GraphqlNftAttribute[];
 
-  @Field(() => ID)
-  ownerId: string;
+  @Field(() => ID, { nullable: true })
+  ownerId?: string | null;
 
-  @Field(() => ID)
-  creatorId: string;
+  @Field(() => ID, { nullable: true })
+  creatorId?: string | null;
 
   @Field(() => ID, { nullable: true })
   collectionId?: string | null;

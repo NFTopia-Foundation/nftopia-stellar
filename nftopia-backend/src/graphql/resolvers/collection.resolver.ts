@@ -154,6 +154,7 @@ export class CollectionResolver {
     @Parent() collection: GraphqlCollection,
     @Context() context: GraphqlContext,
   ): Promise<GraphqlUserType | null> {
+    if (!collection.creatorId) return null;
     const creator = await context.loaders.userById.load(collection.creatorId);
     if (!creator) {
       return null;

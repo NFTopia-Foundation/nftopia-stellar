@@ -90,6 +90,7 @@ describe('AuthService', () => {
   const emailService = {
     sendVerificationEmail: jest.fn(),
     sendPasswordResetEmail: jest.fn(),
+    sendPasswordChangedEmail: jest.fn(),
     sendBidNotificationEmail: jest.fn(),
     sendAuctionWonEmail: jest.fn(),
   };
@@ -574,6 +575,7 @@ describe('AuthService', () => {
       userRepository.findOne.mockResolvedValue({
         id: 'user-1',
         email: 'user@nftopia.io',
+        passwordHash: 'existing-password-hash',
         username: 'user1',
       });
       cacheManager.set.mockResolvedValue(undefined);
@@ -605,11 +607,31 @@ describe('AuthService', () => {
       expect(result).toEqual({ success: true });
       expect(emailService.sendPasswordResetEmail).not.toHaveBeenCalled();
     });
+
+    it('directs wallet-only accounts to wallet authentication', async () => {
+      userRepository.findOne.mockResolvedValue({
+        id: 'wallet-user',
+        email: 'wallet@nftopia.io',
+        passwordHash: null,
+      });
+
+      await expect(
+        service.requestPasswordReset({ email: 'wallet@nftopia.io' }),
+      ).rejects.toThrow('Sign in with your Stellar wallet');
+
+      expect(cacheManager.set).not.toHaveBeenCalled();
+      expect(emailService.sendPasswordResetEmail).not.toHaveBeenCalled();
+    });
   });
 
   describe('resetPassword', () => {
     it('updates the password hash and deletes the token on success', async () => {
       cacheManager.get.mockResolvedValue({ userId: 'user-1' });
+      userRepository.findOne.mockResolvedValue({
+        id: 'user-1',
+        email: 'user@nftopia.io',
+        username: 'user1',
+      });
       userRepository.update.mockResolvedValue(undefined);
       cacheManager.del.mockResolvedValue(undefined);
 
@@ -626,6 +648,10 @@ describe('AuthService', () => {
       expect(criteria).toEqual({ id: 'user-1' });
       expect(typeof update.passwordHash).toBe('string');
       expect(cacheManager.del).toHaveBeenCalled();
+      expect(emailService.sendPasswordChangedEmail).toHaveBeenCalledWith(
+        'user@nftopia.io',
+        'user1',
+      );
     });
 
     it('rejects an invalid or expired token', async () => {

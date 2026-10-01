@@ -66,4 +66,16 @@ export class SearchSyncListener {
       this.logger.error(`Failed to sync user ${payload.userId}`, error);
     }
   }
+
+  @OnEvent('search.user.delete', { async: true })
+  async handleUserDelete(payload: { userId: string }) {
+    try {
+      await this.searchService.removeUser(payload.userId);
+    } catch (error) {
+      this.logger.error(
+        `Failed to remove user ${payload.userId} from search`,
+        error,
+      );
+    }
+  }
 }

@@ -13,8 +13,8 @@ export interface SearchNftDocument {
   imageUrl: string | null;
   animationUrl: string | null;
   externalUrl: string | null;
-  ownerId: string;
-  creatorId: string;
+  ownerId?: string | null;
+  creatorId?: string | null;
   collectionId: string | null;
   lastPrice: number | null;
   isBurned: boolean;

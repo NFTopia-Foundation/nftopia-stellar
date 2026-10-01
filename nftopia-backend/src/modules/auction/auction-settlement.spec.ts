@@ -66,7 +66,7 @@ describe('AuctionService — settlement winner notification', () => {
     status: AuctionStatus.ACTIVE,
     createdAt: new Date(),
     updatedAt: new Date(),
-  } as Auction;
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();

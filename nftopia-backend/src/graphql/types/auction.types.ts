@@ -31,8 +31,8 @@ export class GraphqlBid {
   @Field(() => ID)
   auctionId: string;
 
-  @Field(() => ID)
-  bidderId: string;
+  @Field(() => ID, { nullable: true })
+  bidderId?: string | null;
 
   @Field(() => String)
   amount: string;
@@ -55,8 +55,8 @@ export class GraphqlAuction {
   @Field(() => ID)
   nftId: string;
 
-  @Field(() => ID)
-  sellerId: string;
+  @Field(() => ID, { nullable: true })
+  sellerId?: string | null;
 
   @Field(() => String)
   startPrice: string;

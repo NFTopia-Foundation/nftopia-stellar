@@ -6,6 +6,8 @@ import { signWithFreighter } from "@/lib/stellar/wallet/freighter";
 import { signWithAlbedo } from "@/lib/stellar/wallet/albedo";
 import { signWithWalletConnect } from "@/lib/stellar/wallet/walletconnect";
 import { getSorobanServer, defaultNetwork, getNetworkPassphrase } from "@/lib/stellar/client";
+import { useTransactionStore } from "@/lib/stores/transaction-store";
+import type { TrackedTransactionType } from "@/lib/stores/transaction-store";
 
 interface TransactionState {
   signing: boolean;
@@ -16,7 +18,8 @@ interface TransactionState {
 
 export function useStellarTransaction(
   provider: WalletProvider | null,
-  network: StellarNetwork = defaultNetwork
+  network: StellarNetwork = defaultNetwork,
+  transactionType: TrackedTransactionType = "other",
 ) {
   const [state, setState] = useState<TransactionState>({
     signing: false,
@@ -56,12 +59,15 @@ export function useStellarTransaction(
     async (xdr: string): Promise<string> => {
       const signedXdr = await signTransaction(xdr);
       setState((s) => ({ ...s, submitting: true }));
+      let txHash: string | undefined;
+      const submittedAt = new Date().toISOString();
 
       try {
         const { TransactionBuilder } = await import("@stellar/stellar-sdk");
         const server = getSorobanServer(network);
         const passphrase = getNetworkPassphrase(network);
         const tx = TransactionBuilder.fromXDR(signedXdr, passphrase);
+        txHash = tx.hash().toString("hex");
 
         const result = await server.sendTransaction(tx);
 
@@ -69,15 +75,48 @@ export function useStellarTransaction(
           throw new Error(`Transaction failed: ${JSON.stringify(result.errorResult)}`);
         }
 
+        txHash = result.hash;
+        useTransactionStore.getState().addTransaction({
+          hash: txHash,
+          type: transactionType,
+          network,
+          status: "processing",
+          submittedAt,
+          updatedAt: submittedAt,
+          signedXdr,
+        });
         setState((s) => ({ ...s, submitting: false, txHash: result.hash }));
         return result.hash;
       } catch (err) {
         const message = err instanceof Error ? err.message : "Submission failed";
+        if (txHash) {
+          const existing = useTransactionStore
+            .getState()
+            .transactions.find((transaction) => transaction.hash === txHash);
+          if (existing) {
+            useTransactionStore.getState().updateTransaction(txHash, {
+              status: "failed",
+              error: message,
+              signedXdr,
+            });
+          } else {
+            useTransactionStore.getState().addTransaction({
+              hash: txHash,
+              type: transactionType,
+              network,
+              status: "failed",
+              submittedAt,
+              updatedAt: submittedAt,
+              error: message,
+              signedXdr,
+            });
+          }
+        }
         setState((s) => ({ ...s, submitting: false, error: message }));
         throw err;
       }
     },
-    [signTransaction, network]
+    [signTransaction, network, transactionType]
   );
 
   const clearState = useCallback(() => {

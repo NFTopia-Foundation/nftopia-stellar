@@ -359,6 +359,7 @@ export class AuctionResolver {
     @Parent() auction: GraphqlAuction,
     @Context() context: GraphqlContext,
   ): Promise<GraphqlUserType | null> {
+    if (!auction.sellerId) return null;
     const seller = await context.loaders.userById.load(auction.sellerId);
     if (!seller) {
       return null;

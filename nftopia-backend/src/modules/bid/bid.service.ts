@@ -128,6 +128,9 @@ export class BidService {
     await this.enforceRateLimit(bidderId);
 
     const auction = await this.loadActiveAuction(auctionId);
+    if (!auction.sellerId) {
+      throw new BadRequestException('Auction seller is no longer available');
+    }
 
     if (auction.sellerId === bidderId) {
       throw new ForbiddenException('Sellers cannot bid on their own auctions');

@@ -29,8 +29,8 @@ export class GraphqlCollection {
   @Field(() => String)
   image: string;
 
-  @Field(() => ID)
-  creatorId: string;
+  @Field(() => ID, { nullable: true })
+  creatorId?: string | null;
 
   @Field(() => String)
   totalVolume: string;

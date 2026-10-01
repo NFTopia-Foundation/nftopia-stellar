@@ -18,7 +18,7 @@ export interface HighestBidResult {
   auctionId: string;
   amount: number;
   amountXlm: string;
-  bidderId: string;
+  bidderId?: string | null;
   stellarPublicKey?: string;
   txHash?: string;
   ledgerSequence?: number;
@@ -34,7 +34,7 @@ export interface BidListResult {
 export interface BidRecord {
   id: string;
   auctionId: string;
-  bidderId: string;
+  bidderId: string | null;
   amount: number;
   amountXlm: string;
   txHash?: string;

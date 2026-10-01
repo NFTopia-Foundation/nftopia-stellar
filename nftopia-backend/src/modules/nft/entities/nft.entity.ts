@@ -52,19 +52,19 @@ export class Nft {
   })
   externalUrl?: string;
 
-  @Column({ name: 'owner_id', type: 'uuid' })
-  ownerId: string;
+  @Column({ name: 'owner_id', type: 'uuid', nullable: true })
+  ownerId?: string | null;
 
-  @ManyToOne(() => User, { nullable: false })
+  @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'owner_id' })
-  owner: User;
+  owner?: User | null;
 
-  @Column({ name: 'creator_id', type: 'uuid' })
-  creatorId: string;
+  @Column({ name: 'creator_id', type: 'uuid', nullable: true })
+  creatorId?: string | null;
 
-  @ManyToOne(() => User, { nullable: false })
+  @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'creator_id' })
-  creator: User;
+  creator?: User | null;
 
   @Column({ name: 'collection_id', type: 'uuid', nullable: true })
   collectionId?: string;
