@@ -114,10 +114,7 @@ export class UsersController {
     @Body() dto: VerifyAccountDeletionDto,
     @Req() req: Request,
   ) {
-    return this.usersService.verifyAccountDeletion(
-      dto.token,
-      req.ip,
-    );
+    return this.usersService.verifyAccountDeletion(dto.token, req.ip);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -131,9 +128,7 @@ export class UsersController {
 
   @UseGuards(JwtAuthGuard)
   @Post('account/deletion/cancel')
-  async cancelAccountDeletion(
-    @Req() req: RequestWithUser,
-  ) {
+  async cancelAccountDeletion(@Req() req: RequestWithUser) {
     if (!req.user?.userId) {
       throw new UnauthorizedException('Invalid JWT payload');
     }
