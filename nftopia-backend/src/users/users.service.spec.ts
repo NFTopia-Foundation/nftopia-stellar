@@ -1,5 +1,4 @@
 import {
-  HttpException,
   HttpStatus,
   NotFoundException,
   UnauthorizedException,
@@ -88,7 +87,9 @@ describe('UsersService GDPR export', () => {
     await expect(
       service.requestAccountDeletion('user-1', true, '127.0.0.1'),
     ).resolves.toMatchObject({ verificationRequired: true });
-    expect(emailService.sendAccountDeletionVerificationEmail).toHaveBeenCalled();
+    expect(
+      emailService.sendAccountDeletionVerificationEmail,
+    ).toHaveBeenCalled();
     expect(cacheManager.set).toHaveBeenCalledWith(
       expect.stringMatching(/^account-deletion:/),
       { userId: 'user-1' },
@@ -114,7 +115,10 @@ describe('UsersService GDPR export', () => {
       isEmailVerified: true,
     });
 
-    const result = await service.verifyAccountDeletion('verified-token', '127.0.0.1');
+    const result = await service.verifyAccountDeletion(
+      'verified-token',
+      '127.0.0.1',
+    );
 
     expect(result.success).toBe(true);
     expect(privacyQueue.add).toHaveBeenCalledWith(
@@ -130,9 +134,11 @@ describe('UsersService GDPR export', () => {
     dataSource.transaction.mockImplementation(
       (callback: (manager: { query: jest.Mock }) => Promise<void>) =>
         callback({
-          query: jest.fn().mockResolvedValue([
-            { deletion_requested_at: new Date(), anonymized_at: null },
-          ]),
+          query: jest
+            .fn()
+            .mockResolvedValue([
+              { deletion_requested_at: new Date(), anonymized_at: null },
+            ]),
         }),
     );
     await expect(service.cancelAccountDeletion('user-1')).resolves.toEqual({
@@ -154,7 +160,9 @@ describe('UsersService GDPR export', () => {
     const file = await service.prepareExportFile('user-1', 'zip');
 
     expect(file.contentType).toBe('application/zip');
-    expect(Buffer.from(file.contentBase64, 'base64').subarray(0, 2).toString()).toBe('PK');
+    expect(
+      Buffer.from(file.contentBase64, 'base64').subarray(0, 2).toString(),
+    ).toBe('PK');
   });
 
   it('limits synchronous and queued export requests to three per day', async () => {
@@ -162,7 +170,8 @@ describe('UsersService GDPR export', () => {
     dataSource.transaction.mockImplementation(
       (callback: (manager: { query: jest.Mock }) => Promise<boolean>) => {
         const query = jest.fn((sql: string) => {
-          if (sql.includes('COUNT(*)')) return Promise.resolve([{ count: exportCount }]);
+          if (sql.includes('COUNT(*)'))
+            return Promise.resolve([{ count: exportCount }]);
           if (sql.includes("VALUES ($1, 'export'")) exportCount += 1;
           return Promise.resolve([]);
         });
@@ -173,7 +182,9 @@ describe('UsersService GDPR export', () => {
     await service.requestExportFile('user-1', 'json');
     await service.requestExportFile('user-1', 'csv');
     await service.createExportJob('user-1', 'zip');
-    await expect(service.createExportJob('user-1', 'json')).rejects.toMatchObject({
+    await expect(
+      service.createExportJob('user-1', 'json'),
+    ).rejects.toMatchObject({
       status: HttpStatus.TOO_MANY_REQUESTS,
     });
   });
