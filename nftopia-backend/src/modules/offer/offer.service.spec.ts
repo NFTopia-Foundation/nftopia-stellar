@@ -97,7 +97,7 @@ function makeOffer(overrides: Partial<Offer> = {}): Offer {
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
-  } as unknown as Offer;
+  };
 }
 
 // ─── Test suite ───────────────────────────────────────────────────────────────
