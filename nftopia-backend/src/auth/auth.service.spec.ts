@@ -106,13 +106,15 @@ describe('AuthService', () => {
       (value: Partial<RefreshToken>) => value,
     );
     dataSource.transaction.mockImplementation(
-      (callback: (manager: {
-        getRepository: (
-          entity: unknown,
-        ) =>
-          | typeof refreshTokenRepository
-          | typeof refreshTokenFamilyRepository;
-      }) => unknown) =>
+      (
+        callback: (manager: {
+          getRepository: (
+            entity: unknown,
+          ) =>
+            | typeof refreshTokenRepository
+            | typeof refreshTokenFamilyRepository;
+        }) => unknown,
+      ) =>
         Promise.resolve(
           callback({
             getRepository: (entity: unknown) => {
@@ -586,14 +588,14 @@ describe('AuthService', () => {
         access_token: 'access-token-2',
         refresh_token: newToken,
       });
-      const saveCalls = refreshTokenRepository.save.mock.calls as unknown as
-        Array<[RefreshToken]>;
+      const saveCalls = refreshTokenRepository.save.mock
+        .calls as unknown as Array<[RefreshToken]>;
       const savedToken = saveCalls[0]?.[0];
       expect(savedToken?.id).toBe('refresh-row-1');
       expect(savedToken?.usedAt).toBeInstanceOf(Date);
 
-      const createCalls = refreshTokenRepository.create.mock.calls as unknown as
-        Array<[RefreshToken]>;
+      const createCalls = refreshTokenRepository.create.mock
+        .calls as unknown as Array<[RefreshToken]>;
       const createdToken = createCalls[0]?.[0];
       expect(createdToken?.familyId).toBe('family-1');
       expect(createdToken?.userId).toBe(user.id);
@@ -632,9 +634,8 @@ describe('AuthService', () => {
         'Refresh token reuse detected',
       );
 
-      const familySaveCalls =
-        refreshTokenFamilyRepository.save.mock.calls as unknown as
-          Array<[RefreshTokenFamily]>;
+      const familySaveCalls = refreshTokenFamilyRepository.save.mock
+        .calls as unknown as Array<[RefreshTokenFamily]>;
       const revokedFamily = familySaveCalls[0]?.[0];
       expect(revokedFamily?.id).toBe('family-1');
       expect(revokedFamily?.revokedAt).toBeInstanceOf(Date);
@@ -705,5 +706,4 @@ describe('AuthService', () => {
       expect(refreshTokenRepository.create).not.toHaveBeenCalled();
     });
   });
-
 });
