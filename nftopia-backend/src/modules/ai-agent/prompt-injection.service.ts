@@ -76,8 +76,7 @@ export class PromptInjectionService {
     // "Assistant:" etc. at the start of a line.
     {
       category: 'context-manipulation',
-      pattern:
-        /^(?:system|human|assistant|ai|bot|user|instructions?)\s*:/im,
+      pattern: /^(?:system|human|assistant|ai|bot|user|instructions?)\s*:/im,
     },
     // ── system-prompt-override ────────────────────────────────────────────
     // Attempts to view, replace, or append to the system prompt.
