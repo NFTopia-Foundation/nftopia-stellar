@@ -131,10 +131,7 @@ export class AuthController {
 
   @Post('reset-password')
   @ApiOperation({ summary: 'Reset password using a reset token' })
-  async resetPassword(
-    @Body() dto: ResetPasswordDto,
-    @Req() req: Request,
-  ) {
+  async resetPassword(@Body() dto: ResetPasswordDto, @Req() req: Request) {
     const res = await this.authService.resetPassword(dto, req.ip);
     return { data: { success: true, data: res } };
   }
