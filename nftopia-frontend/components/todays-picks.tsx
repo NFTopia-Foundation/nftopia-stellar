@@ -2,7 +2,7 @@
 
 import { OptimizedImage } from './image';
 import { Button } from "@/components/ui/button";
-import { emitCtaClicked, CTA_IDS, CTA_PLACEMENTS } from "@/lib/telemetry/navigation-instrumentation";
+import { FavoriteButton } from "@/components/ui/FavoriteButton";
 import { Clock, Heart, Search, ShoppingBag, AlertCircle, RefreshCw } from "lucide-react";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useState, useMemo } from 'react';
@@ -116,6 +116,8 @@ export function TodaysPicks() {
             {nftItems.map((item) => (
               <div
                 key={item.id}
+                data-testid="nft-card"
+                data-listing-id={item.id}
                 className="bg-[#1E1A45] rounded-2xl overflow-hidden border border-purple-900/30 transition-all hover:shadow-lg hover:shadow-purple-500/10 hover:-translate-y-1"
               >
                 <div className="relative">
@@ -128,9 +130,16 @@ export function TodaysPicks() {
                       <span>{t("todaysPicks.onSale")}</span>
                     )}
                   </div>
-                  <div className="absolute top-3 right-3 z-10 bg-black/70 rounded-full px-3 py-1 text-xs font-medium">
-                    <Heart className="h-3 w-3 text-red-400 inline mr-1" />
-                    <span>{item.likes}</span>
+                  <div className="absolute top-3 right-3 z-20">
+                    <FavoriteButton
+                      id={String(item.id)}
+                      itemType="nft"
+                      name={item.name}
+                      variant="overlay"
+                      size="sm"
+                      showCount
+                      count={item.likes}
+                    />
                   </div>
                   <div
                     className={`h-[240px] relative overflow-hidden ${item.bgColor}`}
@@ -167,6 +176,7 @@ export function TodaysPicks() {
                     <Button
                       size="sm"
                       variant="ghost"
+                      data-testid="buy-now-btn"
                       className="text-purple-400 hover:bg-transparent hover:text-purple-300 rounded-full px-4 py-1 text-xs"
                       onClick={() => setSelectedNFT(item)}
                     >

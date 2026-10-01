@@ -28,6 +28,39 @@ export const typography = {
   mono: { fontSize: 14, fontFamily: 'monospace' as const },
 };
 
+/**
+ * Tokens specific to list empty/error states (#472) — EmptyState and
+ * ErrorState (components/ui/) are the only consumers. Centralized here
+ * rather than left as magic numbers in each component, so every list
+ * screen's empty/error UI stays visually consistent by construction.
+ */
+export const listState = {
+  iconSize: 64,
+  title: typography.h3,
+  subtitle: typography.bodySmall,
+  containerPadding: spacing.xl,
+  titleSpacing: spacing.xs,
+  subtitleSpacing: spacing.lg,
+  actionSpacing: spacing.md,
+};
+
+/**
+ * Border/background per input state (#468) — the single place TextField
+ * and its variants (FormInput, SecureInput, MnemonicInput, AmountField,
+ * SelectField) read focus/error/disabled colors from, so every form input
+ * in the app stays visually consistent by construction instead of each
+ * component hardcoding its own hex values.
+ */
+export const fieldColors = {
+  border: lightColors.border,
+  borderFocused: lightColors.borderFocused,
+  borderError: lightColors.error,
+  background: lightColors.surface,
+  backgroundFocused: lightColors.background,
+  backgroundError: lightColors.errorBackground,
+  backgroundDisabled: lightColors.surfaceHover,
+};
+
 export const shadows = {
   sm: {
     shadowOffset: { width: 0, height: 1 },

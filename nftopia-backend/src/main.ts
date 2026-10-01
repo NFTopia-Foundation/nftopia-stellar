@@ -10,6 +10,11 @@ const _secretsResult = loadDockerSecrets();
 // Log the result after the Pino logger is available (see bootstrap()).
 
 import 'dotenv/config';
+// Must load before AppModule (and therefore before TypeORM/pg, ioredis, and
+// any HTTP client) so OpenTelemetry's auto-instrumentation can patch those
+// modules the first time they're required. See src/tracing.ts and
+// docs/tracing.md.
+import './tracing';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -18,7 +23,7 @@ import { Logger as PinoLogger } from 'nestjs-pino';
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@apollo/server/express4';
 import { GraphQLSchemaFactory } from '@nestjs/graphql';
-import { json, urlencoded } from 'express';
+import { json, raw, urlencoded } from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import { GraphqlGatewayModule } from './graphql/graphql.module';
 import {
@@ -177,6 +182,17 @@ async function bootstrapRestApi() {
     StellarAccountService,
   );
 
+  // Stripe's webhook signature is computed over the exact raw request
+  // bytes — verifying it against a re-serialized JSON body would always
+  // fail, so this one route needs its body left untouched. Registered
+  // before the global json() below (and matched by the final, prefixed
+  // path Nest will route it to) so this is the only route that gets a raw
+  // Buffer instead of a parsed object; body-parser's own internal
+  // already-parsed check keeps json() from clobbering it afterward.
+  app.use(
+    '/api/v1/payments/webhooks/stripe',
+    raw({ type: 'application/json' }),
+  );
   app.use(json({ limit: '10mb' }));
   app.use(urlencoded({ extended: true, limit: '10mb' }));
 

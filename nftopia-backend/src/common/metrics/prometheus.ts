@@ -67,6 +67,13 @@ const businessTransactionsSettledTotal = new Counter({
   registers: [registry],
 });
 
+const aiModerationJobsProcessedTotal = new Counter({
+  name: 'ai_moderation_jobs_processed_total',
+  help: 'Total number of ai-moderation queue jobs processed, by outcome',
+  labelNames: ['outcome'], // 'flagged' | 'clean' | 'skipped' | 'error'
+  registers: [registry],
+});
+
 const nftImageOptimizationBytes = new Histogram({
   name: 'nft_image_optimization_bytes',
   help: 'Original and optimized NFT image byte sizes',
@@ -181,6 +188,18 @@ export class PrometheusService {
     } catch (error) {
       this.logger.warn(
         `Failed to increment transactions_settled_total: ${error}`,
+      );
+    }
+  }
+
+  incrementAiModerationJobProcessed(
+    outcome: 'flagged' | 'clean' | 'skipped' | 'error',
+  ): void {
+    try {
+      aiModerationJobsProcessedTotal.inc({ outcome });
+    } catch (error) {
+      this.logger.warn(
+        `Failed to increment ai_moderation_jobs_processed_total: ${error}`,
       );
     }
   }

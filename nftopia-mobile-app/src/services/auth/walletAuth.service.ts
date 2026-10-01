@@ -7,6 +7,7 @@ import {
   AuthResponse,
   ChallengeResponse,
   LinkWalletResponse,
+  User,
 } from './types';
 
 const NETWORK_RETRY_ATTEMPTS = 1;
@@ -151,6 +152,43 @@ export class WalletAuthService {
       if (err instanceof AuthError) throw err;
       throw new AuthError(
         `Failed to refresh token: ${(err as Error).message}`,
+        AuthErrorCode.NETWORK_ERROR,
+      );
+    }
+  }
+
+  /**
+   * Confirms the stored access token is still accepted by the server (not
+   * just locally unexpired) by fetching the authenticated user's profile.
+   * Used by `initializeAuth()` — a token that decodes as locally
+   * unexpired can still have been revoked server-side (password change,
+   * admin action, blacklisted after logout elsewhere).
+   */
+  async validateSession(): Promise<User> {
+    const accessToken = await tokenStorage.getAccessToken();
+    if (!accessToken) {
+      throw new AuthError('No access token available', AuthErrorCode.AUTHENTICATION_FAILED);
+    }
+
+    try {
+      const response = await this._fetchWithRetry(`${this.baseUrl}/auth/me`, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      if (!response.ok) {
+        throw new AuthError(
+          `Session validation failed with status ${response.status}`,
+          AuthErrorCode.AUTHENTICATION_FAILED,
+        );
+      }
+
+      const body = (await response.json()) as { data: { data: User } };
+      return body.data.data;
+    } catch (err) {
+      if (err instanceof AuthError) throw err;
+      throw new AuthError(
+        `Failed to validate session: ${(err as Error).message}`,
         AuthErrorCode.NETWORK_ERROR,
       );
     }

@@ -307,4 +307,28 @@ export const TELEMETRY_EVENT_CATALOG: Record<TelemetryEventName, TelemetryEventC
     owner: "navigation",
     status: "active",
   },
+  favorite_toggled: {
+    name: EVENT_NAMES.favoriteToggled,
+    category: "engagement",
+    description: "User toggled favorite status on an item",
+    version: 1,
+    owner: "engagement",
+    status: "active",
+  },
+  favorite_added: {
+    name: EVENT_NAMES.favoriteAdded,
+    category: "engagement",
+    description: "User added an item to favorites",
+    version: 1,
+    owner: "engagement",
+    status: "active",
+  },
+  favorite_removed: {
+    name: EVENT_NAMES.favoriteRemoved,
+    category: "engagement",
+    description: "User removed an item from favorites",
+    version: 1,
+    owner: "engagement",
+    status: "active",
+  },
 };

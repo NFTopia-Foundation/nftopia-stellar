@@ -12,6 +12,7 @@ import {
 import { useCreatorStore } from '@/stores/creatorStore';
 import { useOfflineStore } from '@/stores/offlineStore';
 import apiClient from '@/lib/api/sample';
+import { haptics } from '@/lib/haptics';
 import { MintFormData, NFTAttribute } from '@/types';
 import { OptimizedImage } from '@/src/components/OptimizedImage';
 
@@ -93,7 +94,10 @@ export default function MintNFTScreen({ navigation }: any) {
   };
 
   const handleMint = async () => {
-    if (!validateForm()) return;
+    if (!validateForm()) {
+      haptics.error();
+      return;
+    }
 
     const formData: MintFormData = {
       name: name.trim(),
@@ -134,6 +138,7 @@ export default function MintNFTScreen({ navigation }: any) {
         hasAttributes: formData.attributes && formData.attributes.length > 0,
       });
 
+      haptics.success();
       Alert.alert(
         'Success!',
         isOnline
@@ -150,6 +155,7 @@ export default function MintNFTScreen({ navigation }: any) {
       clearInterval(progressInterval);
       setUploading(false);
       setLoading(false);
+      haptics.error();
       setErrors({ submit: error.message || 'Failed to mint NFT' });
     }
   };

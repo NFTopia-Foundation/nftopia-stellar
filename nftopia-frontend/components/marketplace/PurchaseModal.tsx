@@ -59,7 +59,10 @@ export function PurchaseModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div
+      data-testid="purchase-modal"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+    >
       <div className="bg-[#1E1A45] rounded-2xl p-6 w-full max-w-md border border-purple-900/30">
         <h2 className="text-2xl font-bold mb-4">Complete Purchase</h2>
         
@@ -116,6 +119,7 @@ export function PurchaseModal({
               <Button 
                 variant="outline" 
                 onClick={onClose}
+                data-testid="cancel-purchase-btn"
                 className="flex-1 bg-transparent border-purple-900/50 hover:bg-purple-900/20"
                 disabled={loading}
               >
@@ -131,6 +135,7 @@ export function PurchaseModal({
               ) : (
                 <Button 
                   onClick={handlePurchase}
+                  data-testid="confirm-purchase-btn"
                   className="flex-1 bg-purple-600 hover:bg-purple-700"
                   disabled={loading}
                 >

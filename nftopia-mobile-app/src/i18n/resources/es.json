@@ -195,6 +195,10 @@
     "collection": "Colección",
     "noNFTs": "No se encontraron NFTs",
     "noNFTsMessage": "Intenta ajustar tu búsqueda o filtros",
+    "emptyNoData": "Aún no hay NFTs listados",
+    "emptyNoDataMessage": "Vuelve pronto para ver nuevos listados",
+    "loadError": "Error al cargar los NFTs",
+    "loadErrorMessage": "Por favor, verifica tu conexión e intenta de nuevo",
     "viewDetails": "Ver detalles"
   },
   "nft": {

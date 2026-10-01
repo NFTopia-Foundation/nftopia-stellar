@@ -16,14 +16,17 @@ import {
   Layers,
   Activity,
   Settings,
+  Heart,
 } from "lucide-react";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { WalletConnector } from "@/components/wallet/WalletConnector";
 import { UserDropdown } from "./user-dropdown";
 import { AccountEntryMenu } from "./account-entry-menu";
+import { NotificationDropdown } from "./notifications/notification-dropdown";
 import { useAuth } from "@/lib/stores/auth-store";
 import { useTranslation } from "@/hooks/useTranslation";
 import { LanguageSwitcher, MobileLanguageSwitcher } from "./LanguageSwitcher";
+
 
 export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -177,6 +180,9 @@ export function Navbar() {
               <LanguageSwitcher />
             </div>
 
+            {/* Notification Center Dropdown */}
+            <NotificationDropdown />
+
             {/* Desktop: UserDropdown if logged in, WalletConnector + AccountEntryMenu if not */}
             {!loading && (
               isAuthenticated
@@ -188,6 +194,7 @@ export function Navbar() {
                   </div>
                 )
             )}
+
 
             {/* Mobile hamburger */}
             <button
@@ -291,6 +298,14 @@ export function Navbar() {
                 >
                   <ShoppingBag className="h-5 w-5" />
                   {t("navigation.marketplace")}
+                </Link>
+                <Link
+                  href={`/${locale}/favorites`}
+                  className="text-sm font-medium py-2.5 hover:text-purple-400 transition-colors flex items-center gap-2"
+                  onClick={e => { handleNavClick(e, "favorites", NAV_PLACEMENTS.NAVBAR_MOBILE_DRAWER, `/${locale}/favorites`, isMenuOpen ? "drawer_open" : "collapsed"); closeMenu(); }}
+                >
+                  <Heart className="h-5 w-5 text-rose-400" />
+                  Favorites
                 </Link>
                 <Link
                   href={`/${locale}/artists`}

@@ -2,6 +2,7 @@ import { ForbiddenException } from '@nestjs/common';
 import type { MessageEvent } from '@nestjs/common';
 import type { Observable } from 'rxjs';
 import { AiAgentService } from './ai-agent.service';
+import { PromptInjectionService } from './prompt-injection.service';
 import type { NftService } from '../nft/nft.service';
 import type { ListingService } from '../listing/listing.service';
 import type { CollectionService } from '../collection/collection.service';
@@ -130,6 +131,7 @@ describe('AiAgentService.chatStream', () => {
         save: jest.fn().mockResolvedValue(undefined),
         createQueryBuilder: jest.fn(),
       } as unknown as Repository<AiToolCallLog>,
+      new PromptInjectionService(),
     );
   });
 

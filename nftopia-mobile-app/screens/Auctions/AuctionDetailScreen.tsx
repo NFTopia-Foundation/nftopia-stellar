@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useAuctionStore } from '@/stores/auctionStore';
 import apiClient from '@/lib/api/sample';
+import { haptics } from '@/lib/haptics';
 import { Auction, Bid } from '@/types';
 
 function CountdownTimer({ endTime }: { endTime: string }) {
@@ -68,8 +69,10 @@ export default function AuctionDetailScreen({ route, navigation }: any) {
     try {
       await placeBid(auctionId, bidAmount);
       setBidAmount('');
+      haptics.success();
       Alert.alert('Success', 'Your bid has been placed!');
     } catch (err: any) {
+      haptics.error();
       Alert.alert('Bid Failed', err.message);
     } finally {
       setSubmitting(false);

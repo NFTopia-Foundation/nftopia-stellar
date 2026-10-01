@@ -28,6 +28,10 @@ describe('ListingCreatedListener', () => {
     expect(moderationQueue.add).toHaveBeenCalledWith(
       MODERATE_LISTING_JOB,
       event,
+      expect.objectContaining({
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5000 },
+      }),
     );
   });
 

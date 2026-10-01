@@ -35,11 +35,46 @@
     "collections": "Colecciones",
     "settings": "Configuración"
   },
+  "shell": {
+    "openSidebar": "Abrir menú lateral",
+    "closeSidebar": "Cerrar menú lateral",
+    "localeSwitcher": "Selector de idioma"
+  },
   "table": {
     "header": {
       "name": "Nombre",
       "status": "Estado",
       "date": "Fecha"
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "Iniciar sesión",
+      "help": "Solo cuentas de administrador. Usa tu correo y contraseña de NFTopia.",
+      "email": "Correo electrónico",
+      "password": "Contraseña",
+      "submit": "Iniciar sesión",
+      "submitting": "Iniciando sesión…"
+    },
+    "twoFactor": {
+      "title": "Verificación en dos pasos",
+      "help": "Introduce el código de 6 dígitos de tu aplicación de autenticación.",
+      "code": "Código de autenticación",
+      "submit": "Verificar",
+      "cancel": "Volver a iniciar sesión"
+    },
+    "logout": "Cerrar sesión",
+    "signedInAs": "Sesión iniciada como {{name}}",
+    "notice": {
+      "session_expired": "Tu sesión ha caducado. Inicia sesión de nuevo.",
+      "logged_out": "Has cerrado sesión."
+    },
+    "error": {
+      "invalid_credentials": "Correo o contraseña incorrectos.",
+      "invalid_code": "Código de verificación inválido o caducado.",
+      "not_admin": "Esta cuenta no tiene acceso de administrador. Solo los administradores de NFTopia pueden iniciar sesión aquí.",
+      "network": "No se pudo conectar con el servidor de NFTopia. Comprueba tu conexión e inténtalo de nuevo.",
+      "unknown": "Error al iniciar sesión. Inténtalo de nuevo."
     }
   }
 }

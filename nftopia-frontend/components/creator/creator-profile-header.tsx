@@ -22,6 +22,7 @@ import {
 } from "@/lib/utils/creator-profile";
 import { CreatorFollowButton } from "./creator-follow-button";
 import { CreatorShareButton } from "./creator-share-button";
+import { ReportButton } from "@/src/components/ReportButton";
 
 type CreatorProfileHeaderProps = {
   creator: {
@@ -184,6 +185,7 @@ export function CreatorProfileHeader({
               text={creator.bio ?? undefined}
               imageUrl={avatarUrl}
             />
+            <ReportButton targetType="profile" targetId={creator.id} />
           </div>
         </div>
       </div>

@@ -18,6 +18,10 @@ services:
         condition: service_started
       meilisearch:
         condition: service_started
+      jaeger:
+        condition: service_started
+      mongodb:
+        condition: service_healthy
     environment:
       - PORT=${PORT}
       - NODE_ENV=${NODE_ENV}
@@ -26,6 +30,11 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_HOST=${REDIS_HOST}
       - REDIS_PORT=${REDIS_PORT}
+      - OTEL_ENABLED=${OTEL_ENABLED:-true}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4318/v1/traces}
+      - OTEL_TRACES_SAMPLE_RATIO=${OTEL_TRACES_SAMPLE_RATIO}
+      - MONGO_URI=${MONGO_URI:-mongodb://mongodb:27017}
+      - MONGO_DB_NAME=${MONGO_DB_NAME:-nftopia_analytics}
     volumes:
       # - .:/usr/src/app
       - /usr/src/app/node_modules
@@ -67,6 +76,41 @@ services:
     volumes:
       - meilisearch_data:/meili_data
 
+  # OpenTelemetry trace viewer for local development (#534). Accepts OTLP
+  # traces directly (no separate collector needed) and serves the UI at
+  # http://localhost:16686 — see docs/tracing.md.
+  jaeger:
+    image: jaegertracing/all-in-one:1.62
+    container_name: nftopia-jaeger
+    restart: unless-stopped
+    environment:
+      COLLECTOR_OTLP_ENABLED: 'true'
+    ports:
+      - '16686:16686' # Jaeger UI
+      - '4318:4318'   # OTLP/HTTP receiver
+      - '4317:4317'   # OTLP/gRPC receiver
+
+  # MongoDB for analytics/event data (#531) — flexible, schema-light
+  # document storage kept separate from the relational Postgres schema
+  # above. See docs/mongodb-analytics.md for the schema and retention
+  # policy.
+  mongodb:
+    image: mongo:7
+    container_name: nftopia-mongodb
+    restart: unless-stopped
+    ports:
+      - '27017:27017'
+    environment:
+      MONGO_INITDB_DATABASE: ${MONGO_DB_NAME:-nftopia_analytics}
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres_data:
   meilisearch_data:
+  mongodb_data:

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useAuthStore } from '@/src/stores/authStore';
+import { useAuthStore } from '@/stores/authStore';
 import { SessionExpiryModal } from './SessionExpiryModal';
 import { useToastStore } from '@/stores/toastStore';
 

@@ -1,4 +1,8 @@
-import { RequestMethod, UnauthorizedException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  RequestMethod,
+  UnauthorizedException,
+} from '@nestjs/common';
 import {
   GUARDS_METADATA,
   METHOD_METADATA,
@@ -12,16 +16,21 @@ import { AiUsageService } from './ai-usage.service';
 import { AiAgentHealthService } from './ai-agent-health.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AiChatRateLimitGuard } from '../../common/guards/ai-chat-rate-limit.guard';
+import { CopilotRateLimitGuard } from '../../common/guards/copilot-rate-limit.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
 
 describe('AiAgentController', () => {
   const aiAgentService = {
     chat: jest.fn(),
     chatStream: jest.fn(),
     getToolLogs: jest.fn(),
+    draftListing: jest.fn(),
   };
 
   const aiUsageService = {
     getUsageSummary: jest.fn(),
+    setCapOverride: jest.fn(),
+    clearCapOverride: jest.fn(),
   };
 
   const aiAgentHealthService = {
@@ -291,13 +300,19 @@ describe('AiAgentController', () => {
     });
   });
   describe('getToolLogs', () => {
-    it('applies JwtAuthGuard and Roles guard to the tool logs route', () => {
+    it('applies JwtAuthGuard and RolesGuard to the tool logs route', () => {
+      // Regression check (#529): this route previously had @Roles(ADMIN)
+      // with no RolesGuard in @UseGuards, which meant the decorator's
+      // metadata was never read by anything — any authenticated user could
+      // call it. This test previously only checked for JwtAuthGuard, which
+      // is exactly how that gap went unnoticed.
       const guards = Reflect.getMetadata(
         GUARDS_METADATA,
         controller.getToolLogs,
       ) as unknown[] | undefined;
 
       expect(guards).toContain(JwtAuthGuard);
+      expect(guards).toContain(RolesGuard);
     });
 
     it('delegates to AiAgentService.getToolLogs with defaults', async () => {
@@ -336,6 +351,166 @@ describe('AiAgentController', () => {
         limit: 20,
       });
       expect(result).toEqual(expectedResult);
+    });
+  });
+
+  describe('admin cap override endpoints (#529)', () => {
+    it('applies JwtAuthGuard and RolesGuard to getUsageForAdmin', () => {
+      const guards = Reflect.getMetadata(
+        GUARDS_METADATA,
+        controller.getUsageForAdmin,
+      ) as unknown[] | undefined;
+
+      expect(guards).toContain(JwtAuthGuard);
+      expect(guards).toContain(RolesGuard);
+    });
+
+    it('applies JwtAuthGuard and RolesGuard to setCapOverride', () => {
+      const guards = Reflect.getMetadata(
+        GUARDS_METADATA,
+        controller.setCapOverride,
+      ) as unknown[] | undefined;
+
+      expect(guards).toContain(JwtAuthGuard);
+      expect(guards).toContain(RolesGuard);
+    });
+
+    it('applies JwtAuthGuard and RolesGuard to clearCapOverride', () => {
+      const guards = Reflect.getMetadata(
+        GUARDS_METADATA,
+        controller.clearCapOverride,
+      ) as unknown[] | undefined;
+
+      expect(guards).toContain(JwtAuthGuard);
+      expect(guards).toContain(RolesGuard);
+    });
+
+    it('getUsageForAdmin delegates to AiUsageService.getUsageSummary for the target user', async () => {
+      const summary = { daily: {}, monthly: {}, hasOverride: false };
+      aiUsageService.getUsageSummary.mockResolvedValue(summary);
+
+      const result = await controller.getUsageForAdmin('target-user');
+
+      expect(aiUsageService.getUsageSummary).toHaveBeenCalledWith(
+        'target-user',
+      );
+      expect(result).toBe(summary);
+    });
+
+    it('setCapOverride passes the admin caller id as grantedBy', async () => {
+      const created = { userId: 'target-user' };
+      aiUsageService.setCapOverride.mockResolvedValue(created);
+
+      const result = await controller.setCapOverride(
+        'target-user',
+        { dailyTokenCap: 50_000, reason: 'VIP' },
+        makeRequest('admin-1'),
+      );
+
+      expect(aiUsageService.setCapOverride).toHaveBeenCalledWith(
+        'target-user',
+        {
+          dailyTokenCap: 50_000,
+          monthlyTokenCap: undefined,
+          dailySpendCapUsd: undefined,
+          monthlySpendCapUsd: undefined,
+          reason: 'VIP',
+          grantedBy: 'admin-1',
+          expiresAt: undefined,
+        },
+      );
+      expect(result).toBe(created);
+    });
+
+    it('setCapOverride converts an ISO expiresAt string to a Date', async () => {
+      aiUsageService.setCapOverride.mockResolvedValue({});
+
+      await controller.setCapOverride(
+        'target-user',
+        { expiresAt: '2026-12-31T00:00:00.000Z' },
+        makeRequest('admin-1'),
+      );
+
+      const [, params] = aiUsageService.setCapOverride.mock.calls[0] as [
+        string,
+        { expiresAt?: Date },
+      ];
+      expect(params.expiresAt).toBeInstanceOf(Date);
+      expect(params.expiresAt?.toISOString()).toBe('2026-12-31T00:00:00.000Z');
+    });
+
+    it('clearCapOverride delegates to AiUsageService.clearCapOverride', async () => {
+      const result = await controller.clearCapOverride('target-user');
+
+      expect(aiUsageService.clearCapOverride).toHaveBeenCalledWith(
+        'target-user',
+      );
+      expect(result).toEqual({ cleared: true });
+    });
+  });
+
+  describe('draftListing (#528)', () => {
+    const NFT_ID = '123e4567-e89b-12d3-a456-426614174000';
+
+    it('applies JwtAuthGuard and CopilotRateLimitGuard (not AiChatRateLimitGuard) to the route', () => {
+      const guards = Reflect.getMetadata(
+        GUARDS_METADATA,
+        controller.draftListing,
+      ) as unknown[] | undefined;
+
+      expect(guards).toContain(JwtAuthGuard);
+      expect(guards).toContain(CopilotRateLimitGuard);
+      expect(guards).not.toContain(AiChatRateLimitGuard);
+    });
+
+    it('is registered as POST copilot/draft-listing', () => {
+      expect(Reflect.getMetadata(PATH_METADATA, controller.draftListing)).toBe(
+        'copilot/draft-listing',
+      );
+      expect(
+        Reflect.getMetadata(METHOD_METADATA, controller.draftListing),
+      ).toBe(RequestMethod.POST);
+    });
+
+    it('delegates to AiAgentService.draftListing with the authenticated user id and requested nftId', async () => {
+      const draft = {
+        nftId: NFT_ID,
+        title: 'Cosmic Ape #7',
+        description: 'A rare cosmic ape.',
+        suggestedPrice: 250,
+        currency: 'XLM' as const,
+        reasoning: 'Priced above the collection floor.',
+      };
+      aiAgentService.draftListing.mockResolvedValue(draft);
+
+      const result = await controller.draftListing(makeRequest('user-1'), {
+        nftId: NFT_ID,
+      });
+
+      expect(aiAgentService.draftListing).toHaveBeenCalledWith(
+        'user-1',
+        NFT_ID,
+      );
+      expect(result).toEqual(draft);
+    });
+
+    it('rejects with UnauthorizedException when no authenticated user is present', async () => {
+      await expect(
+        controller.draftListing(makeRequest(undefined), { nftId: NFT_ID }),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(aiAgentService.draftListing).not.toHaveBeenCalled();
+    });
+
+    it('propagates rejection (e.g. ownership failure) from AiAgentService.draftListing unchanged', async () => {
+      aiAgentService.draftListing.mockRejectedValue(
+        new ForbiddenException(
+          'You can only draft a listing for an NFT you own.',
+        ),
+      );
+
+      await expect(
+        controller.draftListing(makeRequest('user-1'), { nftId: NFT_ID }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
     });
   });
 });

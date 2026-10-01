@@ -73,6 +73,14 @@
           "color": "#6C5CE7",
           "sounds": ["./assets/notification-sound.wav"]
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "NFTopia uses your camera to scan WalletConnect pairing codes and wallet addresses.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
       ]
     ],
     "extra": {

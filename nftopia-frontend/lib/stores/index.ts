@@ -19,6 +19,9 @@ export {
   useWatchlist,
 } from "./preferences-store";
 
+// Marketplace assistant (chat widget) state
+export { useAiChatStore } from "./ai-chat-store";
+
 // App Store
 export {
   useAppState,
@@ -29,6 +32,14 @@ export {
   useSidebar,
   useToast,
 } from "./app-store";
+
+// Notification Store
+export {
+  useNotificationStore,
+  useUnreadCount,
+  useNotificationActions,
+} from "./notification-store";
+
 
 export { useMarketplace } from "../../features/marketplace/store/marketplaceStore";
 export { useNFTs } from "../../features/nft/store/nftStore";

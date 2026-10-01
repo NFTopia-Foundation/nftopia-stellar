@@ -6,12 +6,14 @@ import {
   FlatList,
   TouchableOpacity,
   Image,
-  ActivityIndicator,
 } from 'react-native';
 import { useSearchStore } from '@/stores/searchStore';
 import SearchBar from './SearchBar';
 import apiClient from '@/lib/api/sample';
 import { NFT, Collection, CreatorProfile } from '@/types';
+import { useListState } from '@/src/hooks/useListState';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
 
 type TabType = 'all' | 'nfts' | 'collections' | 'creators';
 
@@ -129,6 +131,15 @@ export default function SearchResultsScreen({ navigation, route }: any) {
     : activeTab === 'collections' ? filtered.collections
     : filtered.creators;
 
+  // A search's results are always the "filtered" case (#472) — there is no
+  // "nothing exists yet" reading of an empty search, only "nothing matched".
+  const listState = useListState({
+    loading,
+    error,
+    itemCount: data.length,
+    isFiltered: true,
+  });
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -168,32 +179,31 @@ export default function SearchResultsScreen({ navigation, route }: any) {
         </View>
       )}
 
-      {/* Loading */}
-      {loading && <LoadingSkeleton />}
-
-      {/* Error */}
-      {error && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      )}
-
       {/* Results */}
-      {!loading && query && (
+      {query && listState === 'loading' ? (
+        <LoadingSkeleton />
+      ) : query && listState === 'error' ? (
+        <ErrorState
+          testID="search-error"
+          subtitle={error ?? undefined}
+          onRetry={() => search(query)}
+        />
+      ) : query ? (
         <FlatList
           data={data}
           renderItem={renderItem}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.resultsList}
           ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyIcon}>🔍</Text>
-              <Text style={styles.emptyTitle}>No results found</Text>
-              <Text style={styles.emptySubtitle}>Try different keywords or filters</Text>
-            </View>
+            <EmptyState
+              testID="search-empty"
+              variant="filtered"
+              title="No results found"
+              subtitle="Try different keywords or filters"
+            />
           }
         />
-      )}
+      ) : null}
     </View>
   );
 }
@@ -270,10 +280,4 @@ const styles = StyleSheet.create({
   skeletonImage: { width: 60, height: 60, borderRadius: 8, backgroundColor: '#E8E8E8', marginRight: 12 },
   skeletonInfo: { flex: 1, justifyContent: 'center' },
   skeletonLine: { height: 12, backgroundColor: '#E8E8E8', borderRadius: 6 },
-  errorContainer: { padding: 20, alignItems: 'center' },
-  errorText: { fontSize: 14, color: '#E17055', textAlign: 'center' },
-  emptyContainer: { alignItems: 'center', padding: 60 },
-  emptyIcon: { fontSize: 48, marginBottom: 16 },
-  emptyTitle: { fontSize: 18, fontWeight: '600', color: '#1A1A1A', marginBottom: 8 },
-  emptySubtitle: { fontSize: 14, color: '#666', textAlign: 'center' },
 });

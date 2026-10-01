@@ -1,6 +1,7 @@
 import { Params } from 'nestjs-pino';
 import * as crypto from 'crypto';
 import { IncomingMessage } from 'http';
+import { trace } from '@opentelemetry/api';
 
 export function getLoggerConfig(env: NodeJS.ProcessEnv = process.env): Params {
   const isProduction = env.NODE_ENV === 'production';
@@ -111,6 +112,13 @@ export function getLoggerConfig(env: NodeJS.ProcessEnv = process.env): Params {
         },
       },
       formatters: {
+        // #534: stamps every log line emitted while a span is active with
+        // that span's trace/span ID, so a log line and the OpenTelemetry
+        // trace it happened during can be cross-referenced in either
+        // direction (grep a trace ID from a log, or look up the logs for a
+        // slow/failed trace). `requestId` (from genReqId, above) remains
+        // the app-level correlation ID and is independent of tracing being
+        // enabled at all.
         log: (object: Record<string, unknown>) => {
           if (object.req && typeof object.req === 'object') {
             const req = object.req as Record<string, unknown>;
@@ -118,6 +126,13 @@ export function getLoggerConfig(env: NodeJS.ProcessEnv = process.env): Params {
               object.requestId = req.id;
             }
           }
+
+          const spanContext = trace.getActiveSpan()?.spanContext();
+          if (spanContext) {
+            object.traceId = spanContext.traceId;
+            object.spanId = spanContext.spanId;
+          }
+
           return object;
         },
       },

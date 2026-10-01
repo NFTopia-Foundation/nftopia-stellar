@@ -5,6 +5,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { NFT } from '@/types';
 
+import { FavoriteButton } from '@/components/ui/FavoriteButton';
+
 interface NFTGridProps {
   nfts: NFT[];
   loading?: boolean;
@@ -84,6 +86,9 @@ export function NFTGrid({ nfts, loading = false, emptyMessage = 'No NFTs found' 
                 />
               </div>
             )}
+            <div className="absolute top-2 right-2 z-20">
+              <FavoriteButton id={nft.id} itemType="nft" name={nft.name} variant="overlay" size="sm" />
+            </div>
             {nft.collectionName && (
               <div className="absolute top-2 left-2 bg-black/70 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-full">
                 {nft.collectionName}

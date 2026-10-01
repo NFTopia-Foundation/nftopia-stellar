@@ -1,17 +1,30 @@
 import {
   buildModerationTools,
   MODERATION_TOOL_NAMES,
+  type ModerationToolsDeps,
 } from './moderation.tools';
 import type { ContentFlag } from '../entities/content-flag.entity';
 
 describe('moderation.tools', () => {
+  const LISTING_ID = '123e4567-e89b-12d3-a456-426614174000';
+  const OTHER_ID = '00000000-0000-4000-8000-000000000000';
+
   const contentFlagService = {
     createFlag: jest.fn(),
   };
 
-  const getTool = (name: string) => {
+  const defaultExpectedEntity: ModerationToolsDeps['expectedEntity'] = {
+    entityType: 'listing',
+    entityId: LISTING_ID,
+  };
+
+  const getTool = (
+    name: string,
+    expectedEntity: ModerationToolsDeps['expectedEntity'] = defaultExpectedEntity,
+  ) => {
     const tools = buildModerationTools({
       contentFlagService: contentFlagService as never,
+      expectedEntity,
     });
     const tool = tools.find((t) => t.name === name);
     if (!tool) throw new Error(`Tool "${name}" not found`);
@@ -25,6 +38,7 @@ describe('moderation.tools', () => {
   it('exposes exactly the tools declared in MODERATION_TOOL_NAMES', () => {
     const names = buildModerationTools({
       contentFlagService: contentFlagService as never,
+      expectedEntity: defaultExpectedEntity,
     }).map((tool) => tool.name);
     expect(names.sort()).toEqual([...MODERATION_TOOL_NAMES].sort());
   });
@@ -35,13 +49,13 @@ describe('moderation.tools', () => {
         id: 'flag-1',
         status: 'pending',
         entityType: 'listing',
-        entityId: 'listing-1',
+        entityId: LISTING_ID,
       };
       contentFlagService.createFlag.mockResolvedValue(savedFlag);
 
       const input = {
         entityType: 'listing' as const,
-        entityId: 'listing-1',
+        entityId: LISTING_ID,
         reason: 'Depicts prohibited content',
         severity: 'high' as const,
         confidence: 0.92,
@@ -54,8 +68,40 @@ describe('moderation.tools', () => {
         id: 'flag-1',
         status: 'pending',
         entityType: 'listing',
-        entityId: 'listing-1',
+        entityId: LISTING_ID,
       });
+    });
+
+    it('rejects a flag for a different entity than the one under review (never trusts entityId from the model alone)', async () => {
+      await expect(
+        getTool('flag_content', {
+          entityType: 'listing',
+          entityId: LISTING_ID,
+        }).run({
+          entityType: 'listing',
+          entityId: OTHER_ID,
+          reason: 'x',
+          severity: 'low',
+          confidence: 0.5,
+        }),
+      ).rejects.toThrow(/does not match/);
+      expect(contentFlagService.createFlag).not.toHaveBeenCalled();
+    });
+
+    it('rejects a flag for a different entityType than the one under review', async () => {
+      await expect(
+        getTool('flag_content', {
+          entityType: 'listing',
+          entityId: LISTING_ID,
+        }).run({
+          entityType: 'nft',
+          entityId: LISTING_ID,
+          reason: 'x',
+          severity: 'low',
+          confidence: 0.5,
+        }),
+      ).rejects.toThrow(/does not match/);
+      expect(contentFlagService.createFlag).not.toHaveBeenCalled();
     });
 
     it('validates entityId as a uuid', () => {
@@ -101,9 +147,12 @@ describe('moderation.tools', () => {
       contentFlagService.createFlag.mockRejectedValue(new Error('db down'));
 
       await expect(
-        getTool('flag_content').run({
+        getTool('flag_content', {
           entityType: 'collection',
-          entityId: '123e4567-e89b-12d3-a456-426614174000',
+          entityId: OTHER_ID,
+        }).run({
+          entityType: 'collection',
+          entityId: OTHER_ID,
           reason: 'x',
           severity: 'critical',
           confidence: 0.99,
@@ -116,20 +165,21 @@ describe('moderation.tools', () => {
         id: 'flag-2',
         status: 'pending',
         entityType: 'nft',
-        entityId: 'nft-1',
+        entityId: OTHER_ID,
       };
       contentFlagService.createFlag.mockResolvedValue(savedFlag);
       const toolLogger = jest.fn();
 
       const tools = buildModerationTools({
         contentFlagService: contentFlagService as never,
+        expectedEntity: { entityType: 'nft', entityId: OTHER_ID },
         toolLogger,
       });
       const tool = tools.find((t) => t.name === 'flag_content')!;
 
       const input = {
         entityType: 'nft' as const,
-        entityId: '123e4567-e89b-12d3-a456-426614174000',
+        entityId: OTHER_ID,
         reason: 'spam',
         severity: 'low' as const,
         confidence: 0.8,
@@ -152,13 +202,14 @@ describe('moderation.tools', () => {
 
       const tools = buildModerationTools({
         contentFlagService: contentFlagService as never,
+        expectedEntity: { entityType: 'nft', entityId: OTHER_ID },
         toolLogger,
       });
       const tool = tools.find((t) => t.name === 'flag_content')!;
 
       const input = {
         entityType: 'nft' as const,
-        entityId: '123e4567-e89b-12d3-a456-426614174000',
+        entityId: OTHER_ID,
         reason: 'spam',
         severity: 'low' as const,
         confidence: 0.8,

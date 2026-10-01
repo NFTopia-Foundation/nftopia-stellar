@@ -38,6 +38,7 @@ import { WalletAuthService } from '../walletAuth.service';
 import { StellarWalletService } from '../../stellar/wallet.service';
 import { AuthError, AuthErrorCode, AuthResponse, ChallengeResponse, LinkWalletResponse } from '../types';
 import { Wallet } from '../../stellar/types';
+import { tokenStorage } from '../tokenStorage';
 import * as SecureStore from 'expo-secure-store';
 
 const VALID_KEYPAIR = Keypair.random();
@@ -108,6 +109,7 @@ describe('WalletAuthService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    tokenStorage.clearSessionCache();
     mockWalletService = makeMockWalletService();
     service = new WalletAuthService(mockWalletService, 'http://test-api.example.com');
   });
@@ -399,6 +401,57 @@ describe('WalletAuthService', () => {
       global.fetch = jest.fn().mockRejectedValue(new Error('offline'));
 
       await expect(service.refreshAccessToken()).rejects.toMatchObject({
+        code: AuthErrorCode.NETWORK_ERROR,
+      });
+    });
+  });
+
+  describe('validateSession', () => {
+    it('fetches /auth/me with the stored access token and returns the user', async () => {
+      (SecureStore.getItemAsync as jest.Mock).mockResolvedValue('stored-access-token');
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue({
+          data: { success: true, data: { id: 'user-1', walletAddress: MOCK_WALLET.publicKey } },
+        }),
+      } as unknown as Response);
+
+      const user = await service.validateSession();
+
+      expect(user).toEqual({ id: 'user-1', walletAddress: MOCK_WALLET.publicKey });
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://test-api.example.com/auth/me',
+        expect.objectContaining({
+          method: 'GET',
+          headers: { Authorization: 'Bearer stored-access-token' },
+        }),
+      );
+    });
+
+    it('throws AUTHENTICATION_FAILED without a network call when no access token is stored', async () => {
+      (SecureStore.getItemAsync as jest.Mock).mockResolvedValue(null);
+      global.fetch = jest.fn();
+
+      await expect(service.validateSession()).rejects.toMatchObject({
+        code: AuthErrorCode.AUTHENTICATION_FAILED,
+      });
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('throws AUTHENTICATION_FAILED when the server rejects the token (e.g. revoked)', async () => {
+      (SecureStore.getItemAsync as jest.Mock).mockResolvedValue('revoked-token');
+      mockFetchError(401, 'Invalid token');
+
+      await expect(service.validateSession()).rejects.toMatchObject({
+        code: AuthErrorCode.AUTHENTICATION_FAILED,
+      });
+    });
+
+    it('throws NETWORK_ERROR when the request cannot reach the server', async () => {
+      (SecureStore.getItemAsync as jest.Mock).mockResolvedValue('stored-access-token');
+      global.fetch = jest.fn().mockRejectedValue(new Error('offline'));
+
+      await expect(service.validateSession()).rejects.toMatchObject({
         code: AuthErrorCode.NETWORK_ERROR,
       });
     });

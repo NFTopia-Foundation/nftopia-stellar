@@ -24,3 +24,22 @@ pub fn assert_can_cancel(tx: &Transaction, caller: &Address) -> Result<(), Trans
 pub fn assert_signer(signer: &Address) {
     signer.require_auth();
 }
+
+/// Contract-wide configuration — the mirrored network fee ladder (#291) and the
+/// TTL policy (#290) — is owned by a single authority, claimed once at deploy
+/// time (mirroring `collection_factory::initialize`).
+///
+/// The check fails closed: while no authority is configured nobody can change
+/// the mirror, and the built-in mainnet defaults keep quoting.
+pub fn assert_config_authority(
+    env: &soroban_sdk::Env,
+    caller: &Address,
+) -> Result<(), TransactionError> {
+    match crate::tx_storage::config_authority(env) {
+        Some(authority) if authority == *caller => {
+            caller.require_auth();
+            Ok(())
+        }
+        _ => Err(TransactionError::Unauthorized),
+    }
+}

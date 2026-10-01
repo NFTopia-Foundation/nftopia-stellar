@@ -39,6 +39,9 @@ export const EVENT_NAMES = {
   experimentAssignmentInfo: "experiment_assignment_info",
   creatorDashboardError: "creator_dashboard_error",
   pageNotFound: "page_not_found",
+  favoriteToggled: "favorite_toggled",
+  favoriteAdded: "favorite_added",
+  favoriteRemoved: "favorite_removed",
 } as const;
 
 export type TelemetryEventName = (typeof EVENT_NAMES)[keyof typeof EVENT_NAMES];

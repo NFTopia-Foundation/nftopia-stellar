@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
-import { useAuthStore } from '@/src/stores/authStore';
+import { useAuthStore } from '@/stores/authStore';
 import { AppLockScreen } from '@/screens/Auth/AppLockScreen';
 
 interface AppLockManagerProps {

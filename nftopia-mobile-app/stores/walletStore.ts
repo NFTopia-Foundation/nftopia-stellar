@@ -31,6 +31,7 @@ interface WalletStoreActions {
   revealMnemonic: (publicKey: string) => Promise<string | null>;
   updateLastReminderShown: (publicKey: string) => void;
   clearWallets: () => void;
+  disconnectWallet: () => void;
   clearError: () => void;
 }
 
@@ -239,6 +240,14 @@ export const useWalletStore = create<WalletStore>()(
 
       clearWallets: () => {
         set({ wallets: [], activePublicKey: null, balances: {} });
+      },
+
+      // Ends the active connection (deauthenticates) without deleting any
+      // wallet's keys/mnemonic from device — unlike `clearWallets`, this is
+      // what a normal logout should call. The user can reconnect to the
+      // same wallet afterwards without re-entering their secret key.
+      disconnectWallet: () => {
+        set({ activePublicKey: null, balances: {} });
       },
 
       clearError: () => {

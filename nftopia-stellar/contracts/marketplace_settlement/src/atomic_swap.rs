@@ -80,6 +80,26 @@ impl SwapState {
     }
 }
 
+/// A single escrowed asset movement performed while settling a dispute.
+///
+/// Returned by [`AtomicSwapEngine::settle_dispute_escrow`] so the dispute layer
+/// can emit one off-chain event per real transfer, and so callers can tell what
+/// actually moved rather than inferring it from escrow state.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EscrowRelease {
+    pub swap_id: u64,
+    pub transaction_id: u64,
+    /// Original depositor of the holding.
+    pub from: Address,
+    /// Who the holding was paid out to.
+    pub to: Address,
+    pub asset: Asset,
+    pub amount: i128, // For NFTs this is the token id
+    pub is_nft: bool,
+    pub timestamp: u64,
+}
+
 /// Atomic swap engine for secure NFT and token transfers
 pub struct AtomicSwapEngine;
 
@@ -494,6 +514,179 @@ impl AtomicSwapEngine {
         }
         Self::store_swap(env, &swap)?;
         Ok(refunded)
+    }
+
+    /// Release the escrowed holdings of `transaction_id` to dispute-chosen
+    /// recipients, marking each one released.
+    ///
+    /// This is the escrow-side mechanism behind dispute settlement, and the one
+    /// place where a holding can be paid to somebody other than its original
+    /// depositor. Every other payout path (`cancel_swap`, `expire_swap`,
+    /// `cleanup_expired_swaps`, `reclaim_expired_escrow`, `emergency_withdraw`)
+    /// only ever returns funds to the depositor.
+    ///
+    /// Every *deposited, unreleased* holding is paid out exactly once:
+    ///
+    /// * A payment holding (token/XLM) is split by `payment_primary_bps`:
+    ///   that share goes to `payment_primary`, the remainder to
+    ///   `payment_secondary`. A basis-point value of 10_000 pays it all to
+    ///   `payment_primary`.
+    /// * An NFT holding is transferred in full to `nft_recipient`.
+    ///
+    /// Each released holding gets `released_at` stamped, and the swap is moved to
+    /// a terminal state, so replaying the same call cannot pay anyone twice. The
+    /// returned vector describes exactly what moved; an empty vector means the
+    /// escrow held nothing payable.
+    ///
+    /// Returns the underlying `SettlementError` from the asset transfer if a
+    /// transfer fails (e.g. `PaymentFailed`, `NativeAssetTransferFailed`), rather
+    /// than swallowing it.
+    pub fn settle_dispute_escrow(
+        env: &Env,
+        transaction_id: u64,
+        payment_primary: &Address,
+        payment_primary_bps: u64,
+        payment_secondary: &Address,
+        nft_recipient: &Address,
+    ) -> Result<Vec<EscrowRelease>, SettlementError> {
+        if payment_primary_bps > 10_000 {
+            return Err(SettlementError::InvalidAmount);
+        }
+
+        let mut swap = Self::get_swap_by_transaction(env, transaction_id)?;
+        let now = env.ledger().timestamp();
+        let mut releases = Vec::new(env);
+
+        let mut seller_escrow = swap.seller_escrow.clone();
+        Self::release_holdings_for_dispute(
+            env,
+            &swap,
+            &mut seller_escrow,
+            payment_primary,
+            payment_primary_bps,
+            payment_secondary,
+            nft_recipient,
+            now,
+            &mut releases,
+        )?;
+        swap.seller_escrow = seller_escrow;
+
+        let mut buyer_escrow = swap.buyer_escrow.clone();
+        Self::release_holdings_for_dispute(
+            env,
+            &swap,
+            &mut buyer_escrow,
+            payment_primary,
+            payment_primary_bps,
+            payment_secondary,
+            nft_recipient,
+            now,
+            &mut releases,
+        )?;
+        swap.buyer_escrow = buyer_escrow;
+
+        // Terminal: no other escrow path may act on these holdings again.
+        if swap.state != SwapState::Executed {
+            swap.state = SwapState::Failed;
+        }
+        Self::store_swap(env, &swap)?;
+
+        Ok(releases)
+    }
+
+    /// Internal: pay out one side's deposited, unreleased holdings.
+    #[allow(clippy::too_many_arguments)]
+    fn release_holdings_for_dispute(
+        env: &Env,
+        swap: &AtomicSwap,
+        holdings: &mut Vec<EscrowHolding>,
+        payment_primary: &Address,
+        payment_primary_bps: u64,
+        payment_secondary: &Address,
+        nft_recipient: &Address,
+        now: u64,
+        releases: &mut Vec<EscrowRelease>,
+    ) -> Result<(), SettlementError> {
+        for i in 0..holdings.len() {
+            let mut holding = match holdings.get(i) {
+                Some(holding) => holding,
+                None => continue,
+            };
+            if !holding.is_deposited || holding.released_at.is_some() {
+                continue;
+            }
+
+            if holding.is_nft {
+                Self::transfer_from_escrow(
+                    env,
+                    nft_recipient,
+                    &holding.asset,
+                    holding.amount,
+                    true,
+                )?;
+                releases.push_back(EscrowRelease {
+                    swap_id: swap.swap_id,
+                    transaction_id: swap.transaction_id,
+                    from: holding.holder.clone(),
+                    to: nft_recipient.clone(),
+                    asset: holding.asset.clone(),
+                    amount: holding.amount,
+                    is_nft: true,
+                    timestamp: now,
+                });
+            } else {
+                let primary_amount = holding
+                    .amount
+                    .checked_mul(payment_primary_bps as i128)
+                    .ok_or(SettlementError::Overflow)?
+                    / 10_000;
+                let secondary_amount = holding.amount - primary_amount;
+
+                if primary_amount > 0 {
+                    Self::transfer_from_escrow(
+                        env,
+                        payment_primary,
+                        &holding.asset,
+                        primary_amount,
+                        false,
+                    )?;
+                    releases.push_back(EscrowRelease {
+                        swap_id: swap.swap_id,
+                        transaction_id: swap.transaction_id,
+                        from: holding.holder.clone(),
+                        to: payment_primary.clone(),
+                        asset: holding.asset.clone(),
+                        amount: primary_amount,
+                        is_nft: false,
+                        timestamp: now,
+                    });
+                }
+                if secondary_amount > 0 {
+                    Self::transfer_from_escrow(
+                        env,
+                        payment_secondary,
+                        &holding.asset,
+                        secondary_amount,
+                        false,
+                    )?;
+                    releases.push_back(EscrowRelease {
+                        swap_id: swap.swap_id,
+                        transaction_id: swap.transaction_id,
+                        from: holding.holder.clone(),
+                        to: payment_secondary.clone(),
+                        asset: holding.asset.clone(),
+                        amount: secondary_amount,
+                        is_nft: false,
+                        timestamp: now,
+                    });
+                }
+            }
+
+            holding.released_at = Some(now);
+            holdings.set(i, holding);
+        }
+
+        Ok(())
     }
 
     /// Emergency withdrawal for stuck transactions

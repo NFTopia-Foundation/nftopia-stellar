@@ -5,7 +5,7 @@ import type { AuthStackParamList } from '@/navigation/AuthNavigator';
 import { useWalletConnect } from '@/hooks/useWalletConnect';
 import { colors, spacing, borderRadius } from '@/constants/theme';
 import { PasswordStrengthIndicator } from '@/screens/Auth/components';
-import ValidationError from '@/screens/Auth/components/ValidationError';
+import ValidationError from '@/components/ui/ValidationError';
 import * as Clipboard from 'expo-clipboard';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'WalletCreate'>;

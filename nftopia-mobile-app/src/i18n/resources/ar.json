@@ -195,6 +195,10 @@
     "collection": "المجموعة",
     "noNFTs": "لم يتم العثور على NFTs",
     "noNFTsMessage": "حاول تعديل بحثك أو عوامل التصفية",
+    "emptyNoData": "لا توجد NFTs مدرجة بعد",
+    "emptyNoDataMessage": "تحقق مرة أخرى قريبًا للحصول على قوائم جديدة",
+    "loadError": "فشل تحميل NFTs",
+    "loadErrorMessage": "يرجى التحقق من اتصالك والمحاولة مرة أخرى",
     "viewDetails": "عرض التفاصيل"
   },
   "nft": {

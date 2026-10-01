@@ -160,6 +160,44 @@
     "block": "Bloquer",
     "unblock": "Débloquer"
   },
+  "report": {
+    "title": "Signaler du contenu",
+    "action": "Signaler",
+    "selectReason": "Sélectionnez un motif",
+    "detailsLabel": "Détails supplémentaires (facultatif)",
+    "detailsPlaceholder": "Fournissez plus de contexte sur le problème...",
+    "cancel": "Annuler",
+    "submit": "Envoyer le signalement",
+    "submitting": "Envoi en cours...",
+    "close": "Fermer",
+    "success": "Signalement envoyé. Merci de contribuer à la sécurité de NFTopia.",
+    "successTitle": "Signalement envoyé",
+    "successBody": "Merci pour votre signalement. Notre équipe l'examinera sous peu.",
+    "error": "Échec de l'envoi du signalement. Veuillez réessayer.",
+    "alreadyReported": "Signalé",
+    "reasons": {
+      "spam": {
+        "label": "Contenu indésirable ou trompeur",
+        "description": "Contenu répétitif, hors sujet ou trompeur."
+      },
+      "copyright": {
+        "label": "Copyright ou propriété intellectuelle",
+        "description": "Contenu violant le droit d'auteur ou une marque déposée."
+      },
+      "offensive": {
+        "label": "Contenu offensant",
+        "description": "Contenu haineux, violent ou autrement nuisible."
+      },
+      "scam": {
+        "label": "Arnaque ou fraude",
+        "description": "Contenu lié à des activités frauduleuses ou à des arnaques."
+      },
+      "other": {
+        "label": "Autre",
+        "description": "Autres motifs non listés ci-dessus."
+      }
+    }
+  },
   "notifications": {
     "title": "Notifications",
     "markAllRead": "Marquer tout comme lu",

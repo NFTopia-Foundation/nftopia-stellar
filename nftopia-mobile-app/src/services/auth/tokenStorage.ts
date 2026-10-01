@@ -5,6 +5,12 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 const ACCESS_TOKEN_KEY = "nftopia_access_token";
 const REFRESH_TOKEN_KEY = "nftopia_refresh_token";
 const TOKEN_EXPIRY_KEY = "nftopia_token_expiry";
+// Same key `biometricService.getBiometricPreference()` / `BiometricSettings`
+// read and write. Read directly here (rather than importing that service)
+// so this module — on the path of every authenticated request — doesn't
+// pull in its heavier dependency chain (expo-local-authentication,
+// analytics, error logging). `biometricService` remains the only writer.
+const BIOMETRIC_ENABLED_KEY = "biometric_enabled";
 
 interface TokenPayload {
   exp?: number;
@@ -14,29 +20,74 @@ interface TokenPayload {
 
 // TokenStorage class for managing tokens in secure storage
 export class TokenStorage {
+  // Read tokens for the lifetime of the app session once SecureStore has
+  // released them, so a biometric-protected item only prompts once per
+  // session instead of on every `getAccessToken()` call (which happens on
+  // essentially every authenticated API request). Cleared on `clearTokens()`.
+  private sessionCache: Map<string, string> = new Map();
+
   // Writes through expo-secure-store; if the platform has no secure store
   // (e.g. web) that throws, so fall back to AsyncStorage rather than losing
   // the token entirely. Best-effort persistence without OS-level encryption
   // beats forcing the user to re-authenticate on every load.
+  //
+  // When the user has opted into biometric protection (the same
+  // preference `BiometricSettings`/`biometricService` already manage),
+  // tokens are written with SecureStore's `requireAuthentication: true`,
+  // which ties the OS Keychain/Keystore entry itself to a biometric/device
+  // passcode prompt on read — no separate LocalAuthentication call needed.
+  // That option only takes effect for an item as it's (re-)created, so
+  // toggling the preference protects tokens from the next save onward
+  // (next login/refresh), not retroactively.
   private async setItem(key: string, value: string): Promise<void> {
+    const requireAuthentication = await this.isBiometricProtectionEnabled();
     try {
-      await SecureStore.setItemAsync(key, value);
+      if (requireAuthentication) {
+        await SecureStore.setItemAsync(key, value, {
+          requireAuthentication: true,
+          keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+          authenticationPrompt: "Authenticate to access your NFTopia session",
+        });
+      } else {
+        await SecureStore.setItemAsync(key, value);
+      }
+      this.sessionCache.set(key, value);
     } catch {
+      // No SecureStore on this platform (e.g. web) — requireAuthentication
+      // has no AsyncStorage equivalent, so this falls back unprotected.
       await AsyncStorage.setItem(key, value);
+      this.sessionCache.set(key, value);
     }
   }
 
   private async getItem(key: string): Promise<string | null> {
+    if (this.sessionCache.has(key)) {
+      return this.sessionCache.get(key)!;
+    }
     try {
-      return await SecureStore.getItemAsync(key);
+      const value = await SecureStore.getItemAsync(key);
+      if (value !== null) this.sessionCache.set(key, value);
+      return value;
     } catch {
-      return AsyncStorage.getItem(key);
+      const value = await AsyncStorage.getItem(key);
+      if (value !== null) this.sessionCache.set(key, value);
+      return value;
+    }
+  }
+
+  private async isBiometricProtectionEnabled(): Promise<boolean> {
+    try {
+      const value = await AsyncStorage.getItem(BIOMETRIC_ENABLED_KEY);
+      return value ? JSON.parse(value) : false;
+    } catch {
+      return false;
     }
   }
 
   // A key may have been written via either backend depending on what was
   // available at save time, so clear both to guarantee nothing lingers.
   private async removeItem(key: string): Promise<void> {
+    this.sessionCache.delete(key);
     await Promise.all([
       SecureStore.deleteItemAsync(key).catch(() => {}),
       AsyncStorage.removeItem(key).catch(() => {}),
@@ -120,6 +171,14 @@ export class TokenStorage {
     await this.removeItem(ACCESS_TOKEN_KEY);
     await this.removeItem(REFRESH_TOKEN_KEY);
     await this.removeItem(TOKEN_EXPIRY_KEY);
+  }
+
+  // Drops the in-memory session cache without touching stored tokens, so
+  // the next read re-hits SecureStore (and, if biometric protection is
+  // on, re-prompts). Exposed for app-lock to call when it locks, and for
+  // tests to isolate cases that reconfigure the mocked backend mid-file.
+  clearSessionCache(): void {
+    this.sessionCache.clear();
   }
 }
 

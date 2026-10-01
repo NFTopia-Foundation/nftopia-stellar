@@ -29,6 +29,7 @@ const initialState = {
   timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   recentSearches: [],
   favoriteCollections: [],
+  favoriteNFTs: [],
   watchlist: [],
   isHydrated: false,
 };
@@ -85,9 +86,10 @@ export const usePreferencesStore = create<PreferencesStore>()(
             state.recentSearches = [];
           }),
 
-        // Favorites
+        // Favorites (Collections)
         addToFavorites: (collectionId) =>
           set((state) => {
+            if (!state.favoriteCollections) state.favoriteCollections = [];
             if (!state.favoriteCollections.includes(collectionId)) {
               state.favoriteCollections.push(collectionId);
             }
@@ -95,14 +97,39 @@ export const usePreferencesStore = create<PreferencesStore>()(
 
         removeFromFavorites: (collectionId) =>
           set((state) => {
+            if (!state.favoriteCollections) state.favoriteCollections = [];
             state.favoriteCollections = state.favoriteCollections.filter(
               (id) => id !== collectionId
             );
           }),
 
+        // Favorites (NFTs)
+        addToFavoriteNFTs: (nftId) =>
+          set((state) => {
+            if (!state.favoriteNFTs) state.favoriteNFTs = [];
+            if (!state.favoriteNFTs.includes(nftId)) {
+              state.favoriteNFTs.push(nftId);
+            }
+          }),
+
+        removeFromFavoriteNFTs: (nftId) =>
+          set((state) => {
+            if (!state.favoriteNFTs) state.favoriteNFTs = [];
+            state.favoriteNFTs = state.favoriteNFTs.filter((id) => id !== nftId);
+          }),
+
+        toggleFavoriteNFT: (nftId) =>
+          set((state) => {
+            if (!state.favoriteNFTs) state.favoriteNFTs = [];
+            state.favoriteNFTs = state.favoriteNFTs.includes(nftId)
+              ? state.favoriteNFTs.filter((id) => id !== nftId)
+              : [...state.favoriteNFTs, nftId];
+          }),
+
         // Watchlist
         addToWatchlist: (nftId) =>
           set((state) => {
+            if (!state.watchlist) state.watchlist = [];
             if (!state.watchlist.includes(nftId)) {
               state.watchlist.push(nftId);
             }
@@ -110,6 +137,7 @@ export const usePreferencesStore = create<PreferencesStore>()(
 
         removeFromWatchlist: (nftId) =>
           set((state) => {
+            if (!state.watchlist) state.watchlist = [];
             state.watchlist = state.watchlist.filter((id) => id !== nftId);
           }),
 
@@ -141,8 +169,9 @@ export const usePreferencesStore = create<PreferencesStore>()(
           language: state.language,
           timezone: state.timezone,
           recentSearches: state.recentSearches,
-          favoriteCollections: state.favoriteCollections,
-          watchlist: state.watchlist,
+          favoriteCollections: state.favoriteCollections || [],
+          favoriteNFTs: state.favoriteNFTs || [],
+          watchlist: state.watchlist || [],
         }),
       }
     ),
@@ -169,23 +198,47 @@ export const useDisplaySettings = () => {
 };
 
 export const useFavorites = () => {
-  const { favoriteCollections, addToFavorites, removeFromFavorites } = usePreferencesStore();
-  
-  const isFavorite = (collectionId: string) => favoriteCollections.includes(collectionId);
-  const toggleFavorite = (collectionId: string) => {
-    if (isFavorite(collectionId)) {
-      removeFromFavorites(collectionId);
+  const {
+    favoriteCollections,
+    favoriteNFTs = [],
+    addToFavorites,
+    removeFromFavorites,
+    addToFavoriteNFTs,
+    removeFromFavoriteNFTs,
+    toggleFavoriteNFT,
+    isHydrated,
+  } = usePreferencesStore();
+
+  const isFavorite = (id: string, type: 'nft' | 'collection' = 'collection') => {
+    if (type === 'collection') {
+      return (favoriteCollections || []).includes(id);
+    }
+    return (favoriteNFTs || []).includes(id);
+  };
+
+  const toggleFavorite = (id: string, type: 'nft' | 'collection' = 'collection') => {
+    if (type === 'collection') {
+      if (isFavorite(id, 'collection')) {
+        removeFromFavorites(id);
+      } else {
+        addToFavorites(id);
+      }
     } else {
-      addToFavorites(collectionId);
+      toggleFavoriteNFT(id);
     }
   };
 
   return {
-    favoriteCollections,
+    favoriteCollections: favoriteCollections || [],
+    favoriteNFTs: favoriteNFTs || [],
     isFavorite,
     toggleFavorite,
     addToFavorites,
     removeFromFavorites,
+    addToFavoriteNFTs,
+    removeFromFavoriteNFTs,
+    toggleFavoriteNFT,
+    isHydrated,
   };
 };
 

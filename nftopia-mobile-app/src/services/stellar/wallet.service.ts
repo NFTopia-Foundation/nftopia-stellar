@@ -10,22 +10,50 @@ import {
 import { SecureStorage } from './secureStorage';
 import { createServer } from './network';
 import { NetworkType } from '@/stores/walletStore';
+import {
+  BASE_RESERVE_STROOPS,
+  DEFAULT_BASE_FEE_STROOPS,
+  FeeEstimate,
+  FeeTierName,
+  buildFeeEstimate,
+  checkMinimumReserve,
+  xlmToStroops,
+} from './fee';
 
 export { TransactionType, WalletError, WalletErrorCode } from './types';
 export type { Wallet, WalletCreateResult, Transaction, TransactionFilters, PaginatedTransactions } from './types';
+export type { FeeEstimate, FeeTierName, ReserveCheckResult } from './fee';
+export { checkMinimumReserve, isValidCustomFeeStroops, stroopsToXlm } from './fee';
+
+export interface AccountReserveInfo {
+  nativeBalanceStroops: string;
+  subentryCount: number;
+  baseReserveStroops: string;
+}
 
 export class StellarWalletService {
   private readonly storage: SecureStorage;
   private readonly server: Horizon.Server;
   private readonly network: NetworkType;
 
-  constructor(storage?: SecureStorage, network: NetworkType = 'testnet') {
+  /**
+   * `server` is injectable (beyond the network it points at) purely for
+   * tests — real callers never pass it, so `createServer(network)` remains
+   * the only server this class talks to in the app itself.
+   */
+  constructor(storage?: SecureStorage, network: NetworkType = 'testnet', server?: Horizon.Server) {
     this.storage = storage ?? new SecureStorage();
     this.network = network;
-    this.server = createServer(network);
+    this.server = server ?? createServer(network);
   }
 
-  async sendPayment(secretKey: string, destination: string, amount: string, assetCode = 'XLM', assetIssuer?: string, memo?: string): Promise<{ hash: string }> {
+  /**
+   * `feeOverrideStroops` lets a caller pass the fee the user actually saw
+   * and confirmed in ConfirmationDialog (a chosen tier, or a manual
+   * advanced-mode value from estimateFee) — otherwise falls back to
+   * fetchBaseFee() as before (#471).
+   */
+  async sendPayment(secretKey: string, destination: string, amount: string, assetCode = 'XLM', assetIssuer?: string, memo?: string, feeOverrideStroops?: string): Promise<{ hash: string }> {
     assertValidSecretKey(secretKey);
     if (!StrKey.isValidEd25519PublicKey(destination)) throw new WalletError('Invalid recipient address', WalletErrorCode.TRANSACTION_ERROR);
     if (!/^\d+(?:\.\d{1,7})?$/.test(amount) || Number(amount) <= 0) throw new WalletError('Amount must be a positive decimal', WalletErrorCode.TRANSACTION_ERROR);
@@ -34,7 +62,26 @@ export class StellarWalletService {
       const source = Keypair.fromSecret(secretKey);
       const account = await this.server.loadAccount(source.publicKey());
       const asset = assetCode === 'XLM' ? Asset.native() : assetIssuer ? new Asset(assetCode, assetIssuer) : (() => { throw new Error('Asset issuer is required'); })();
-      const builder = new TransactionBuilder(account, { fee: String(await this.server.fetchBaseFee()), networkPassphrase: this.network === 'mainnet' ? Networks.PUBLIC : Networks.TESTNET }).addOperation(Operation.payment({ destination, asset, amount }));
+      const feeStroops = feeOverrideStroops ?? String(await this.server.fetchBaseFee());
+
+      // Blocks submission rather than letting Horizon reject it (or worse,
+      // accept it and strand the account) after the user has already
+      // signed — see checkMinimumReserve (#471).
+      const nativeBalance = account.balances.find((b) => b.asset_type === 'native');
+      const reserveCheck = checkMinimumReserve({
+        nativeBalanceStroops: xlmToStroops(nativeBalance ? nativeBalance.balance : '0'),
+        subentryCount: account.subentry_count,
+        totalFeeStroops: feeStroops,
+        nativeAmountSpentStroops: asset.isNative() ? xlmToStroops(amount) : '0',
+      });
+      if (!reserveCheck.ok) {
+        throw new WalletError(
+          `This would leave your account below the minimum reserve of ${reserveCheck.minimumReserveXlm} XLM. Reduce the amount or add funds.`,
+          WalletErrorCode.INSUFFICIENT_RESERVE,
+        );
+      }
+
+      const builder = new TransactionBuilder(account, { fee: feeStroops, networkPassphrase: this.network === 'mainnet' ? Networks.PUBLIC : Networks.TESTNET }).addOperation(Operation.payment({ destination, asset, amount }));
       if (memo) builder.addMemo(Memo.text(memo));
       const transaction = builder.setTimeout(180).build();
       transaction.sign(source);
@@ -43,6 +90,73 @@ export class StellarWalletService {
     } catch (error) {
       if (error instanceof WalletError) throw error;
       throw new WalletError(`Failed to submit payment: ${(error as Error).message}`, WalletErrorCode.TRANSACTION_ERROR);
+    }
+  }
+
+  /**
+   * Estimates the network fee for a transaction with the given operations
+   * (#471) — `operations` is one display label per operation (e.g.
+   * ['Add Trustline', 'Send Payment']), not real Stellar Operation
+   * objects: Stellar charges a flat per-operation rate regardless of
+   * operation type, so labels are all a fee estimate needs.
+   *
+   * Tries Horizon's /fee_stats (full low/medium/high distribution) first,
+   * falls back to the simpler fetchBaseFee() endpoint, and finally to a
+   * hardcoded network-minimum constant if both are unavailable — always
+   * returns a usable estimate (`degraded: true` marks the fallback path)
+   * rather than throwing, since a transient fee-stats outage shouldn't
+   * block showing the confirmation dialog at all.
+   */
+  async estimateFee(
+    operations: string[],
+    options?: { tier?: FeeTierName; customFeePerOperationStroops?: string },
+  ): Promise<FeeEstimate> {
+    let feeStats: Horizon.HorizonApi.FeeStatsResponse | null = null;
+    let fallbackBaseFeeStroops = DEFAULT_BASE_FEE_STROOPS;
+    let degraded = false;
+
+    try {
+      feeStats = await this.server.feeStats();
+    } catch {
+      degraded = true;
+      try {
+        fallbackBaseFeeStroops = String(await this.server.fetchBaseFee());
+      } catch {
+        // Both endpoints unavailable — fall through with the hardcoded
+        // network-minimum constant already set above.
+      }
+    }
+
+    return buildFeeEstimate({
+      operationLabels: operations,
+      feeStats,
+      fallbackBaseFeeStroops,
+      tier: options?.tier,
+      customFeePerOperationStroops: options?.customFeePerOperationStroops,
+      degraded,
+    });
+  }
+
+  /**
+   * Balance/subentry data needed for the minimum-reserve check (#471) —
+   * separated from estimateFee since the caller (ConfirmationDialog via
+   * SendScreen) needs the account's own state, not just the fee, to
+   * evaluate checkMinimumReserve.
+   */
+  async getAccountReserveInfo(publicKey: string): Promise<AccountReserveInfo> {
+    try {
+      const account = await this.server.loadAccount(publicKey);
+      const nativeBalance = account.balances.find((b) => b.asset_type === 'native');
+      return {
+        nativeBalanceStroops: xlmToStroops(nativeBalance ? nativeBalance.balance : '0'),
+        subentryCount: account.subentry_count,
+        baseReserveStroops: BASE_RESERVE_STROOPS,
+      };
+    } catch (error) {
+      throw new WalletError(
+        `Failed to load account reserve info: ${(error as Error).message}`,
+        WalletErrorCode.NETWORK_ERROR,
+      );
     }
   }
 

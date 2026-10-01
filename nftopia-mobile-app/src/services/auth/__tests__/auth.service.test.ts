@@ -162,4 +162,137 @@ describe("AuthService", () => {
       expect(mockedTokenStorage.clearTokens).toHaveBeenCalled();
     });
   });
+
+  describe("interceptors (#399)", () => {
+    // The outer `beforeEach` replaces `service.api` with a bare
+    // `{ post: mockPost }` stub, which has no `.interceptors` at all —
+    // these tests need the real axios instance the constructor wires up,
+    // so they get their own fresh instance instead.
+    let realService: AuthService;
+    let postSpy: jest.SpyInstance;
+    let requestSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+      realService = new AuthService();
+      postSpy = jest.spyOn(realService.api, "post");
+      requestSpy = jest.spyOn(realService.api, "request");
+    });
+
+    const requestInterceptor = () =>
+      (realService.api.interceptors.request as any).handlers[0].fulfilled;
+    const responseErrorInterceptor = () =>
+      (realService.api.interceptors.response as any).handlers[0].rejected;
+
+    describe("request interceptor", () => {
+      it("attaches the Authorization header from the stored access token", async () => {
+        mockedTokenStorage.isTokenExpired.mockResolvedValue(false);
+        mockedTokenStorage.getAccessToken.mockResolvedValue("valid-token");
+
+        const config = await requestInterceptor()({ url: "/api/v1/nfts", headers: {} });
+
+        expect(config.headers.Authorization).toBe("Bearer valid-token");
+      });
+
+      it("proactively refreshes before sending when the token is already expired", async () => {
+        mockedTokenStorage.isTokenExpired.mockResolvedValue(true);
+        mockedTokenStorage.getRefreshToken.mockResolvedValue("stored-refresh");
+        postSpy.mockResolvedValue({ data: fakeResponse });
+        mockedTokenStorage.saveTokens.mockResolvedValue(undefined);
+
+        await requestInterceptor()({ url: "/api/v1/nfts", headers: {} });
+
+        expect(postSpy).toHaveBeenCalledWith("/api/v1/auth/refresh", {
+          refreshToken: "stored-refresh",
+        });
+      });
+
+      it("does not check expiry or attach a header for the auth endpoints themselves", async () => {
+        const config = await requestInterceptor()({
+          url: "/api/v1/auth/email/login",
+          headers: {},
+        });
+
+        expect(mockedTokenStorage.isTokenExpired).not.toHaveBeenCalled();
+        expect(config.headers.Authorization).toBeUndefined();
+      });
+    });
+
+    describe("response interceptor (401 handling)", () => {
+      const make401 = (url = "/api/v1/nfts") => ({
+        response: { status: 401 },
+        config: { url, headers: {} },
+      });
+
+      it("retries the original request once with a refreshed token", async () => {
+        mockedTokenStorage.getRefreshToken.mockResolvedValue("stored-refresh");
+        postSpy.mockResolvedValue({ data: fakeResponse }); // the /auth/refresh call
+        mockedTokenStorage.saveTokens.mockResolvedValue(undefined);
+        requestSpy.mockResolvedValue({ data: "ok" });
+
+        const result = await responseErrorInterceptor()(make401());
+
+        expect(requestSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            url: "/api/v1/nfts",
+            headers: expect.objectContaining({ Authorization: "Bearer access-abc" }),
+          }),
+        );
+        expect(result).toEqual({ data: "ok" });
+      });
+
+      it("does not retry a request twice (the retry itself failing 401 again propagates)", async () => {
+        const error = make401();
+        (error.config as any)._retry = true;
+
+        await expect(responseErrorInterceptor()(error)).rejects.toBe(error);
+        expect(mockedTokenStorage.getRefreshToken).not.toHaveBeenCalled();
+      });
+
+      it("clears tokens and propagates the error when there is no refresh token to fall back on", async () => {
+        mockedTokenStorage.getRefreshToken.mockResolvedValue(null);
+        mockedTokenStorage.clearTokens.mockResolvedValue(undefined);
+
+        const error = make401();
+        await expect(responseErrorInterceptor()(error)).rejects.toBe(error);
+
+        expect(mockedTokenStorage.clearTokens).toHaveBeenCalled();
+        expect(requestSpy).not.toHaveBeenCalled();
+      });
+
+      it("clears tokens and propagates the error when the refresh call itself fails", async () => {
+        mockedTokenStorage.getRefreshToken.mockResolvedValue("stored-refresh");
+        postSpy.mockRejectedValue(new Error("refresh token invalid"));
+        mockedTokenStorage.clearTokens.mockResolvedValue(undefined);
+
+        const error = make401();
+        await expect(responseErrorInterceptor()(error)).rejects.toBe(error);
+
+        expect(mockedTokenStorage.clearTokens).toHaveBeenCalled();
+      });
+
+      it("ignores non-401 errors entirely", async () => {
+        const error = { response: { status: 500 }, config: { url: "/api/v1/nfts", headers: {} } };
+
+        await expect(responseErrorInterceptor()(error)).rejects.toBe(error);
+        expect(mockedTokenStorage.getRefreshToken).not.toHaveBeenCalled();
+      });
+
+      it("dedupes concurrent 401s into a single refresh call", async () => {
+        mockedTokenStorage.getRefreshToken.mockResolvedValue("stored-refresh");
+        postSpy.mockResolvedValue({ data: fakeResponse });
+        mockedTokenStorage.saveTokens.mockResolvedValue(undefined);
+        requestSpy.mockResolvedValue({ data: "ok" });
+
+        await Promise.all([
+          responseErrorInterceptor()(make401("/api/v1/nfts")),
+          responseErrorInterceptor()(make401("/api/v1/listings")),
+        ]);
+
+        const refreshCalls = postSpy.mock.calls.filter(
+          ([url]) => url === "/api/v1/auth/refresh",
+        );
+        expect(refreshCalls).toHaveLength(1);
+      });
+    });
+  });
 });

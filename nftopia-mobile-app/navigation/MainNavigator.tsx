@@ -40,6 +40,8 @@ import NotificationsScreen from '@/screens/Notifications/NotificationsScreen';
 import NotificationSettingsScreen from '@/screens/Notifications/NotificationSettingsScreen';
 import SettingsScreen from '@/screens/Settings/SettingsScreen';
 import { SendScreen } from '@/screens/Wallet/SendScreen';
+import { QRScannerScreen } from '@/screens/Wallet/QRScannerScreen';
+import { ReceiveScreen } from '@/screens/Wallet/ReceiveScreen';
 
 // Backup Reminder Screen
 import BackupReminderScreen from '@/screens/BackupReminder/BackupReminderScreen';
@@ -66,6 +68,8 @@ export type MainStackParamList = {
   NotificationSettings: undefined;
   Settings: undefined;
   Send: { prefilledAddress?: string } | undefined;
+  QRScanner: undefined;
+  Receive: undefined;
   Marketplace: { category?: string } | undefined;
   BackupReminder: undefined;
   Favorites: undefined;
@@ -149,6 +153,22 @@ export default function MainNavigator() {
         </Stack.Screen>
 
         <Stack.Screen name="Send" component={SendScreen} />
+
+        <Stack.Screen name="QRScanner" options={getTransitionConfig('modal')}>
+          {(props) => (
+            <ScreenErrorBoundary name="QRScannerScreen">
+              <QRScannerScreen {...props} />
+            </ScreenErrorBoundary>
+          )}
+        </Stack.Screen>
+
+        <Stack.Screen name="Receive" options={getTransitionConfig('modal')}>
+          {(props) => (
+            <ScreenErrorBoundary name="ReceiveScreen">
+              <ReceiveScreen {...props} />
+            </ScreenErrorBoundary>
+          )}
+        </Stack.Screen>
         
         {/* Marketplace with detail transition */}
         <Stack.Screen 

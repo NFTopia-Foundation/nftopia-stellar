@@ -29,6 +29,16 @@ export interface AuthStore {
   isCheckingAuth: boolean;
   lastLogin: string | null;
 
+  // Session timeout / app-lock state
+  sessionExpiryTime: number | null;
+  warningThreshold: number;
+  showExpiryWarning: boolean;
+  isLocked: boolean;
+  lockTimeout: number;
+  failedUnlockAttempts: number;
+  lockoutUntil: number | null;
+  appLockEnabled: boolean;
+
   // Actions - State Management
   setUser: (user: User | null) => void;
   setWallet: (wallet: Wallet | null) => void;
@@ -42,6 +52,20 @@ export interface AuthStore {
   initializeAuth: () => Promise<void>;
   loginWithWallet: (wallet: Wallet) => Promise<void>;
   logout: () => Promise<void>;
+
+  // Actions - Session timeout / app-lock
+  setShowExpiryWarning: (show: boolean) => void;
+  setWarningThreshold: (seconds: number) => void;
+  setLockTimeout: (seconds: number) => void;
+  setAppLockEnabled: (enabled: boolean) => void;
+  extendSession: () => Promise<boolean>;
+  getSessionTimeRemaining: () => number | null;
+  checkSessionExpiry: () => boolean;
+  lockApp: () => void;
+  unlockApp: (pin?: string) => Promise<boolean>;
+  resetFailedAttempts: () => void;
+  isInLockout: () => boolean;
+  getLockoutRemaining: () => number;
 
   // Navigation actions
   navigateToScreen: (screen: AuthNavigatorScreen) => void;

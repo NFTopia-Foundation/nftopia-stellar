@@ -1,4 +1,11 @@
 import { getLoggerConfig } from './logger.config';
+import { trace, context } from '@opentelemetry/api';
+import {
+  BasicTracerProvider,
+  InMemorySpanExporter,
+  SimpleSpanProcessor,
+} from '@opentelemetry/sdk-trace-base';
+import { AsyncLocalStorageContextManager } from '@opentelemetry/context-async-hooks';
 
 interface TestConfig {
   pinoHttp: {
@@ -180,6 +187,56 @@ describe('LoggerConfig', () => {
 
       const result = logFormatter(logObj);
       expect(result.requestId).toBeUndefined();
+    });
+
+    describe('trace correlation (#534)', () => {
+      // logger.config.ts calls trace.getActiveSpan() unconditionally, so
+      // these tests need a real (context-propagating) provider registered
+      // — the default no-op context manager doesn't track an "active
+      // span" at all, which would make every one of these tests pass
+      // vacuously regardless of whether the formatter code is correct.
+      let provider: BasicTracerProvider;
+
+      beforeAll(() => {
+        context.setGlobalContextManager(
+          new AsyncLocalStorageContextManager().enable(),
+        );
+        provider = new BasicTracerProvider({
+          spanProcessors: [new SimpleSpanProcessor(new InMemorySpanExporter())],
+        });
+        trace.setGlobalTracerProvider(provider);
+      });
+
+      afterAll(async () => {
+        context.disable();
+        trace.disable();
+        await provider.shutdown();
+      });
+
+      it('adds traceId and spanId when a span is active', () => {
+        const config = getTestConfig();
+        const logFormatter = config.pinoHttp.formatters.log;
+        const tracer = trace.getTracer('test');
+
+        tracer.startActiveSpan('test-span', (span) => {
+          const result = logFormatter({ msg: 'test log' });
+          const spanContext = span.spanContext();
+
+          expect(result.traceId).toBe(spanContext.traceId);
+          expect(result.spanId).toBe(spanContext.spanId);
+          span.end();
+        });
+      });
+
+      it('does not add traceId/spanId when no span is active', () => {
+        const config = getTestConfig();
+        const logFormatter = config.pinoHttp.formatters.log;
+
+        const result = logFormatter({ msg: 'test log' });
+
+        expect(result.traceId).toBeUndefined();
+        expect(result.spanId).toBeUndefined();
+      });
     });
   });
 });

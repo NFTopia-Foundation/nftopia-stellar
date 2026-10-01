@@ -173,6 +173,25 @@ export interface TelemetryPayloadMap {
     resource_type: "nft" | "collection" | "auction" | "page";
     id?: string;
   };
+  favorite_toggled: {
+    id: string;
+    itemType: "nft" | "collection";
+    name: string;
+    isFavorite: boolean;
+    timestamp: number;
+  };
+  favorite_added: {
+    id: string;
+    itemType: "nft" | "collection";
+    name: string;
+    timestamp: number;
+  };
+  favorite_removed: {
+    id: string;
+    itemType: "nft" | "collection";
+    name: string;
+    timestamp: number;
+  };
 }
 
 export type TelemetryPayload<T extends TelemetryEventName> =

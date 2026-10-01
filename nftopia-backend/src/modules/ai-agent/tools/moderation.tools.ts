@@ -1,6 +1,7 @@
 import { betaZodTool } from '@anthropic-ai/sdk/helpers/beta/zod';
 import { z } from 'zod';
 import type { ContentFlagService } from '../content-flag.service';
+import type { ContentFlagEntityType } from '../entities/content-flag.entity';
 
 /**
  * The exact tool names this builder is allowed to return — see
@@ -10,6 +11,14 @@ export const MODERATION_TOOL_NAMES = ['flag_content'] as const;
 
 export interface ModerationToolsDeps {
   contentFlagService: ContentFlagService;
+  /**
+   * The entity this moderation call is actually reviewing — closed over
+   * here so flag_content can't record a flag against a different entity
+   * than the one it was asked to review, even if the model echoes a
+   * different entityType/entityId. Same "never trust identity from tool
+   * input" pattern as creator-copilot.tools.ts's expectedNftId (#528).
+   */
+  expectedEntity: { entityType: ContentFlagEntityType; entityId: string };
   toolLogger?: import('./tool-set.types').ToolLogger;
 }
 
@@ -84,6 +93,16 @@ export function buildModerationTools(deps: ModerationToolsDeps) {
         ),
     }),
     run: async (input) => {
+      if (
+        input.entityType !== deps.expectedEntity.entityType ||
+        input.entityId !== deps.expectedEntity.entityId
+      ) {
+        throw new Error(
+          `Flagged content (${input.entityType}:${input.entityId}) does not match ` +
+            `the entity under review (${deps.expectedEntity.entityType}:${deps.expectedEntity.entityId}).`,
+        );
+      }
+
       const flag = await contentFlagService.createFlag(input);
       return JSON.stringify({
         id: flag.id,

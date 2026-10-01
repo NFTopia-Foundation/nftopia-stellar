@@ -8,6 +8,16 @@ import { getApolloClient } from "@/lib/graphql/client";
 // Mock next/navigation notFound to avoid throwing during tests
 jest.mock("next/navigation", () => ({
   notFound: jest.fn(),
+  useRouter: () => ({
+    push: jest.fn(),
+    replace: jest.fn(),
+    prefetch: jest.fn(),
+    back: jest.fn(),
+    forward: jest.fn(),
+    refresh: jest.fn(),
+  }),
+  usePathname: () => "/en/marketplace/nft-1",
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 // Mock next-intl

@@ -9,7 +9,7 @@ import {
   AccessibilityInfo,
   Platform,
 } from 'react-native';
-import { useAuthStore } from '@/src/stores/authStore';
+import { useAuthStore } from '@/stores/authStore';
 import { useBiometric } from '@/src/hooks/useBiometric';
 import { colors, spacing, borderRadius, shadows } from '@/constants/theme';
 
@@ -58,22 +58,26 @@ export function SessionExpiryModal({ visible, onExtend, onLogout }: SessionExpir
     try {
       setIsExtending(true);
 
+      const doExtend = async () => {
+        const extended = await extendSession();
+        if (extended) {
+          if (onExtend) onExtend();
+        } else {
+          // Refresh token is no longer valid — extending isn't possible,
+          // so fall back to login rather than silently dismissing the
+          // warning as if it had succeeded.
+          if (onLogout) onLogout();
+        }
+      };
+
       // If biometrics are available, require authentication
       if (isAvailable && isEnrolled) {
-        await requireBiometricWithFallback(
-          'extend_session',
-          async () => {
-            await extendSession();
-            if (onExtend) onExtend();
-          },
-          () => {
-            setIsExtending(false);
-          }
-        );
+        await requireBiometricWithFallback('EXTEND_SESSION', doExtend, () => {
+          setIsExtending(false);
+        });
       } else {
         // No biometrics, extend directly
-        await extendSession();
-        if (onExtend) onExtend();
+        await doExtend();
       }
     } catch (error) {
       console.error('Failed to extend session:', error);

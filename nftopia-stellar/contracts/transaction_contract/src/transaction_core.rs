@@ -10,8 +10,8 @@ use crate::types::{
     TransactionBlueprint, TransactionState, TransactionStatus, default_gas_config,
 };
 
-const STROOPS_PER_GAS: i128 = 1;
-
+use crate::dependency_resolver;
+use crate::security::permission_checker;
 use crate::security::resource_guard;
 use crate::security::validation_engine;
 use crate::storage::state_store;
@@ -108,6 +108,11 @@ impl TransactionContract {
         // Full preflight validation
         validation_engine::preflight(&env, &tx)?;
 
+        // Resolve the execution order topologically and make sure the entries
+        // backing this run are still live for the whole of it (#290/#291). The
+        // returned order, not the insertion order, is what gets executed.
+        let plan = dependency_resolver::prepare_execution(&env, tx.transaction_id, &tx.operations)?;
+
         let gas_ceiling = max_gas.unwrap_or(resource_guard::DEFAULT_GAS_CEILING);
 
         let original_state = tx.state.clone();
@@ -121,7 +126,7 @@ impl TransactionContract {
         let mut used_gas = 0_u64;
         let mut successful_operations = 0_u32;
 
-        for op in tx.operations.iter() {
+        for op in plan.operations.iter() {
             if !dependencies_satisfied(&succeeded_ids, &op.dependencies) {
                 tx.state = TransactionState::Failed;
                 tx.error_reason = Some(String::from_str(&env, "operation dependency not met"));
@@ -170,7 +175,9 @@ impl TransactionContract {
         }
 
         tx.total_gas_used = used_gas;
-        tx.total_cost = (used_gas as i128) * STROOPS_PER_GAS;
+        // Record what the network will actually charge for this run on the
+        // mirrored ladder, instead of a made-up stroop-per-gas ratio (#291).
+        tx.total_cost = gas_calculator::estimate_gas(&env, &tx.operations).estimated_cost;
         tx.completed_at = Some(env.ledger().timestamp());
         tx.state = TransactionState::Completed;
 
@@ -225,7 +232,7 @@ impl TransactionContract {
             .ok_or(TransactionError::TransactionNotFound)?;
 
         gas_calculator::validate_gas_limits(&tx.operations)?;
-        Ok(gas_calculator::total_gas(&tx.operations))
+        Ok(gas_calculator::estimate_gas(&env, &tx.operations))
     }
 
     pub fn batch_create_transactions(
@@ -395,6 +402,152 @@ impl TransactionContract {
         let _ = storage::load_transaction(&env, transaction_id)
             .ok_or(TransactionError::TransactionNotFound)?;
         Ok(default_gas_config(&env))
+    }
+
+    // -------------------------------------------------------------------------
+    // Network mirror: fee ladder (#291) and TTL policy (#290)
+    // -------------------------------------------------------------------------
+
+    /// Claim the configuration authority. Must be called once, right after
+    /// deployment; until then the mirror stays on the built-in mainnet defaults.
+    pub fn initialize_config_authority(env: Env, caller: Address) -> Result<(), TransactionError> {
+        if storage::config_authority(&env).is_some() {
+            return Err(TransactionError::InvalidConfiguration);
+        }
+        caller.require_auth();
+        storage::set_config_authority(&env, &caller);
+        Ok(())
+    }
+
+    /// Rotate the configuration authority.
+    pub fn set_config_authority(
+        env: Env,
+        caller: Address,
+        new_authority: Address,
+    ) -> Result<(), TransactionError> {
+        permission_checker::assert_config_authority(&env, &caller)?;
+        storage::set_config_authority(&env, &new_authority);
+        Ok(())
+    }
+
+    pub fn get_config_authority(env: Env) -> Option<Address> {
+        storage::config_authority(&env)
+    }
+
+    /// The mirrored fee ladder every quote is priced on.
+    pub fn get_network_fee_ladder(env: Env) -> gas_calculator::NetworkFeeParams {
+        gas_calculator::get_network_fee_params(&env)
+    }
+
+    /// Refresh the mirrored ladder after a network upgrade (#291). The ladder is
+    /// validated before it is stored, so a bad parameter set can never take
+    /// effect.
+    pub fn set_network_fee_ladder(
+        env: Env,
+        caller: Address,
+        params: gas_calculator::NetworkFeeParams,
+    ) -> Result<(), TransactionError> {
+        permission_checker::assert_config_authority(&env, &caller)?;
+        gas_calculator::set_network_fee_params(&env, &params)
+    }
+
+    pub fn get_ttl_policy(env: Env) -> dependency_resolver::TtlPolicy {
+        dependency_resolver::get_ttl_policy(&env)
+    }
+
+    /// Refresh the liveness policy (#290).
+    pub fn set_ttl_policy(
+        env: Env,
+        caller: Address,
+        policy: dependency_resolver::TtlPolicy,
+    ) -> Result<(), TransactionError> {
+        permission_checker::assert_config_authority(&env, &caller)?;
+        dependency_resolver::set_ttl_policy(&env, &policy)
+    }
+
+    /// Per-dimension stroop quote for a stored transaction (#291): instructions,
+    /// ledger entries, bytes, events, rent, envelope size and the classic base
+    /// fee, summed into `total`.
+    pub fn estimate_transaction_fees(
+        env: Env,
+        transaction_id: u64,
+    ) -> Result<gas_calculator::FeeBreakdown, TransactionError> {
+        let horizon = dependency_resolver::get_ttl_policy(&env).extend_to_ledgers;
+        Self::quote_transaction_fees(env, transaction_id, horizon)
+    }
+
+    /// As [`Self::estimate_transaction_fees`], priced over an explicit TTL
+    /// horizon — use this to compare "run it now" against "keep it alive for a
+    /// week" before signing.
+    pub fn quote_transaction_fees(
+        env: Env,
+        transaction_id: u64,
+        ttl_horizon_ledgers: u32,
+    ) -> Result<gas_calculator::FeeBreakdown, TransactionError> {
+        let tx = storage::load_transaction(&env, transaction_id)
+            .ok_or(TransactionError::TransactionNotFound)?;
+        gas_calculator::validate_gas_limits(&tx.operations)?;
+        let usage = gas_calculator::total_resources(&tx.operations, ttl_horizon_ledgers);
+        Ok(gas_calculator::estimate_fees(
+            &gas_calculator::get_network_fee_params(&env),
+            &usage,
+        ))
+    }
+
+    /// Fail-closed budget gate for clients (#291): returns the quote, or
+    /// [`TransactionError::GasLimitExceeded`] when it would exceed
+    /// `max_fee_stroops`.
+    pub fn validate_gas_budget(
+        env: Env,
+        transaction_id: u64,
+        max_fee_stroops: i128,
+    ) -> Result<gas_calculator::FeeBreakdown, TransactionError> {
+        let fees = Self::estimate_transaction_fees(env, transaction_id)?;
+        if fees.total > max_fee_stroops {
+            return Err(TransactionError::GasLimitExceeded);
+        }
+        Ok(fees)
+    }
+
+    // -------------------------------------------------------------------------
+    // State liveness (#290)
+    // -------------------------------------------------------------------------
+
+    /// The resolved, cycle-free execution plan as ordered operation ids. Runs
+    /// the same liveness gate `execute_transaction` runs.
+    pub fn resolve_execution_plan(
+        env: Env,
+        transaction_id: u64,
+    ) -> Result<Vec<u64>, TransactionError> {
+        let tx = storage::load_transaction(&env, transaction_id)
+            .ok_or(TransactionError::TransactionNotFound)?;
+        let plan = dependency_resolver::prepare_execution(&env, transaction_id, &tx.operations)?;
+        Ok(plan.order)
+    }
+
+    /// Buy more liveness for a transaction's own state (creator-only). Long
+    /// running flows call this between interactive steps so the record cannot be
+    /// evicted mid-flight.
+    pub fn refresh_transaction_ttl(
+        env: Env,
+        transaction_id: u64,
+        caller: Address,
+    ) -> Result<u32, TransactionError> {
+        let tx = storage::load_transaction(&env, transaction_id)
+            .ok_or(TransactionError::TransactionNotFound)?;
+        permission_checker::assert_creator(&tx, &caller)?;
+        let policy = dependency_resolver::get_ttl_policy(&env);
+        dependency_resolver::extend_transaction_state(&env, transaction_id, &policy)
+    }
+
+    /// Ledgers of proven liveness left on a transaction record (`0` once a
+    /// refresh is due).
+    pub fn remaining_state_ttl(env: Env, transaction_id: u64) -> u32 {
+        dependency_resolver::remaining_live_ledgers(
+            &env,
+            transaction_id,
+            dependency_resolver::TRANSACTION_LIVE_SCOPE,
+        )
     }
 
     // -------------------------------------------------------------------------

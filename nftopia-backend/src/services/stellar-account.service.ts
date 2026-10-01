@@ -1,4 +1,13 @@
 import { Injectable } from '@nestjs/common';
+import { trace } from '@opentelemetry/api';
+
+// #534: this service does no network/RPC calls itself (it's a pure
+// response-shaping helper called by StellarTransformInterceptor on every
+// response) — the blockchain RPC latency the issue is primarily about is
+// captured in soroban-rpc.service.ts, which every real Horizon/Soroban call
+// routes through. These spans exist so transform overhead is still visible
+// as a named child span in a request's trace, distinct from RPC time.
+const tracer = trace.getTracer('nftopia-backend.stellar-account');
 
 @Injectable()
 export class StellarAccountService {
@@ -18,6 +27,19 @@ export class StellarAccountService {
   }
 
   transformAccountData(payload: unknown): unknown {
+    return tracer.startActiveSpan(
+      'stellar_account.transform_account_data',
+      (span) => {
+        try {
+          return this._transformAccountData(payload);
+        } finally {
+          span.end();
+        }
+      },
+    );
+  }
+
+  private _transformAccountData(payload: unknown): unknown {
     if (!payload || typeof payload !== 'object') {
       return payload;
     }
@@ -71,6 +93,24 @@ export class StellarAccountService {
   }
 
   wrapCollectionResponse(
+    data: unknown,
+    page?: number,
+    limit?: number,
+    total?: number,
+  ): unknown {
+    return tracer.startActiveSpan(
+      'stellar_account.wrap_collection_response',
+      (span) => {
+        try {
+          return this._wrapCollectionResponse(data, page, limit, total);
+        } finally {
+          span.end();
+        }
+      },
+    );
+  }
+
+  private _wrapCollectionResponse(
     data: unknown,
     page?: number,
     limit?: number,

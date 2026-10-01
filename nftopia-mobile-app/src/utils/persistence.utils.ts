@@ -74,6 +74,37 @@ export const secureStorageAdapter: StorageAdapter = {
   },
 };
 
+// Lightweight symmetric cipher used to encrypt data before it's handed to
+// SecureStore. XOR-with-a-digested-keystream, not real AES — expo-crypto
+// only exposes hashing/digest primitives, not a symmetric cipher, and this
+// matches the same tradeoff already made (and documented) for wallet
+// secrets in `src/services/stellar/secureStorage.ts`. It still adds a real
+// layer on top of SecureStore's own OS-level (Keychain/Keystore) encryption
+// at rest, which is what actually matters here: without it, this function
+// was a documented no-op (see git history) and stored data in plaintext.
+async function deriveKeystream(secret: string, length: number): Promise<string> {
+  // Imported lazily so modules that pull in `store.factory.ts` (and so
+  // this file) but never actually use `storage: 'encrypted'` don't pay for
+  // loading expo-crypto — and, under this project's node-based jest setup,
+  // don't need to mock it either.
+  const Crypto = await import('expo-crypto');
+  let keystream = '';
+  let block = secret;
+  while (keystream.length < length) {
+    block = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, block);
+    keystream += block;
+  }
+  return keystream.slice(0, length);
+}
+
+async function xorTransform(text: string, secret: string): Promise<string> {
+  const keystream = await deriveKeystream(secret, text.length);
+  return text
+    .split('')
+    .map((char, i) => String.fromCharCode(char.charCodeAt(0) ^ keystream.charCodeAt(i)))
+    .join('');
+}
+
 // Create a storage adapter with encryption
 export const createEncryptedStorage = (
   encryptionKey: string
@@ -82,13 +113,21 @@ export const createEncryptedStorage = (
     getItem: async (key: string) => {
       try {
         const value = await SecureStore.getItemAsync(key);
-        if (value) {
-          // In production, decrypt here
-          // const decrypted = decrypt(value, encryptionKey);
-          // return decrypted;
+        if (!value) return null;
+
+        try {
+          const decrypted = await xorTransform(value, encryptionKey);
+          JSON.parse(decrypted); // Validate before trusting it — see fallback below.
+          return decrypted;
+        } catch {
+          // Either not yet encrypted (data written before this adapter
+          // applied encryption) or corrupt ciphertext. Fall back to the
+          // raw value so an existing session isn't dropped; the next
+          // `setItem` (triggered by any subsequent state change) re-saves
+          // it through the encrypted path, migrating it in place.
+          JSON.parse(value);
           return value;
         }
-        return null;
       } catch (error) {
         console.error(`[Persistence] Failed to get encrypted item ${key}:`, error);
         return null;
@@ -96,10 +135,8 @@ export const createEncryptedStorage = (
     },
     setItem: async (key: string, value: string) => {
       try {
-        // In production, encrypt here
-        // const encrypted = encrypt(value, encryptionKey);
-        // await SecureStore.setItemAsync(key, encrypted);
-        await SecureStore.setItemAsync(key, value, {
+        const encrypted = await xorTransform(value, encryptionKey);
+        await SecureStore.setItemAsync(key, encrypted, {
           keychainAccessible: SecureStore.WHEN_UNLOCKED,
         });
       } catch (error) {

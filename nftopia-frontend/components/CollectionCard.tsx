@@ -6,8 +6,8 @@ import Link from 'next/link';
 import { Heart, Loader2 } from 'lucide-react';
 import { Collection } from '@/types';
 import { useLikeCollection } from '@/hooks/graphql/useCollectionQueries';
-
 import { FloorPriceDisplay } from './collection/FloorPriceDisplay';
+import { FavoriteButton } from './ui/FavoriteButton';
 
 interface CollectionCardProps {
   collection: Collection;
@@ -145,28 +145,16 @@ const CollectionCard: React.FC<CollectionCardProps> = ({ collection }) => {
                 </div>
                 <span className="truncate">{collection.creatorName}</span>
               </div>
-              <button
-                onClick={handleLikeClick}
-                disabled={isLoading}
-                aria-pressed={localIsLiked}
-                aria-label={localIsLiked ? 'Unlike collection' : 'Like collection'}
-                className={`p-1 rounded-full transition-all duration-200 z-10 ${
-                  isLoading 
-                    ? 'opacity-50 cursor-not-allowed' 
-                    : 'hover:text-white hover:bg-white/10 focus:outline-none focus:ring-1 focus:ring-white/50'
-                }`}
-              >
-                {isLoading ? (
-                  <Loader2 size={18} className="animate-spin text-purple-400" />
-                ) : (
-                  <Heart
-                    size={18}
-                    fill={localIsLiked ? 'rgb(192, 132, 252)' : 'none'}
-                    stroke={localIsLiked ? 'rgb(192, 132, 252)' : 'currentColor'}
-                    className={`transition-all duration-200 ${localIsLiked ? 'text-purple-400 scale-110' : 'text-gray-500'}`}
-                  />
-                )}
-              </button>
+              <FavoriteButton
+                id={String(collection.id)}
+                itemType="collection"
+                name={collection.title}
+                variant="icon"
+                size="sm"
+                onToggle={() => {
+                  handleLikeClick({ preventDefault: () => {}, stopPropagation: () => {} } as any);
+                }}
+              />
             </div>
           </div>
 

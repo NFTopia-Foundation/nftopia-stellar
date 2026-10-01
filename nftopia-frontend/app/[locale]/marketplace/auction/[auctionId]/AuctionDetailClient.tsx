@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { API_CONFIG } from "@/lib/config";
 import { cn } from "@/lib/utils";
 import { TransactionFeePreview } from "@/components/wallet/TransactionFeePreview";
+import { FavoriteButton } from "@/components/ui/FavoriteButton";
 import {
   ArrowLeft, Clock, Gavel, User, Award, Wallet, Check, Share2, Heart,
   TrendingUp, Loader2, Info, Tag, AlertTriangle, X, Radio,
@@ -322,13 +323,13 @@ export default function AuctionDetailClient({
               <div className="flex items-start justify-between gap-4">
                 <h1 className="text-3xl font-bold text-white">{nft?.name || "Untitled NFT"}</h1>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <button onClick={() => setIsWatched(!isWatched)}
-                    className={cn("p-2.5 rounded-xl border transition-all", isWatched
-                      ? "bg-red-500/10 border-red-500/30 text-red-400"
-                      : "bg-gray-900/30 border-gray-800/50 text-gray-400 hover:text-white hover:border-gray-700")}
-                    title={isWatched ? t("auctionDetail.removeFromWatchlist") : t("auctionDetail.addToWatchlist")}>
-                    <Heart className={cn("h-5 w-5", isWatched && "fill-current")} />
-                  </button>
+                  <FavoriteButton
+                    id={String(nft?.id || auction.nftId)}
+                    itemType="nft"
+                    name={nft?.name}
+                    variant="button"
+                    size="md"
+                  />
                   <button onClick={handleCopyLink}
                     className="p-2.5 rounded-xl border border-gray-800/50 bg-gray-900/30 text-gray-400 hover:text-white hover:border-gray-700 transition-all"
                     title={t("auctionDetail.share")}>

@@ -21,7 +21,12 @@ use crate::types::{
 };
 use crate::utils::{asset_utils, time_utils};
 use crate::version;
-use soroban_sdk::{contract, contractimpl, symbol_short, Address, Bytes, Env, String, Symbol, Vec};
+use soroban_sdk::{
+    contract, contractimpl, symbol_short, Address, Bytes, BytesN, Env, String, Symbol, Vec,
+};
+
+use crate::dispute_resolution::{ArbitrationOracle, DisputeConfig};
+use crate::types::Dispute;
 
 /// Marketplace Settlement Contract
 #[contract]
@@ -950,6 +955,210 @@ impl MarketplaceSettlement {
         })
     }
 
+    /// Force-resolve a dispute with a binding outcome (dispute admin only)
+    ///
+    /// `admin` must authenticate and must be either the primary admin from
+    /// `AdminConfig` or an address in the dispute admin registry; it is not
+    /// trusted merely because a caller names it. The outcome is validated, recorded,
+    /// and paid out from the real escrow holdings in the same call.
+    pub fn force_resolve_dispute(
+        env: Env,
+        dispute_id: u64,
+        resolution: u64,
+        admin: Address,
+    ) -> Result<(), SettlementError> {
+        admin.require_auth();
+
+        // Check if disputes module is paused
+        PauseManager::check_module_not_paused(&env, ModuleType::Disputes)?;
+
+        ReentrancyGuard::execute(&env, &admin, "force_resolve_dispute", || {
+            DisputeResolutionManager::force_resolve_dispute(&env, dispute_id, resolution, &admin)
+        })
+    }
+
+    /// Settle a dispute whose arbitration stalled past `DisputeConfig::dispute_timeout`
+    ///
+    /// Permissionless: the most a caller can do is apply the outcome the
+    /// configuration already prescribes once the deadline has elapsed.
+    pub fn resolve_dispute_timeout(
+        env: Env,
+        dispute_id: u64,
+        caller: Address,
+    ) -> Result<(), SettlementError> {
+        caller.require_auth();
+
+        // Check if disputes module is paused
+        PauseManager::check_module_not_paused(&env, ModuleType::Disputes)?;
+
+        ReentrancyGuard::execute(&env, &caller, "resolve_dispute_timeout", || {
+            DisputeResolutionManager::resolve_dispute_timeout(&env, dispute_id, &caller)
+        })
+    }
+
+    /// Submit a binding resolution from a registered arbitration oracle
+    ///
+    /// The oracle must authenticate (so a multi-sig or DAO oracle enforces its own
+    /// approval policy), must be registered and active, and must present an ed25519
+    /// signature from its registered public key over
+    /// `dispute_oracle_payload(dispute_id, transaction_id, resolution)`. The
+    /// resolution is then paid out of escrow immediately.
+    pub fn submit_oracle_resolution(
+        env: Env,
+        dispute_id: u64,
+        resolution: u64,
+        oracle: Address,
+        signature: BytesN<64>,
+    ) -> Result<(), SettlementError> {
+        // Check if disputes module is paused
+        PauseManager::check_module_not_paused(&env, ModuleType::Disputes)?;
+
+        ReentrancyGuard::execute(&env, &oracle, "submit_oracle_resolution", || {
+            DisputeResolutionManager::submit_oracle_resolution(
+                &env, dispute_id, resolution, &oracle, &signature,
+            )
+        })
+    }
+
+    /// Bytes an arbitration oracle must sign for `dispute_id`
+    ///
+    /// View helper so an off-chain resolver can reproduce the exact payload the
+    /// contract verifies, without trusting caller-supplied fields.
+    pub fn dispute_oracle_payload(
+        env: Env,
+        dispute_id: u64,
+        resolution: u64,
+    ) -> Result<Bytes, SettlementError> {
+        let dispute = DisputeResolutionManager::get_dispute(&env, dispute_id)?;
+        Ok(DisputeResolutionManager::oracle_attestation_payload(
+            &env,
+            dispute_id,
+            dispute.transaction_id,
+            resolution,
+        ))
+    }
+
+    /// Register or update an arbitration oracle (dispute admin only)
+    pub fn register_arbitration_oracle(
+        env: Env,
+        admin: Address,
+        oracle: Address,
+        public_key: BytesN<32>,
+        is_active: bool,
+    ) -> Result<(), SettlementError> {
+        admin.require_auth();
+
+        ReentrancyGuard::execute(&env, &admin, "register_arbitration_oracle", || {
+            DisputeResolutionManager::register_oracle(&env, &admin, &oracle, &public_key, is_active)
+        })
+    }
+
+    /// Get a registered arbitration oracle (view function)
+    pub fn get_arbitration_oracle(env: Env, oracle: Address) -> Option<ArbitrationOracle> {
+        DisputeResolutionManager::get_oracle(&env, &oracle)
+    }
+
+    /// Register an address as an eligible arbitrator
+    pub fn register_arbitrator(
+        env: Env,
+        arbitrator: Address,
+        initial_reputation: u64,
+    ) -> Result<(), SettlementError> {
+        arbitrator.require_auth();
+
+        DisputeResolutionManager::register_arbitrator(&env, &arbitrator, initial_reputation)
+    }
+
+    /// Adjust an arbitrator's reputation (dispute admin only)
+    pub fn update_arbitrator_reputation(
+        env: Env,
+        admin: Address,
+        arbitrator: Address,
+        reputation_change: i32,
+    ) -> Result<(), SettlementError> {
+        admin.require_auth();
+
+        if !DisputeResolutionManager::is_dispute_admin(&env, &admin) {
+            return Err(SettlementError::NotAdmin);
+        }
+
+        ReentrancyGuard::execute(&env, &admin, "update_arbitrator_reputation", || {
+            DisputeResolutionManager::update_arbitrator_reputation(
+                &env,
+                &arbitrator,
+                reputation_change,
+            )
+        })
+    }
+
+    /// Rotate the arbitrator selection entropy (dispute admin only)
+    pub fn reseed_arbitrator_selection(env: Env, admin: Address) -> Result<(), SettlementError> {
+        admin.require_auth();
+
+        ReentrancyGuard::execute(&env, &admin, "reseed_arbitrator_selection", || {
+            DisputeResolutionManager::reseed_arbitrator_selection(&env, &admin)
+        })
+    }
+
+    /// Add an address to the dispute admin registry (dispute admin only)
+    pub fn add_dispute_admin(
+        env: Env,
+        admin: Address,
+        new_admin: Address,
+    ) -> Result<(), SettlementError> {
+        admin.require_auth();
+
+        ReentrancyGuard::execute(&env, &admin, "add_dispute_admin", || {
+            DisputeResolutionManager::add_dispute_admin(&env, &admin, &new_admin)
+        })
+    }
+
+    /// Remove an address from the dispute admin registry (dispute admin only)
+    pub fn remove_dispute_admin(
+        env: Env,
+        admin: Address,
+        target: Address,
+    ) -> Result<(), SettlementError> {
+        admin.require_auth();
+
+        ReentrancyGuard::execute(&env, &admin, "remove_dispute_admin", || {
+            DisputeResolutionManager::remove_dispute_admin(&env, &admin, &target)
+        })
+    }
+
+    /// Addresses in the dispute admin registry (view function)
+    pub fn get_dispute_admins(env: Env) -> Vec<Address> {
+        DisputeResolutionManager::get_dispute_admins(&env)
+    }
+
+    /// Whether `address` can perform dispute administration (view function)
+    pub fn is_dispute_admin(env: Env, address: Address) -> bool {
+        DisputeResolutionManager::is_dispute_admin(&env, &address)
+    }
+
+    /// Get a dispute (view function)
+    pub fn get_dispute(env: Env, dispute_id: u64) -> Result<Dispute, SettlementError> {
+        DisputeResolutionManager::get_dispute(&env, dispute_id)
+    }
+
+    /// Get the dispute/arbitration configuration (view function)
+    pub fn get_dispute_config(env: Env) -> Result<DisputeConfig, SettlementError> {
+        DisputeResolutionManager::get_dispute_config(&env)
+    }
+
+    /// Replace the dispute/arbitration configuration (dispute admin only)
+    pub fn update_dispute_config(
+        env: Env,
+        config: DisputeConfig,
+        admin: Address,
+    ) -> Result<(), SettlementError> {
+        admin.require_auth();
+
+        ReentrancyGuard::execute(&env, &admin, "update_dispute_config", || {
+            DisputeResolutionManager::update_dispute_config(&env, &config, &admin)
+        })
+    }
+
     /// Emergency withdrawal (admin only) - NOT paused
     pub fn emergency_withdraw(
         env: Env,
@@ -1263,6 +1472,20 @@ impl MarketplaceSettlement {
         }
         AllowlistStore::set_token_allowed(&env, &contract, false);
         Ok(())
+    }
+
+    /// Read whether `contract` is allowlisted for NFT settlement (view function).
+    ///
+    /// Used by deployment tooling and off-chain verifiers to confirm that a
+    /// freshly deployed NFT contract has been wired into the marketplace.
+    pub fn is_nft_allowed(env: Env, contract: Address) -> bool {
+        AllowlistStore::is_nft_allowed(&env, &contract)
+    }
+
+    /// Read whether `contract` is allowlisted for token settlement (view
+    /// function). See [`Self::is_nft_allowed`].
+    pub fn is_token_allowed(env: Env, contract: Address) -> bool {
+        AllowlistStore::is_token_allowed(&env, &contract)
     }
 
     /// Block an address (admin only)

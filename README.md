@@ -70,6 +70,10 @@ NFTopia is a full-stack NFT platform built around Stellar and Soroban. This mono
 
 ## 📁 Repository Structure
 
+For the decision and current boundary between backend transaction orchestration
+and the Soroban transaction contract, see
+[`docs/transaction-architecture.md`](docs/transaction-architecture.md).
+
 ```text
 nftopia-stellar/
 ├── nftopia-admin/          # React + Vite admin dashboard scaffold

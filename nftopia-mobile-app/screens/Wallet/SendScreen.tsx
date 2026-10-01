@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,17 @@ import {
   isValidStellarAddress,
 } from '@/stores/addressBookStore';
 import { useWalletStore } from '@/stores/walletStore';
-import { StellarWalletService } from '@/src/services/stellar/wallet.service';
+import {
+  StellarWalletService,
+  WalletError,
+  checkMinimumReserve,
+  isValidCustomFeeStroops,
+  type FeeEstimate,
+  type FeeTierName,
+} from '@/src/services/stellar/wallet.service';
+import ConfirmationDialog from '@/components/wallet/ConfirmationDialog';
+import TransactionFeeSummary from '@/components/wallet/TransactionFeeSummary';
+import { haptics } from '@/lib/haptics';
 
 interface SendScreenProps {
   navigation?: any;
@@ -34,6 +44,31 @@ export function SendScreen({ navigation, route, onSend }: SendScreenProps) {
   const [showPicker, setShowPicker] = useState(false);
   const [pickerQuery, setPickerQuery] = useState('');
   const [addressError, setAddressError] = useState<string | null>(null);
+
+  // Fee confirmation (#471) — shown before any transaction is submitted.
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [feeEstimate, setFeeEstimate] = useState<FeeEstimate | null>(null);
+  const [feeLoading, setFeeLoading] = useState(false);
+  const [selectedTier, setSelectedTier] = useState<FeeTierName>('medium');
+  const [useCustomFee, setUseCustomFee] = useState(false);
+  const [customFeeStroops, setCustomFeeStroops] = useState('');
+  const [reserveInfo, setReserveInfo] = useState<{
+    nativeBalanceStroops: string;
+    subentryCount: number;
+  } | null>(null);
+  const [sending, setSending] = useState(false);
+
+  // `route.params.prefilledAddress` changes when the QR scanner navigates
+  // back to this same (already-mounted) screen instance with a new scan —
+  // the `useState` initializer above only runs once, so it can't pick that
+  // up on its own.
+  useEffect(() => {
+    const prefilled = route?.params?.prefilledAddress;
+    if (prefilled && prefilled !== recipient) {
+      setRecipient(prefilled);
+      setAddressError(null);
+    }
+  }, [route?.params?.prefilledAddress]);
 
   const recentFiltered = useMemo(() => {
     // Exclude saved addresses from recent suggestions
@@ -72,23 +107,92 @@ export function SendScreen({ navigation, route, onSend }: SendScreenProps) {
   const validateAddress = (addr: string): boolean => {
     if (!addr.trim()) {
       setAddressError('Recipient address is required');
+      haptics.error();
       return false;
     }
     if (!isValidStellarAddress(addr.trim())) {
       setAddressError('Invalid Stellar address');
+      haptics.error();
       return false;
     }
     setAddressError(null);
     return true;
   };
 
+  // Resolved per-operation fee, in stroops: the custom override when
+  // advanced mode is on, otherwise the selected tier's recommendation.
+  const resolvedFeeStroops = useCustomFee
+    ? customFeeStroops
+    : feeEstimate?.tiers[selectedTier].feePerOperationStroops;
+
+  const customFeeError =
+    useCustomFee && customFeeStroops && feeEstimate && !isValidCustomFeeStroops(customFeeStroops, feeEstimate.tiers.low.feePerOperationStroops)
+      ? `Must be at least ${feeEstimate.tiers.low.feePerOperationStroops} stroops`
+      : undefined;
+
+  // Recomputed locally (no extra network call) whenever the resolved fee
+  // or reserve info changes, so switching tiers/entering a custom fee
+  // updates the warning immediately.
+  const reserveResult =
+    reserveInfo && resolvedFeeStroops
+      ? checkMinimumReserve({
+          nativeBalanceStroops: reserveInfo.nativeBalanceStroops,
+          subentryCount: reserveInfo.subentryCount,
+          totalFeeStroops: resolvedFeeStroops,
+          nativeAmountSpentStroops: String(Math.round(Number(amount || '0') * 10_000_000)),
+        })
+      : null;
+
+  const reserveWarning =
+    reserveResult && !reserveResult.ok
+      ? `This would leave your account below the ${reserveResult.minimumReserveXlm} XLM minimum reserve. Reduce the amount or add funds.`
+      : undefined;
+
   const handleSend = async () => {
     if (!validateAddress(recipient)) return;
     if (!amount.trim() || isNaN(Number(amount)) || Number(amount) <= 0) {
+      haptics.error();
       Alert.alert('Error', 'Enter a valid amount');
       return;
     }
+    if (!onSend && !wallets.find((item) => item.publicKey === activePublicKey)) {
+      haptics.error();
+      Alert.alert('Error', 'Connect a wallet before sending');
+      return;
+    }
 
+    // Reset any fee/reserve state left over from a previous open.
+    setSelectedTier('medium');
+    setUseCustomFee(false);
+    setCustomFeeStroops('');
+    setFeeEstimate(null);
+    setReserveInfo(null);
+    setShowConfirm(true);
+    setFeeLoading(true);
+
+    const service = new StellarWalletService(undefined, network);
+    // Settled independently, not Promise.all: estimateFee never rejects
+    // (it degrades gracefully internally), but getAccountReserveInfo can —
+    // and a reserve-info failure must not also discard an otherwise-fine
+    // fee estimate the user is waiting to see.
+    const [estimateResult, reserveResult] = await Promise.allSettled([
+      service.estimateFee(['Send Payment']),
+      activePublicKey ? service.getAccountReserveInfo(activePublicKey) : Promise.resolve(null),
+    ]);
+    if (estimateResult.status === 'fulfilled') {
+      setFeeEstimate(estimateResult.value);
+    }
+    if (reserveResult.status === 'fulfilled' && reserveResult.value) {
+      setReserveInfo(reserveResult.value);
+    }
+    // A reserveResult rejection is left silent: reserveInfo simply stays
+    // null, so the confirm dialog still shows the fee, it just can't warn
+    // about the reserve for this attempt.
+    setFeeLoading(false);
+  };
+
+  const handleConfirmSend = async () => {
+    setSending(true);
     try {
       if (onSend) {
         await onSend({ address: recipient.trim(), amount: amount.trim(), memo: memo.trim() || undefined });
@@ -96,20 +200,33 @@ export function SendScreen({ navigation, route, onSend }: SendScreenProps) {
         const wallet = wallets.find((item) => item.publicKey === activePublicKey);
         if (!wallet) throw new Error('Connect a wallet before sending');
         const service = new StellarWalletService(undefined, network);
-        await service.sendPayment(wallet.secretKey, recipient.trim(), amount.trim(), 'XLM', undefined, memo.trim() || undefined);
+        await service.sendPayment(
+          wallet.secretKey,
+          recipient.trim(),
+          amount.trim(),
+          'XLM',
+          undefined,
+          memo.trim() || undefined,
+          resolvedFeeStroops,
+        );
         Alert.alert('Sent', `${amount.trim()} XLM sent successfully`);
       }
-      // Record as recent recipient (unless already saved – still useful, but filtered in suggestions)
+      haptics.success();
       addRecentRecipient(recipient.trim());
-      // Clear form or navigate
+      setShowConfirm(false);
       if (navigation?.goBack) navigation.goBack();
     } catch (e) {
-      Alert.alert('Send failed', e instanceof Error ? e.message : 'Unknown error');
+      const message =
+        e instanceof WalletError ? e.message : e instanceof Error ? e.message : 'Unknown error';
+      haptics.error();
+      Alert.alert('Send failed', message);
+    } finally {
+      setSending(false);
     }
   };
 
   const handleScan = () => {
-    Alert.alert('Scan', 'QR scan would be implemented via expo-barcode-scanner');
+    navigation?.navigate?.('QRScanner');
   };
 
   return (
@@ -299,6 +416,33 @@ export function SendScreen({ navigation, route, onSend }: SendScreenProps) {
           </View>
         </View>
       </Modal>
+
+      <ConfirmationDialog
+        visible={showConfirm}
+        title="Confirm Payment"
+        message={`Send ${amount.trim() || '0'} XLM to ${recipient.trim().slice(0, 8)}...${recipient.trim().slice(-6)}?`}
+        confirmLabel={sending ? 'Sending…' : 'Confirm & Send'}
+        cancelLabel="Cancel"
+        onConfirm={handleConfirmSend}
+        onCancel={() => setShowConfirm(false)}
+        confirmDisabled={
+          sending || feeLoading || !!reserveWarning || !!customFeeError || (useCustomFee && !customFeeStroops)
+        }
+      >
+        <TransactionFeeSummary
+          testID="send-fee-summary"
+          estimate={feeEstimate}
+          loading={feeLoading}
+          selectedTier={selectedTier}
+          onSelectTier={setSelectedTier}
+          useCustomFee={useCustomFee}
+          onToggleCustomFee={setUseCustomFee}
+          customFeeStroops={customFeeStroops}
+          onCustomFeeChange={setCustomFeeStroops}
+          customFeeError={customFeeError}
+          reserveWarning={reserveWarning}
+        />
+      </ConfirmationDialog>
     </View>
   );
 }

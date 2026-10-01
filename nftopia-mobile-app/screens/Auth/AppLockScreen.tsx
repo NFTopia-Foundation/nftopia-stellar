@@ -11,7 +11,7 @@ import {
   Platform,
   AccessibilityInfo,
 } from 'react-native';
-import { useAuthStore } from '@/src/stores/authStore';
+import { useAuthStore } from '@/stores/authStore';
 import { useBiometric } from '@/src/hooks/useBiometric';
 import { colors, spacing, borderRadius, shadows } from '@/constants/theme';
 import { useToastStore } from '@/stores/toastStore';

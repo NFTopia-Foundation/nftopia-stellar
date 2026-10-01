@@ -5,10 +5,18 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { SpanKind, SpanStatusCode, trace } from '@opentelemetry/api';
 import {
   getStellarConfig,
   type StellarRuntimeConfig,
 } from '../config/stellar.config';
+
+// #534: every real Soroban/Horizon RPC call in the codebase (getAccount,
+// simulateTransaction, sendTransaction, ...) routes through
+// `retrySorobanRpcCall` via `SorobanRpcService.retryRpcCall` — instrumenting
+// it here, once, captures blockchain RPC latency for all of them rather
+// than requiring every call site to remember to add its own span.
+const tracer = trace.getTracer('nftopia-backend.soroban-rpc');
 
 export type SorobanRpcRetryMetrics = {
   totalRetryAttempts: number;
@@ -161,47 +169,81 @@ export async function retrySorobanRpcCall<T>(
   operation: () => Promise<T>,
   options: SorobanRpcRetryOptions,
 ): Promise<T> {
-  const maxAttempts = Math.max(1, options.config.sorobanRpcMaxRetries);
+  const methodName = options.methodName ?? 'unknown';
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    try {
-      const result = await operation();
+  return tracer.startActiveSpan(
+    `soroban_rpc.${methodName}`,
+    {
+      kind: SpanKind.CLIENT,
+      attributes: {
+        'rpc.system': 'soroban',
+        'rpc.method': methodName,
+      },
+    },
+    async (span) => {
+      try {
+        const maxAttempts = Math.max(1, options.config.sorobanRpcMaxRetries);
 
-      if (attempt > 1) {
-        sorobanRpcRetryMetrics.successfulRecoveries += 1;
-      }
+        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+          try {
+            const result = await operation();
 
-      return result;
-    } catch (error) {
-      const canRetry =
-        attempt < maxAttempts && isRetryableSorobanRpcError(error);
+            if (attempt > 1) {
+              sorobanRpcRetryMetrics.successfulRecoveries += 1;
+            }
 
-      if (!canRetry) {
-        if (attempt >= maxAttempts && isRetryableSorobanRpcError(error)) {
-          sorobanRpcRetryMetrics.exhaustedRetries += 1;
+            span.setAttribute('soroban_rpc.attempts', attempt);
+            return result;
+          } catch (error) {
+            const canRetry =
+              attempt < maxAttempts && isRetryableSorobanRpcError(error);
+
+            if (!canRetry) {
+              if (attempt >= maxAttempts && isRetryableSorobanRpcError(error)) {
+                sorobanRpcRetryMetrics.exhaustedRetries += 1;
+              }
+
+              span.setAttribute('soroban_rpc.attempts', attempt);
+              span.recordException(
+                error instanceof Error
+                  ? error
+                  : new Error(formatUnknownError(error)),
+              );
+              span.setStatus({
+                code: SpanStatusCode.ERROR,
+                message: formatUnknownError(error),
+              });
+              throw error;
+            }
+
+            const delayMs = calculateExponentialBackoffDelayMs(
+              attempt,
+              options.config.sorobanRpcRetryDelayMs,
+              options.config.sorobanRpcRetryBackoffMultiplier,
+              options.config.sorobanRpcRetryMaxDelayMs,
+            );
+
+            sorobanRpcRetryMetrics.totalRetryAttempts += 1;
+
+            span.addEvent('retry', {
+              attempt,
+              delayMs,
+              'error.message': formatUnknownError(error),
+            });
+
+            options.logger?.warn(
+              `Soroban RPC retry: method=${methodName} attempt=${attempt}/${maxAttempts} delayMs=${delayMs} error=${formatUnknownError(error)}`,
+            );
+
+            await wait(delayMs);
+          }
         }
-
-        throw error;
+        throw new Error('Soroban RPC retry operation failed');
+      } finally {
+        span.end();
       }
-
-      const delayMs = calculateExponentialBackoffDelayMs(
-        attempt,
-        options.config.sorobanRpcRetryDelayMs,
-        options.config.sorobanRpcRetryBackoffMultiplier,
-        options.config.sorobanRpcRetryMaxDelayMs,
-      );
-
-      sorobanRpcRetryMetrics.totalRetryAttempts += 1;
-
-      options.logger?.warn(
-        `Soroban RPC retry: method=${options.methodName ?? 'unknown'} attempt=${attempt}/${maxAttempts} delayMs=${delayMs} error=${formatUnknownError(error)}`,
-      );
-
-      await wait(delayMs);
-    }
-  }
-
-  throw new Error('Soroban RPC retry operation failed');
+    },
+  );
 }
 
 @Injectable()

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, User, LogOut, Settings } from "lucide-react";
+import { ChevronDown, User, LogOut, Settings, Heart } from "lucide-react";
 import { OptimizedImage } from './image';
 import { useAuth } from "@/lib/stores/auth-store";
 import { useToast } from "@/lib/stores";
@@ -101,6 +101,15 @@ export function UserDropdown() {
           >
             <User className="w-4 h-4" aria-hidden="true" />
             Dashboard
+          </Link>
+
+          <Link
+            href={localizedRoute("/favorites")}
+            role="menuitem"
+            className="flex items-center gap-3 px-4 py-2 text-sm text-white hover:bg-purple-600/20 transition-colors focus-visible:outline-none focus-visible:bg-purple-600/20"
+          >
+            <Heart className="w-4 h-4 text-rose-400 fill-rose-400/20" aria-hidden="true" />
+            Favorites
           </Link>
 
           <Link

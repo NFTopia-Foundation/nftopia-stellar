@@ -41,15 +41,33 @@ pub fn estimate_with_config(
     }
 }
 
-// Placeholder reordering hook. Returns same order now for deterministic draft behavior.
+// Dependency-safe, gas-aware reordering (#291): operations that target the same
+// contract are run back to back so the host can reuse the already loaded
+// instance entry, which is the most expensive read in the fee model. The result
+// is always a valid topological order, so this can never break a dependency.
 pub fn reorder_for_efficiency(
     env: &Env,
     operations: &Vec<Operation>,
-    _cfg: &GasOptimizationConfig,
+    cfg: &GasOptimizationConfig,
 ) -> Vec<Operation> {
-    let mut out = Vec::new(env);
-    for op in operations.iter() {
-        out.push_back(op);
+    if !cfg.enable_reordering {
+        let mut out = Vec::new(env);
+        for op in operations.iter() {
+            out.push_back(op);
+        }
+        return out;
     }
-    out
+    match crate::dependency_resolver::DependencyGraph::build_clustered(env, operations) {
+        Ok(graph) => graph.operations,
+        // An unresolvable graph is the caller's problem to report; returning the
+        // input unchanged keeps this function total and lets the execution path
+        // surface the real error.
+        Err(_) => {
+            let mut out = Vec::new(env);
+            for op in operations.iter() {
+                out.push_back(op);
+            }
+            out
+        }
+    }
 }

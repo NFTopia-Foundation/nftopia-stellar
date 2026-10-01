@@ -45,6 +45,32 @@ describe('ContentFlagService', () => {
     );
   });
 
+  describe('findExistingFlag', () => {
+    it('returns the existing flag for the given entity when one exists', async () => {
+      const existing = {
+        id: 'flag-1',
+        entityType: 'listing',
+        entityId: 'listing-1',
+      };
+      contentFlagRepo.findOne.mockResolvedValue(existing);
+
+      const result = await service.findExistingFlag('listing', 'listing-1');
+
+      expect(contentFlagRepo.findOne).toHaveBeenCalledWith({
+        where: { entityType: 'listing', entityId: 'listing-1' },
+      });
+      expect(result).toEqual(existing);
+    });
+
+    it('returns null when no flag exists for the entity', async () => {
+      contentFlagRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.findExistingFlag('listing', 'listing-1');
+
+      expect(result).toBeNull();
+    });
+  });
+
   describe('createFlag', () => {
     it('persists a flag with the AI agent as raisedBy and pending status', async () => {
       const input = {

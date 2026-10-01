@@ -6,6 +6,7 @@ import Image from "next/image";
 import { ArrowLeft, Award, ImageIcon } from "lucide-react";
 import { CircuitBackground } from "@/components/circuit-background";
 import { NFTGrid } from "@/components/nft/NFTGrid";
+import { ReportButton } from "@/src/components/ReportButton";
 import type { NFT } from "@/types";
 
 interface CollectionData {
@@ -95,7 +96,10 @@ export function CollectionDetailClient({
 
           <div className="lg:col-span-2 space-y-6">
             <div>
-              <h1 className="text-4xl font-bold text-white mb-2">{collection.name}</h1>
+              <div className="flex flex-wrap items-start justify-between gap-3 mb-2">
+                <h1 className="text-4xl font-bold text-white">{collection.name}</h1>
+                <ReportButton targetType="collection" targetId={collection.id} />
+              </div>
               {collection.creator && (
                 <div className="flex items-center gap-2 text-gray-400">
                   <Award className="h-4 w-4 text-emerald-400" />

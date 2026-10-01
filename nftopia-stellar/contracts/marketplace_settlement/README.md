@@ -26,7 +26,7 @@ This contract implements a secure, efficient marketplace settlement system with 
 
 ### Security
 - `security/reentrancy_guard.rs`: Protection against reentrant calls
-- `security/frontrun_protection.rs`: Anti-front-running measures and commitment schemes
+- `security/frontrun_protection.rs`: Anti-front-running measures, commitment schemes and withdrawal anomaly monitoring
 
 ### Utilities
 - `utils/math_utils.rs`: Safe mathematical operations
@@ -76,6 +76,48 @@ This contract implements a secure, efficient marketplace settlement system with 
 - `update_swap_timeout_config()`: Update the swap timeout policy (admin only)
 - `emergency_withdraw()`: Emergency withdrawal (admin only)
 - `withdraw_platform_fees()`: Withdraw accumulated platform fees
+
+## Withdrawal anomaly monitoring
+
+`security/frontrun_protection.rs` evaluates every withdrawal attempt against the
+account's own recent history. The monitor is **not** a no-op: each attempt is
+recorded, classified, and then allowed, flagged, or held.
+
+### Criteria
+
+| Criterion       | Trigger                                                                                                                                                                                                  | Outcome      |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| Velocity        | More than `max_withdrawals_per_window` withdrawals (default 5) inside the trailing `window_seconds` (default 3600s)                                                                                       | **Held**     |
+| Rapid sequence  | Less than `min_withdrawal_gap_seconds` (default 5s) since the account's previous withdrawal                                                                                                               | **Held**     |
+| Amount spike    | At least `min_history_for_spike` (default 3) prior withdrawals **and** amount > `spike_multiplier` (default 10x) the account's historical average **and** amount >= `min_spike_amount` (default 1000)     | **Flagged**  |
+
+Criteria are checked in that order and the first match wins. The absolute
+`min_spike_amount` floor stops dust-sized withdrawals from tripping the ratio
+check.
+
+### Response
+
+| Decision        | Meaning                                                                                                                                                                                                                     |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Allowed`       | Normal pattern; the withdrawal may proceed.                                                                                                                                                                              |
+| `Flagged(kind)` | Suspicious but permitted. The attempt is recorded and a `WithdrawalAnomalyEvent` with `blocked = false` is emitted so operators can alert on it.                                                                          |
+| `Held(kind)`    | Blocked. A `WithdrawalHold` is written for the account and a `WithdrawalAnomalyEvent` with `blocked = true` is emitted. The account cannot withdraw again - even with a well-spaced, small amount - until an operator clears the hold. |
+
+A held account can never lift its own hold: `clear_hold` is a library function
+that entrypoints must gate behind an admin/operator authorization check.
+Clearing a hold deliberately keeps the rolling history, so an auditor can still
+see what happened after the fact.
+
+### Configuration
+
+- Defaults are active before any admin configuration, so monitoring cannot be
+  silently off.
+- `set_config` rejects thresholds that would disable detection: zero window,
+  zero limits, a negative spike floor, or a `history_limit` smaller than
+  `max_withdrawals_per_window` (which would trim away the very entries the
+  velocity check counts).
+- Storage: the config lives in instance storage; per-account history and holds
+  live in persistent storage with TTL extension.
 
 ## Data Structures
 

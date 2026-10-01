@@ -3,6 +3,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { CacheModule } from '@nestjs/cache-manager';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { MongooseModule } from '@nestjs/mongoose';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { BullModule } from '@nestjs/bull';
 
@@ -40,6 +41,11 @@ import { CorrelationIdMiddleware } from './common/middleware/correlation-id.midd
 import { SocialModule } from './modules/social/social.module';
 import { PaymentModule } from './modules/payment/payment.module';
 import { AiAgentModule } from './modules/ai-agent/ai-agent.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
+import {
+  getMongoConfig,
+  mongoEnvironmentFromProcessEnv,
+} from './config/mongo.config';
 // import { CorsConfig } from './config/cors.config';
 
 @Module({
@@ -141,8 +147,30 @@ import { AiAgentModule } from './modules/ai-agent/ai-agent.module';
               },
             }),
           }),
+          // MongoDB connection for analytics/event data (#531) — flexible,
+          // schema-light document storage kept separate from the
+          // relational Postgres schema above. Skipped under test for the
+          // same reason TypeOrmModule is: so the Jest suite never tries to
+          // hold the process open waiting on a real connection. See
+          // docs/mongodb-analytics.md.
+          MongooseModule.forRootAsync({
+            useFactory: () => {
+              const mongoConfig = getMongoConfig(
+                mongoEnvironmentFromProcessEnv(process.env),
+              );
+              return {
+                uri: mongoConfig.uri,
+                dbName: mongoConfig.dbName,
+                retryAttempts: mongoConfig.retryAttempts,
+                retryDelay: mongoConfig.retryDelay,
+                connectTimeoutMS: mongoConfig.connectTimeoutMS,
+                serverSelectionTimeoutMS: mongoConfig.serverSelectionTimeoutMS,
+              };
+            },
+          }),
           UsersModule,
           AdminModule,
+          AnalyticsModule,
         ]),
     CollectionModule,
     NftModule,

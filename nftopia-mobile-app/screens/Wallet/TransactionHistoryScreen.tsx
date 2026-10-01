@@ -14,7 +14,7 @@ import {
   Linking,
   Platform,
 } from 'react-native';
-import { useAuthStore } from '@/src/stores/authStore';
+import { useAuthStore } from '@/stores/authStore';
 import { stellarWalletService, Transaction, TransactionType, TransactionFilters } from '@/src/services/stellar/wallet.service';
 import { colors, spacing, borderRadius, shadows } from '@/constants/theme';
 import { useNetworkGuard } from '@/src/hooks/useNetworkGuard';

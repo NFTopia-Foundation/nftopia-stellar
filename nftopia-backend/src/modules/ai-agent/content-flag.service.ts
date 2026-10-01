@@ -50,6 +50,19 @@ export class ContentFlagService {
     private readonly auditService: AuditService,
   ) {}
 
+  /**
+   * Idempotency check for the ai-moderation queue processor (#527): a
+   * redelivered job for the same entity must not raise a second flag.
+   * Matches on entity identity alone (any status), not job/attempt —
+   * once an entity has ever been flagged, moderation for it is done.
+   */
+  async findExistingFlag(
+    entityType: ContentFlagEntityType,
+    entityId: string,
+  ): Promise<ContentFlag | null> {
+    return this.contentFlagRepo.findOne({ where: { entityType, entityId } });
+  }
+
   async createFlag(input: CreateContentFlagInput): Promise<ContentFlag> {
     const flag = this.contentFlagRepo.create({
       entityType: input.entityType,
