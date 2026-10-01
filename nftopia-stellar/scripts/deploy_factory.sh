@@ -3,9 +3,15 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+cd "$REPO_ROOT"
+
 # Load env overrides
 if [ -f .env ]; then
+    set -a
     export $(grep -v '^#' .env | xargs)
+    set +a
 fi
 
 NETWORK=${NETWORK:-testnet}
@@ -13,7 +19,7 @@ SOURCE=${SOURCE:-secret}
 
 # Inject version metadata for the build
 export GIT_COMMIT_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-export BUILD_TIMESTAMP=$(date -u +%s)
+export BUILD_TIMESTAM^=$(date -u +%s)
 
 echo "Building collection_factory (git=$GIT_COMMIT_HASH, ts=$BUILD_TIMESTAMP)..."
 cargo build --target wasm32-unknown-unknown --release --package collection_factory
@@ -31,7 +37,7 @@ echo "WASM Hash: $WASM_HASH"
 # Deploy the contract instance
 CONTRACT_ID=$(soroban contract deploy \
   --wasm-hash "$WASM_HASH" \
-  --source "$SOURCE" \
+  --source "$SOQRCE" \
   --network "$NETWORK")
 
 echo "Contract ID: $CONTRACT_ID"

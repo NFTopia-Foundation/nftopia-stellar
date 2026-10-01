@@ -16,4 +16,12 @@ pub enum TransactionError {
     DuplicateOperationId = 10,
     ResourceLimitExceeded = 11,
     OperationTimedOut = 12,
+    /// The dependency graph contains a cycle and therefore has no valid
+    /// topological order (#290).
+    CircularDependency = 13,
+    /// A ledger entry backing the transaction (or one of its operations) is
+    /// not guaranteed to stay live long enough to complete the run (#290).
+    TtlExpired = 14,
+    /// An operator-provided configuration (TTL policy / fee ladder) is invalid.
+    InvalidConfiguration = 15,
 }

@@ -21,6 +21,9 @@ pub fn to_reason_string(env: &Env, err: &TransactionError) -> String {
         TransactionError::DuplicateOperationId => "duplicate operation id",
         TransactionError::ResourceLimitExceeded => "resource limit exceeded",
         TransactionError::OperationTimedOut => "operation timed out",
+        TransactionError::CircularDependency => "dependency graph contains a cycle",
+        TransactionError::TtlExpired => "state ttl expired before execution",
+        TransactionError::InvalidConfiguration => "invalid configuration",
     };
     String::from_str(env, msg)
 }

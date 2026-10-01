@@ -9,11 +9,15 @@
   "moduleFileExtensions": ["ts", "tsx", "js", "jsx", "json"],
   "testMatch": ["**/__tests__/**/*.test.tsx", "**/*.test.tsx"],
   "testPathIgnorePatterns": ["/node_modules/"],
+  "globals": {
+    "__DEV__": false
+  },
   "moduleNameMapper": {
     "^react-native$": "<rootDir>/src/test-mocks/react-native.tsx",
     "^@react-native-async-storage/async-storage$": "<rootDir>/src/test-mocks/async-storage.ts",
     "^expo-secure-store$": "<rootDir>/src/services/auth/__mocks__/expo-secure-store.ts",
     "^expo-haptics$": "<rootDir>/src/test-mocks/expo-haptics.ts",
+    "^@gorhom/bottom-sheet$": "<rootDir>/src/test-mocks/gorhom-bottom-sheet.tsx",
     "^@/components/(.*)$": "<rootDir>/components/$1",
     "^@/screens/(.*)$": "<rootDir>/screens/$1",
     "^@/navigation/(.*)$": "<rootDir>/navigation/$1",

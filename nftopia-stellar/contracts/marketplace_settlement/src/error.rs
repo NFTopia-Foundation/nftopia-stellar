@@ -154,29 +154,91 @@ impl From<SwapTimeoutError> for SettlementError {
     }
 }
 
-// Separate enum for withdrawal-anomaly detection
+// Separate enum for dispute arbitration, oracle and escrow-settlement errors
 //
-// Like `SwapTimeoutError`, this lives outside `SettlementError` (which is at the
-// 50-case spec limit). `WithdrawalPatternMonitor` returns these codes directly so
-// an operator can tell "your thresholds are invalid" apart from "this account is
-// on a hold"; the `From` impl collapses them onto the closest settlement-level
-// code for callers that need a single error type.
+// These live outside `SettlementError` because it is at the 50-case spec limit.
+// Following the `PauseError` / `SwapTimeoutError` pattern, each case has a `From`
+// mapping into `SettlementError`, which necessarily collapses some of them onto
+// shared codes:
+//
+// * `TimeoutNotReached` folds onto `InvalidState`, the same choice
+//   `SwapTimeoutError::NotYetExpired` makes for "the deadline has not passed".
+// * `OracleNotRegistered` and `OracleInactive` both fold onto `Unauthorized`,
+//   which is also what a missing `require_auth` produces.
+//
+// Dispute entrypoints return `SettlementError` so the contract keeps one public
+// error type; the distinct `DisputeError` codes are what internal callers match on.
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+pub enum DisputeError {
+    /// Caller is neither the primary admin nor in the dispute admin registry.
+    NotAdmin = 1,
+    /// No oracle is registered at the supplied address.
+    OracleNotRegistered = 2,
+    /// The registered oracle has been deactivated.
+    OracleInactive = 3,
+    /// An oracle is already registered at that address.
+    OracleAlreadyRegistered = 4,
+    /// The requested resolution is not one of the four known outcomes.
+    InvalidResolution = 5,
+    /// A timeout-triggered resolution was attempted before the deadline.
+    TimeoutNotReached = 6,
+    /// The dispute's escrow has already been paid out.
+    AlreadySettled = 7,
+    /// Nothing is escrowed for the disputed transaction.
+    NoEscrowedFunds = 8,
+    /// A split basis-point value was above 10_000.
+    InvalidSplitBps = 9,
+    /// The supplied `DisputeConfig` is internally inconsistent.
+    InvalidDisputeConfig = 10,
+    /// The arbitrator registry has no eligible arbitrator.
+    NoEligibleArbitrators = 11,
+    /// A vote value other than 0 (against) or 1 (for the initiator).
+    InvalidVote = 12,
+}
+
+// Helper to convert DisputeError to SettlementError
+impl From<DisputeError> for SettlementError {
+    fn from(err: DisputeError) -> Self {
+        match err {
+            DisputeError::NotAdmin => SettlementError::NotAdmin,
+            DisputeError::OracleNotRegistered => SettlementError::Unauthorized,
+            DisputeError::OracleInactive => SettlementError::Unauthorized,
+            DisputeError::OracleAlreadyRegistered => SettlementError::AlreadyExists,
+            DisputeError::InvalidResolution => SettlementError::InvalidState,
+            DisputeError::TimeoutNotReached => SettlementError::InvalidState,
+            DisputeError::AlreadySettled => SettlementError::DisputeAlreadyResolved,
+            DisputeError::NoEscrowedFunds => SettlementError::NotFound,
+            DisputeError::InvalidSplitBps => SettlementError::InvalidAmount,
+            DisputeError::InvalidDisputeConfig => SettlementError::InvalidState,
+            DisputeError::NoEligibleArbitrators => SettlementError::InsufficientArbitrators,
+            DisputeError::InvalidVote => SettlementError::InvalidAmount,
+        }
+    }
+}
+
+// Separate enum for withdrawal-anomaly-monitoring errors
+//
+// These live outside `SettlementError` because it is at the 50-case spec limit.
+// `WithdrawalPatternMonitor` (security/frontrun_protection.rs) returns these
+// codes directly rather than converting through `SettlementError`, since it is
+// not yet wired into a public entrypoint.
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 pub enum WithdrawalAnomalyError {
-    /// The supplied `WithdrawalAnomalyConfig` would disable detection.
+    /// The supplied `WithdrawalAnomalyConfig` is internally inconsistent (a
+    /// zero threshold, a negative spike floor, or a history_limit shorter
+    /// than max_withdrawals_per_window).
     InvalidConfig = 1,
-    /// A previous anomaly already put this account on a withdrawal hold.
-    HoldActive = 2,
-    /// No hold is outstanding for this account.
-    NoHold = 3,
+    /// `clear_hold` was called for an account with no outstanding hold.
+    NoHold = 2,
 }
 
+// Helper to convert WithdrawalAnomalyError to SettlementError
 impl From<WithdrawalAnomalyError> for SettlementError {
     fn from(err: WithdrawalAnomalyError) -> Self {
         match err {
             WithdrawalAnomalyError::InvalidConfig => SettlementError::InvalidState,
-            WithdrawalAnomalyError::HoldActive => SettlementError::CooldownActive,
             WithdrawalAnomalyError::NoHold => SettlementError::NotFound,
         }
     }

@@ -35,6 +35,11 @@
     "collections": "Collections",
     "settings": "Settings"
   },
+  "shell": {
+    "openSidebar": "Open sidebar",
+    "closeSidebar": "Close sidebar",
+    "localeSwitcher": "Language switcher"
+  },
   "table": {
     "header": {
       "name": "Name",

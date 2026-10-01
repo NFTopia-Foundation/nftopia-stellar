@@ -14,6 +14,7 @@ export const Pressable = 'RNPressable';
 export const ActivityIndicator = 'RNActivityIndicator';
 export const TextInput = 'RNTextInput';
 export const Modal = 'RNModal';
+export const ScrollView = 'RNScrollView';
 
 /** Minimal stand-in: no actual animation, `.start()` fires its callback synchronously so tests don't need fake timers. */
 export const Animated = {
@@ -36,6 +37,7 @@ export const StyleSheet = {
 
 export const AccessibilityInfo = {
   announceForAccessibility: jest.fn(),
+  setAccessibilityFocus: jest.fn(),
 };
 
 export const Platform = {
@@ -43,3 +45,15 @@ export const Platform = {
   select: <T,>(spec: { ios?: T; android?: T; default?: T }): T | undefined =>
     spec.ios ?? spec.default,
 };
+
+/** Runs the callback synchronously — no real "interactions" concept exists under react-test-renderer, and tests don't need fake timers to observe the effect. */
+export const InteractionManager = {
+  runAfterInteractions: (callback: () => void): void => {
+    callback();
+  },
+};
+
+/** Returns a fake, stable numeric handle for any truthy ref value — react-test-renderer instances have no real native view tag to return. */
+export function findNodeHandle(ref: unknown): number | null {
+  return ref ? 1 : null;
+}

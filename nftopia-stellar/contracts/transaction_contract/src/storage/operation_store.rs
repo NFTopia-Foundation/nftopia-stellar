@@ -41,3 +41,25 @@ pub fn get_all(env: &Env, tx_id: u64) -> soroban_sdk::Vec<Operation> {
     let map = load_ops(env, tx_id);
     map.values()
 }
+
+/// Extend the TTL of the operation map of a transaction (#290).
+///
+/// Returns `false` when no operation has been stored for the transaction yet.
+pub fn extend_ttl(env: &Env, tx_id: u64, threshold: u32, extend_to: u32) -> bool {
+    let key = OpStoreKey::Ops(tx_id);
+    if !env.storage().persistent().has(&key) {
+        return false;
+    }
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, threshold, extend_to);
+    true
+}
+
+/// Whether a transaction owns a separate operation-map entry at all (#290).
+///
+/// Operations may live inside the `Transaction` record instead, in which case
+/// there is no second entry whose liveness has to be guaranteed.
+pub fn exists(env: &Env, tx_id: u64) -> bool {
+    env.storage().persistent().has(&OpStoreKey::Ops(tx_id))
+}

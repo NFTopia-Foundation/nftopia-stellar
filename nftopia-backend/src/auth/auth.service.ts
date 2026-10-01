@@ -40,6 +40,8 @@ import { User } from '../users/user.entity';
 import { StellarSignatureStrategy } from './strategies/stellar.strategy';
 import { TwoFactorService } from './two-factor.service';
 import { EmailService } from '../modules/email/email.service';
+import { WALLET_NONCE_STORE } from './wallet-nonce.store';
+import type { WalletNonceStore } from './wallet-nonce.store';
 
 type JwtUserPayload = {
   sub: string;
@@ -90,6 +92,11 @@ export class AuthService {
     process.env.WALLET_CHALLENGE_TTL_SECONDS || '300',
     10,
   );
+  /**
+   * Redis keeps a challenge this long past its expiry so a late verification
+   * gets "expired" instead of the less helpful "not found".
+   */
+  private readonly challengeExpiredGraceSeconds = 60;
   private readonly challengeRateLimitMax = parseInt(
     process.env.WALLET_CHALLENGE_RATE_LIMIT_MAX || '5',
     10,
@@ -129,6 +136,8 @@ export class AuthService {
     @Inject(forwardRef(() => TwoFactorService))
     private readonly twoFactorService: TwoFactorService,
     private readonly emailService: EmailService,
+    @Inject(WALLET_NONCE_STORE)
+    private readonly walletNonceStore: WalletNonceStore,
   ) {}
 
   async registerWithEmail(dto: EmailRegisterDto) {
@@ -343,22 +352,20 @@ export class AuthService {
       issuedAt,
     );
 
-    // Store nonce in Redis with TTL
+    // Store the nonce in Redis so it survives restarts and is visible to
+    // every backend instance (#572).
     const sessionKey = `nonce:${dto.walletAddress}`;
-    const sessionData = {
-      nonce,
-      challengeMessage: message,
-      walletAddress: dto.walletAddress,
-      walletProvider: dto.walletProvider,
-      issuedAt: issuedAt.toISOString(),
-      expiresAt: expiresAt.toISOString(),
-      ipAddress: requestIp,
-    };
-
-    await this.cacheManager.set(
-      sessionKey,
-      sessionData,
-      this.challengeTtlSeconds * 1000,
+    await this.walletNonceStore.issue(
+      {
+        nonce,
+        challengeMessage: message,
+        walletAddress: dto.walletAddress,
+        walletProvider: dto.walletProvider,
+        issuedAt: issuedAt.toISOString(),
+        expiresAt: expiresAt.toISOString(),
+        ipAddress: requestIp,
+      },
+      this.challengeTtlSeconds + this.challengeExpiredGraceSeconds,
     );
 
     return {
@@ -375,29 +382,21 @@ export class AuthService {
       throw new BadRequestException('Invalid Stellar wallet address');
     }
 
-    // Retrieve nonce from Redis
-    const sessionKey = `nonce:${dto.walletAddress}`;
-    const sessionData = await this.cacheManager.get<{
-      nonce: string;
-      challengeMessage: string;
-      walletAddress: string;
-      walletProvider?: string;
-      issuedAt: string;
-      expiresAt: string;
-      ipAddress?: string;
-    }>(sessionKey);
+    const sessionData = await this.walletNonceStore.find(dto.walletAddress);
 
     if (!sessionData) {
-      throw new UnauthorizedException('Wallet challenge not found');
+      throw new UnauthorizedException(
+        'Wallet challenge not found or expired. Request a new challenge.',
+      );
     }
 
-    // Check if expired
     if (new Date(sessionData.expiresAt) <= new Date()) {
-      await this.cacheManager.del(sessionKey);
-      throw new UnauthorizedException('Wallet challenge has expired');
+      await this.walletNonceStore.discard(dto.walletAddress);
+      throw new UnauthorizedException(
+        'Wallet challenge has expired. Request a new challenge.',
+      );
     }
 
-    // Check nonce matches
     if (sessionData.nonce !== dto.nonce) {
       throw new UnauthorizedException('Invalid nonce');
     }
@@ -412,6 +411,19 @@ export class AuthService {
       throw new UnauthorizedException('Invalid wallet signature');
     }
 
+    // Consume atomically before any side effects: if another request (on
+    // this or another instance) already used this nonce, it cannot be
+    // replayed.
+    const consumed = await this.walletNonceStore.consume(
+      dto.walletAddress,
+      dto.nonce,
+    );
+    if (!consumed) {
+      throw new UnauthorizedException(
+        'Wallet challenge has already been used. Request a new challenge.',
+      );
+    }
+
     const user = await this.resolveUserByWallet(
       dto.walletAddress,
       dto.walletProvider || sessionData.walletProvider,
@@ -423,9 +435,6 @@ export class AuthService {
       dto.walletProvider,
       true,
     );
-
-    // Delete nonce from Redis after successful verification (one-time use)
-    await this.cacheManager.del(sessionKey);
 
     // Check if 2FA is enabled
     if (user.twoFactorEnabled) {

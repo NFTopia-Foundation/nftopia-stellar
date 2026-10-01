@@ -598,7 +598,7 @@ fn test_complex_dependency_resolution() {
 }
 
 #[test]
-#[should_panic(expected = "HostError: Error(Contract, #5)")] // TransactionError::DependencyNotMet
+#[should_panic(expected = "HostError: Error(Contract, #13)")] // TransactionError::CircularDependency
 fn test_circular_dependency_detection() {
     let env = Env::default();
     env.mock_all_auths();
@@ -608,8 +608,8 @@ fn test_circular_dependency_detection() {
 
     // 1 -> 2
     // 2 -> 1 (Circular)
-    // Note: The preflight check doesn't explicitly check for cycles yet,
-    // but execution will fail when it hits the first unmet dependency.
+    // The topological resolver (#291) detects the cycle up-front and reports it
+    // as `CircularDependency` instead of failing on the first unmet dependency.
     let op1 = sample_operation(&env, 1, vec![&env, 2]);
     let op2 = sample_operation(&env, 2, vec![&env, 1]);
 
@@ -712,4 +712,262 @@ fn test_batch_execute_partial_success() {
     assert_eq!(result.failed, 1);
     assert_eq!(result.result_ids.len(), 1);
     assert_eq!(result.result_ids.get(0).unwrap(), tx1);
+}
+
+// ── Dependency resolution (#291) ────────────────────────────────────────────
+
+#[test]
+fn resolver_reorders_dependencies_regardless_of_insertion_order() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, creator) = make_client(&env);
+    let tx_id = client.create_transaction(&creator, &map![&env], &vec![&env]);
+
+    // Deliberately added out of topological order: 3 needs 2, 2 needs 1.
+    client.add_operation(&tx_id, &sample_operation(&env, 3, vec![&env, 2]));
+    client.add_operation(&tx_id, &sample_operation(&env, 1, vec![&env]));
+    client.add_operation(&tx_id, &sample_operation(&env, 2, vec![&env, 1]));
+
+    let plan = client.resolve_execution_plan(&tx_id);
+    assert_eq!(plan.len(), 3);
+    assert_eq!(plan.get(0), Some(1));
+    assert_eq!(plan.get(1), Some(2));
+    assert_eq!(plan.get(2), Some(3));
+
+    // Execution follows the plan, not the insertion order.
+    let result = client.execute_transaction(&tx_id, &None, &None);
+    let mut previous = 0_u64;
+    for r in result.results.iter() {
+        assert!(r.operation_id > previous);
+        previous = r.operation_id;
+    }
+}
+
+#[test]
+#[should_panic(expected = "HostError: Error(Contract, #13)")] // CircularDependency
+fn resolver_rejects_self_dependency() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, creator) = make_client(&env);
+    let tx_id = client.create_transaction(&creator, &map![&env], &vec![&env]);
+
+    client.add_operation(&tx_id, &sample_operation(&env, 1, vec![&env, 1]));
+    let _ = client.resolve_execution_plan(&tx_id);
+}
+
+#[test]
+#[should_panic(expected = "HostError: Error(Contract, #5)")] // DependencyNotMet
+fn resolver_rejects_dependency_outside_the_transaction() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, creator) = make_client(&env);
+    let tx_id = client.create_transaction(&creator, &map![&env], &vec![&env]);
+
+    client.add_operation(&tx_id, &sample_operation(&env, 1, vec![&env, 42]));
+    let _ = client.resolve_execution_plan(&tx_id);
+}
+
+#[test]
+fn resolver_tolerates_duplicate_dependency_edges() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, creator) = make_client(&env);
+    let tx_id = client.create_transaction(&creator, &map![&env], &vec![&env]);
+
+    client.add_operation(&tx_id, &sample_operation(&env, 1, vec![&env]));
+    // The same dependency listed twice must not wedge the in-degree counter.
+    client.add_operation(&tx_id, &sample_operation(&env, 2, vec![&env, 1, 1]));
+
+    let plan = client.resolve_execution_plan(&tx_id);
+    assert_eq!(plan.get(0), Some(1));
+    assert_eq!(plan.get(1), Some(2));
+}
+
+// ── State liveness (#290) ───────────────────────────────────────────────────
+
+#[test]
+fn ttl_is_bought_before_it_is_relied_on() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, creator) = make_client(&env);
+    let tx_id = client.create_transaction(&creator, &map![&env], &vec![&env]);
+    client.add_operation(&tx_id, &sample_operation(&env, 1, vec![&env]));
+
+    // Nothing has been proven live yet.
+    assert_eq!(client.remaining_state_ttl(&tx_id), 0);
+
+    let live_until = client.refresh_transaction_ttl(&tx_id, &creator);
+    assert!(live_until > env.ledger().sequence());
+    assert!(client.remaining_state_ttl(&tx_id) > 0);
+
+    // Resolving a plan refreshes liveness automatically as well.
+    let tx2 = client.create_transaction(&creator, &map![&env], &vec![&env]);
+    client.add_operation(&tx2, &sample_operation(&env, 1, vec![&env]));
+    let _ = client.resolve_execution_plan(&tx2);
+    assert!(client.remaining_state_ttl(&tx2) > 0);
+}
+
+#[test]
+#[should_panic(expected = "HostError: Error(Contract, #15)")] // InvalidConfiguration
+fn ttl_policy_rejects_unimplementable_configuration() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, creator) = make_client(&env);
+
+    client.initialize_config_authority(&creator);
+    let mut policy = client.get_ttl_policy();
+    // Asking for more liveness than the network can ever grant.
+    policy.extend_to_ledgers = u32::MAX;
+    client.set_ttl_policy(&creator, &policy);
+}
+
+#[test]
+#[should_panic(expected = "HostError: Error(Contract, #15)")] // InvalidConfiguration
+fn config_authority_can_only_be_claimed_once() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, creator) = make_client(&env);
+
+    client.initialize_config_authority(&creator);
+    client.initialize_config_authority(&creator);
+}
+
+// ── Fee ladder quoting (#291) ───────────────────────────────────────────────
+
+#[test]
+fn fee_breakdown_prices_every_billed_dimension() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, creator) = make_client(&env);
+    let tx_id = client.create_transaction(&creator, &map![&env], &vec![&env]);
+    client.add_operation(&tx_id, &sample_operation(&env, 1, vec![&env]));
+    client.add_operation(&tx_id, &sample_operation(&env, 2, vec![&env, 1]));
+
+    let fees = client.quote_transaction_fees(&tx_id, &17_280);
+    assert!(fees.instructions > 0);
+    assert!(fees.read_entries > 0);
+    assert!(fees.write_entries > 0);
+    assert!(fees.read_bytes > 0);
+    assert!(fees.write_bytes > 0);
+    assert!(fees.contract_events > 0);
+    assert!(fees.rent > 0, "keeping state alive must be priced");
+    assert!(fees.transaction_size > 0);
+    assert_eq!(fees.base_inclusion, 100);
+
+    // The breakdown must be exhaustive: the parts sum to the quoted total.
+    let parts = fees
+        .instructions
+        .saturating_add(fees.read_entries)
+        .saturating_add(fees.write_entries)
+        .saturating_add(fees.read_bytes)
+        .saturating_add(fees.write_bytes)
+        .saturating_add(fees.contract_events)
+        .saturating_add(fees.rent)
+        .saturating_add(fees.transaction_size)
+        .saturating_add(fees.base_inclusion);
+    assert_eq!(parts, fees.total);
+}
+
+#[test]
+fn a_longer_ttl_horizon_costs_more() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, creator) = make_client(&env);
+    let tx_id = client.create_transaction(&creator, &map![&env], &vec![&env]);
+    client.add_operation(&tx_id, &sample_operation(&env, 1, vec![&env]));
+
+    let short = client.quote_transaction_fees(&tx_id, &17_280);
+    let long = client.quote_transaction_fees(&tx_id, &69_120);
+    assert!(long.rent > short.rent);
+    assert!(long.total > short.total);
+    // Only the rent dimension differs between the two quotes.
+    assert_eq!(long.instructions, short.instructions);
+    assert_eq!(long.transaction_size, short.transaction_size);
+}
+
+#[test]
+fn gas_budget_gate_accepts_a_funded_run() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, creator) = make_client(&env);
+    let tx_id = client.create_transaction(&creator, &map![&env], &vec![&env]);
+    client.add_operation(&tx_id, &sample_operation(&env, 1, vec![&env]));
+
+    let quoted = client.estimate_transaction_fees(&tx_id);
+    let checked = client.validate_gas_budget(&tx_id, &(quoted.total + 1_000));
+    assert_eq!(checked.total, quoted.total);
+}
+
+#[test]
+#[should_panic(expected = "HostError: Error(Contract, #6)")] // GasLimitExceeded
+fn gas_budget_gate_rejects_an_underfunded_run() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, creator) = make_client(&env);
+    let tx_id = client.create_transaction(&creator, &map![&env], &vec![&env]);
+    client.add_operation(&tx_id, &sample_operation(&env, 1, vec![&env]));
+
+    let _ = client.validate_gas_budget(&tx_id, &1);
+}
+
+#[test]
+#[should_panic(expected = "HostError: Error(Contract, #2)")] // Unauthorized
+fn fee_ladder_cannot_be_moved_without_the_authority() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, creator) = make_client(&env);
+
+    let mut ladder = client.get_network_fee_ladder();
+    ladder.fee_per_write_entry = ladder.fee_per_write_entry.saturating_mul(2);
+    client.set_network_fee_ladder(&creator, &ladder);
+}
+
+#[test]
+fn the_authority_can_raise_the_ladder_and_quotes_follow() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, creator) = make_client(&env);
+    let tx_id = client.create_transaction(&creator, &map![&env], &vec![&env]);
+    client.add_operation(&tx_id, &sample_operation(&env, 1, vec![&env]));
+
+    let before = client.estimate_transaction_fees(&tx_id);
+
+    client.initialize_config_authority(&creator);
+    let mut ladder = client.get_network_fee_ladder();
+    ladder.fee_per_write_entry = ladder.fee_per_write_entry.saturating_mul(2);
+    client.set_network_fee_ladder(&creator, &ladder);
+
+    let after = client.estimate_transaction_fees(&tx_id);
+    assert!(after.total > before.total);
+    assert_eq!(
+        client.get_network_fee_ladder().updated_at_ledger,
+        env.ledger().sequence()
+    );
+}
+
+#[test]
+fn the_fee_primitive_rounds_up_per_increment() {
+    use crate::utils::gas_calculator::compute_fee_per_increment;
+
+    assert_eq!(compute_fee_per_increment(10_000, 25, 10_000), 25);
+    assert_eq!(compute_fee_per_increment(10_001, 25, 10_000), 26);
+    assert_eq!(compute_fee_per_increment(1, 25, 10_000), 1);
+    assert_eq!(compute_fee_per_increment(0, 25, 10_000), 0);
+}
+
+#[test]
+fn congestion_buffer_raises_the_quote() {
+    use crate::utils::gas_calculator::{NetworkFeeParams, estimate_gas_with_params};
+
+    let env = Env::default();
+    let ops = vec![&env, sample_operation(&env, 1, vec![&env])];
+
+    let base = estimate_gas_with_params(&NetworkFeeParams::mainnet(), &ops);
+    let mut buffered = NetworkFeeParams::mainnet();
+    buffered.congestion_multiplier_bps = 20_000;
+    let buffered_quote = estimate_gas_with_params(&buffered, &ops);
+
+    assert!(buffered_quote.estimated_cost > base.estimated_cost);
+    // Instruction count is a resource measurement, not a price: it must not move.
+    assert_eq!(buffered_quote.estimated_gas, base.estimated_gas);
 }

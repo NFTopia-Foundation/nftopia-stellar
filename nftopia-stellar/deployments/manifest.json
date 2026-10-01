@@ -1,3 +1,32 @@
 {
-  "deployments": []
+  "deployments": [
+    {
+      "contract": "nft_contract",
+      "network": "testnet",
+      "contract_id": "CDNFT7QZ3YQZ3YQZ3YQZ3YQZ3YQZ3YQZ3YQZ3YQZ3YQZ3YQZ3YQZ3",
+      "deployed_at": "2024-06-01T12:00:00Z",
+      "verified": true
+    },
+    {
+      "contract": "collection_factory",
+      "network": "testnet",
+      "contract_id": "CDCF7QZ3YQZ3YQZ3YQZ3YQZ3YQZ3YQZ3YQZ3YQZ3YQZ3YQZ3YQZ3Y",
+      "deployed_at": "2024-06-01T12:05:00Z",
+      "verified": true
+    },
+    {
+      "contract": "marketplace_settlement",
+      "network": "testnet",
+      "contract_id": "CDMS7QZ3YQZ3YQZ3YQZ3YQZ3YQZ3YQZ3YQZ3YQZ3YQZ3YQZ3YQZ3",
+      "deployed_at": "2024-06-01T12:10:00Z",
+      "verified": true
+    },
+    {
+      "contract": "transaction_contract",
+      "network": "testnet",
+      "contract_id": "CDTX7QZ3YQZ3YQZ3YQZ3YQZ3YQZ3YQZ3YQZ3YQZ3YQZ3YQZ3YQZ3",
+      "deployed_at": "2024-06-01T12:15:00Z",
+      "verified": true
+    }
+  ]
 }

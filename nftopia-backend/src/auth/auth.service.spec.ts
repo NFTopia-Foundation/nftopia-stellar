@@ -14,9 +14,17 @@ import { DataSource } from 'typeorm';
 import { StellarSignatureStrategy } from './strategies/stellar.strategy';
 import { TwoFactorService } from './two-factor.service';
 import { EmailService } from '../modules/email/email.service';
+import {
+  RedisWalletNonceStore,
+  WALLET_NONCE_STORE,
+} from './wallet-nonce.store';
+import { FakeRedisServer } from '../../test/helpers/fake-wallet-nonce-redis';
 
 describe('AuthService', () => {
   let service: AuthService;
+  // Shared by every AuthService built in a test, like a real Redis shared by
+  // restarted or parallel backend instances.
+  let nonceRedis: FakeRedisServer;
 
   const userRepository = {
     findOne: jest.fn(),
@@ -87,46 +95,8 @@ describe('AuthService', () => {
     sendAuctionWonEmail: jest.fn(),
   };
 
-  beforeEach(async () => {
-    jest.clearAllMocks();
-
-    refreshTokenFamilyRepository.create.mockImplementation(
-      (value: Partial<RefreshTokenFamily>) => value,
-    );
-    refreshTokenFamilyRepository.save.mockImplementation(
-      (value: Partial<RefreshTokenFamily>) => ({
-        id: value.id ?? 'family-1',
-        ...value,
-      }),
-    );
-    refreshTokenRepository.create.mockImplementation(
-      (value: Partial<RefreshToken>) => value,
-    );
-    refreshTokenRepository.save.mockImplementation(
-      (value: Partial<RefreshToken>) => value,
-    );
-    dataSource.transaction.mockImplementation(
-      (
-        callback: (manager: {
-          getRepository: (
-            entity: unknown,
-          ) =>
-            | typeof refreshTokenRepository
-            | typeof refreshTokenFamilyRepository;
-        }) => unknown,
-      ) =>
-        Promise.resolve(
-          callback({
-            getRepository: (entity: unknown) => {
-              if (entity === RefreshToken) return refreshTokenRepository;
-              if (entity === RefreshTokenFamily)
-                return refreshTokenFamilyRepository;
-              throw new Error('Unexpected transactional repository');
-            },
-          }),
-        ),
-    );
-
+  /** A fresh AuthService (new process state) on the shared nonce Redis. */
+  async function buildService(): Promise<AuthService> {
     const moduleRef = await Test.createTestingModule({
       providers: [
         AuthService,
@@ -174,81 +144,68 @@ describe('AuthService', () => {
           provide: EmailService,
           useValue: emailService,
         },
+        {
+          provide: WALLET_NONCE_STORE,
+          useValue: new RedisWalletNonceStore(nonceRedis.createClient()),
+        },
       ],
     }).compile();
+    return moduleRef.get(AuthService);
+  }
 
-    service = moduleRef.get(AuthService);
-  });
+  beforeEach(async () => {
+    jest.clearAllMocks();
 
-  it('generates a wallet challenge session', async () => {
-    stellarStrategy.isValidPublicKey.mockReturnValue(true);
-    cacheManager.set.mockResolvedValue(undefined);
-
-    const result = await service.generateWalletChallenge(
-      {
-        walletAddress:
-          'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
-        walletProvider: 'freighter',
-      },
-      '127.0.0.1',
+    refreshTokenFamilyRepository.create.mockImplementation(
+      (value: Partial<RefreshTokenFamily>) => value,
     );
-
-    expect(result.sessionId).toContain('nonce:');
-    expect(result.walletAddress).toEqual(
-      'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
-    );
-    expect(result.nonce).toBeTruthy();
-    expect(result.message).toContain('NFTopia Wallet Authentication');
-    expect(cacheManager.set).toHaveBeenCalled();
-  });
-
-  it('rejects invalid signatures during wallet verification', async () => {
-    stellarStrategy.isValidPublicKey.mockReturnValue(true);
-    walletSessionRepository.findOne.mockResolvedValue({
-      id: 'session-1',
-      walletAddress: 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
-      nonce: 'nonce-1',
-      challengeMessage: 'test-message',
-      nonceExpiresAt: new Date(Date.now() + 60_000),
-      consumedAt: null,
-    });
-    stellarStrategy.verifySignedMessage.mockReturnValue(false);
-
-    await expect(
-      service.verifyWalletChallenge({
-        walletAddress:
-          'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
-        nonce: 'nonce-1',
-        signature: Buffer.from('invalid').toString('base64'),
+    refreshTokenFamilyRepository.save.mockImplementation(
+      (value: Partial<RefreshTokenFamily>) => ({
+        id: value.id ?? 'family-1',
+        ...value,
       }),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    );
+    refreshTokenRepository.create.mockImplementation(
+      (value: Partial<RefreshToken>) => value,
+    );
+    refreshTokenRepository.save.mockImplementation(
+      (value: Partial<RefreshToken>) => value,
+    );
+    dataSource.transaction.mockImplementation(
+      (
+        callback: (manager: {
+          getRepository: (
+            entity: unknown,
+          ) =>
+            | typeof refreshTokenRepository
+            | typeof refreshTokenFamilyRepository;
+        }) => unknown,
+      ) =>
+        Promise.resolve(
+          callback({
+            getRepository: (entity: unknown) => {
+              if (entity === RefreshToken) return refreshTokenRepository;
+              if (entity === RefreshTokenFamily)
+                return refreshTokenFamilyRepository;
+              throw new Error('Unexpected transactional repository');
+            },
+          }),
+        ),
+    );
+
+    nonceRedis = new FakeRedisServer();
+    service = await buildService();
   });
 
-  it('verifies wallet challenge and returns token pair', async () => {
-    const walletAddress =
-      'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF';
+  const WALLET = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF';
 
-    stellarStrategy.isValidPublicKey.mockReturnValue(true);
-    stellarStrategy.verifySignedMessage.mockReturnValue(true);
-
-    // Mock cacheManager.get to return session data
-    cacheManager.get.mockResolvedValue({
-      nonce: 'nonce-1',
-      challengeMessage: 'challenge-message',
-      walletAddress,
-      walletProvider: 'freighter',
-      issuedAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 60_000).toISOString(),
-    });
-
-    userWalletRepository.findOne
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(null);
-
+  /** Repository mocks for a first-time wallet login that creates a user. */
+  function mockNewWalletUser() {
+    userWalletRepository.findOne.mockResolvedValue(null);
     userRepository.findOne.mockResolvedValue(null);
     const createdUser = {
-      address: walletAddress,
-      walletAddress,
+      address: WALLET,
+      walletAddress: WALLET,
       walletProvider: 'freighter',
       walletConnectedAt: new Date(),
     };
@@ -256,36 +213,87 @@ describe('AuthService', () => {
     userRepository.save.mockResolvedValue({
       id: 'user-1',
       ...createdUser,
-      walletProvider: 'freighter',
       username: null,
     });
-
-    userWalletRepository.update.mockResolvedValue(undefined);
-    const createdWallet = {
-      userId: 'user-1',
-      walletAddress,
-      walletProvider: 'freighter',
-      isPrimary: true,
-      lastUsedAt: new Date(),
-    };
-    userWalletRepository.create.mockReturnValue(createdWallet);
-    userWalletRepository.save.mockResolvedValue({
-      id: 'wallet-1',
-      ...createdWallet,
-    });
-
     userRepository.update.mockResolvedValue(undefined);
-    cacheManager.del.mockResolvedValue(undefined);
+    userWalletRepository.update.mockResolvedValue(undefined);
+    userWalletRepository.create.mockImplementation(
+      (value: Record<string, unknown>) => value,
+    );
+    userWalletRepository.save.mockImplementation(
+      (value: Record<string, unknown>) =>
+        Promise.resolve({ id: 'wallet-1', ...value }),
+    );
+    jwtService.sign.mockReturnValue('signed-token');
+  }
 
+  async function issueChallenge(on: AuthService = service) {
+    return on.generateWalletChallenge(
+      { walletAddress: WALLET, walletProvider: 'freighter' },
+      '127.0.0.1',
+    );
+  }
+
+  function verify(on: AuthService, nonce: string) {
+    return on.verifyWalletChallenge({
+      walletAddress: WALLET,
+      nonce,
+      signature: Buffer.from('signed').toString('base64'),
+    });
+  }
+
+  function pendingChallenge() {
+    return new RedisWalletNonceStore(nonceRedis.createClient()).find(WALLET);
+  }
+
+  it('generates a wallet challenge session stored in Redis', async () => {
+    stellarStrategy.isValidPublicKey.mockReturnValue(true);
+
+    const result = await issueChallenge();
+
+    expect(result.sessionId).toContain('nonce:');
+    expect(result.walletAddress).toEqual(WALLET);
+    expect(result.nonce).toBeTruthy();
+    expect(result.message).toContain('NFTopia Wallet Authentication');
+
+    const stored = await pendingChallenge();
+    expect(stored?.nonce).toEqual(result.nonce);
+    expect(stored?.challengeMessage).toEqual(result.message);
+    // challenge window (300s default) plus the 60s "expired" grace period
+    expect(nonceRedis.ttlSeconds(`wallet-auth:nonce:${WALLET}`)).toBe(360);
+  });
+
+  it('rejects invalid signatures and keeps the challenge usable', async () => {
+    stellarStrategy.isValidPublicKey.mockReturnValue(true);
+    stellarStrategy.verifySignedMessage.mockReturnValue(false);
+    const { nonce } = await issueChallenge();
+
+    await expect(verify(service, nonce)).rejects.toThrow(
+      'Invalid wallet signature',
+    );
+    expect((await pendingChallenge())?.nonce).toEqual(nonce);
+  });
+
+  it('rejects a nonce that does not match the pending challenge', async () => {
+    stellarStrategy.isValidPublicKey.mockReturnValue(true);
+    stellarStrategy.verifySignedMessage.mockReturnValue(true);
+    await issueChallenge();
+
+    await expect(verify(service, 'not-the-nonce')).rejects.toThrow(
+      'Invalid nonce',
+    );
+  });
+
+  it('verifies wallet challenge and returns token pair', async () => {
+    stellarStrategy.isValidPublicKey.mockReturnValue(true);
+    stellarStrategy.verifySignedMessage.mockReturnValue(true);
+    mockNewWalletUser();
     jwtService.sign
       .mockReturnValueOnce('access-token')
       .mockReturnValueOnce('refresh-token');
+    const { nonce, message } = await issueChallenge();
 
-    const result = await service.verifyWalletChallenge({
-      walletAddress,
-      nonce: 'nonce-1',
-      signature: Buffer.from('signed').toString('base64'),
-    });
+    const result = await verify(service, nonce);
 
     if ('requiresTwoFactor' in result) {
       throw new Error('expected direct auth response, got 2FA challenge');
@@ -293,9 +301,127 @@ describe('AuthService', () => {
     expect(result.access_token).toEqual('access-token');
     expect(result.refresh_token).toEqual('refresh-token');
     expect(result.user.id).toEqual('user-1');
-    expect(result.user.walletAddress).toEqual(walletAddress);
-    expect(cacheManager.get).toHaveBeenCalled();
-    expect(cacheManager.del).toHaveBeenCalled();
+    expect(result.user.walletAddress).toEqual(WALLET);
+    expect(stellarStrategy.verifySignedMessage).toHaveBeenCalledWith(
+      WALLET,
+      message,
+      expect.any(String),
+    );
+    expect(await pendingChallenge()).toBeNull();
+  });
+
+  describe('wallet nonce storage (#572)', () => {
+    beforeEach(() => {
+      stellarStrategy.isValidPublicKey.mockReturnValue(true);
+      stellarStrategy.verifySignedMessage.mockReturnValue(true);
+      mockNewWalletUser();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    /** Move the wall clock (Date and the fake Redis TTLs) forward. */
+    function advanceClock(ms: number) {
+      jest.useFakeTimers({
+        doNotFake: [
+          'nextTick',
+          'setImmediate',
+          'queueMicrotask',
+          'setTimeout',
+          'clearTimeout',
+          'setInterval',
+          'clearInterval',
+        ],
+      });
+      jest.setSystemTime(Date.now() + ms);
+    }
+
+    it('completes a challenge issued before a backend restart', async () => {
+      const { nonce } = await issueChallenge();
+
+      // Restart: all in-process state is gone, Redis is not.
+      const restarted = await buildService();
+
+      await expect(verify(restarted, nonce)).resolves.toHaveProperty(
+        'access_token',
+      );
+    });
+
+    it('verifies a nonce on a different instance sharing the same Redis', async () => {
+      const instanceA = service;
+      const instanceB = await buildService();
+      const { nonce } = await issueChallenge(instanceA);
+
+      await expect(verify(instanceB, nonce)).resolves.toHaveProperty(
+        'access_token',
+      );
+      await expect(verify(instanceA, nonce)).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('rejects an expired nonce with a clear error', async () => {
+      const { nonce } = await issueChallenge();
+
+      advanceClock(301_000);
+
+      await expect(verify(service, nonce)).rejects.toThrow(
+        'Wallet challenge has expired. Request a new challenge.',
+      );
+      expect(await pendingChallenge()).toBeNull();
+    });
+
+    it('rejects a nonce whose Redis entry has already expired', async () => {
+      const { nonce } = await issueChallenge();
+
+      advanceClock(361_000);
+
+      await expect(verify(service, nonce)).rejects.toThrow(
+        'Wallet challenge not found or expired. Request a new challenge.',
+      );
+    });
+
+    it('does not allow a used nonce to be replayed', async () => {
+      const { nonce } = await issueChallenge();
+
+      await verify(service, nonce);
+
+      await expect(verify(service, nonce)).rejects.toThrow(
+        'Wallet challenge not found or expired. Request a new challenge.',
+      );
+      await expect(verify(await buildService(), nonce)).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('lets only one of two concurrent verifications of a nonce succeed', async () => {
+      const { nonce } = await issueChallenge();
+      const other = await buildService();
+
+      const results = await Promise.allSettled([
+        verify(service, nonce),
+        verify(other, nonce),
+      ]);
+
+      expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+      const rejected = results.find(
+        (r): r is PromiseRejectedResult => r.status === 'rejected',
+      );
+      expect(rejected?.reason).toBeInstanceOf(UnauthorizedException);
+    });
+
+    it('invalidates the earlier nonce when a new challenge is issued', async () => {
+      const first = await issueChallenge();
+      const second = await issueChallenge();
+
+      await expect(verify(service, first.nonce)).rejects.toThrow(
+        'Invalid nonce',
+      );
+      await expect(verify(service, second.nonce)).resolves.toHaveProperty(
+        'access_token',
+      );
+    });
   });
 
   it('registers with email/password and returns tokens', async () => {

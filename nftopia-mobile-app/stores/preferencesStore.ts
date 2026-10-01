@@ -12,6 +12,8 @@ export interface PreferencesState {
   autoLock: boolean;
   lockTimeout: number; // in minutes
   hideBalances: boolean;
+  /** Accessibility preference (#467) — when true, lib/haptics.ts no-ops every haptic call. */
+  reduceHaptics: boolean;
   lastUpdated: string | null;
 }
 
@@ -27,6 +29,7 @@ const initialState: PreferencesState = {
   autoLock: true,
   lockTimeout: 5,
   hideBalances: false,
+  reduceHaptics: false,
   lastUpdated: null,
 };
 
@@ -40,6 +43,7 @@ interface PreferencesStore extends PreferencesState {
   setAutoLock: (enabled: boolean) => void;
   setLockTimeout: (timeout: number) => void;
   setHideBalances: (hide: boolean) => void;
+  setReduceHaptics: (reduce: boolean) => void;
   resetPreferences: () => void;
   updateLastUpdated: () => void;
 }
@@ -88,6 +92,10 @@ export const usePreferencesStore = createStore<PreferencesStore>({
       set({ hideBalances: hide, lastUpdated: new Date().toISOString() });
     },
 
+    setReduceHaptics: (reduce: boolean) => {
+      set({ reduceHaptics: reduce, lastUpdated: new Date().toISOString() });
+    },
+
     resetPreferences: () => {
       set({ ...initialState, lastUpdated: new Date().toISOString() });
     },
@@ -110,6 +118,7 @@ export const usePreferencesStore = createStore<PreferencesStore>({
       autoLock: state.autoLock,
       lockTimeout: state.lockTimeout,
       hideBalances: state.hideBalances,
+      reduceHaptics: state.reduceHaptics,
     }),
     storage: 'async',
   },

@@ -35,6 +35,11 @@
     "collections": "Colecciones",
     "settings": "Configuración"
   },
+  "shell": {
+    "openSidebar": "Abrir menú lateral",
+    "closeSidebar": "Cerrar menú lateral",
+    "localeSwitcher": "Selector de idioma"
+  },
   "table": {
     "header": {
       "name": "Nombre",

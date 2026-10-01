@@ -1,6 +1,6 @@
 use crate::security::frontrun_protection::WithdrawalAnomalyKind;
 use crate::types::*;
-use soroban_sdk::{contracttype, symbol_short, Address, Bytes, Env, Symbol, Vec};
+use soroban_sdk::{contracttype, symbol_short, Address, Bytes, BytesN, Env, Symbol, Vec};
 
 // Sale Events
 #[contracttype]
@@ -213,6 +213,79 @@ pub struct DisputeResolvedEvent {
     pub resolution: u64,
     pub winning_votes: u64,
     pub total_votes: u64,
+    pub timestamp: u64,
+}
+
+/// Emitted once for every escrowed asset actually transferred when a dispute is
+/// settled. One event per movement, so off-chain indexers can reconcile balances
+/// without replaying escrow state.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DisputeFundsReleasedEvent {
+    pub dispute_id: u64,
+    pub transaction_id: u64,
+    pub resolution: u64,
+    /// Original depositor of the released holding.
+    pub from: Address,
+    /// Recipient chosen by the resolution.
+    pub to: Address,
+    pub asset: Asset,
+    pub amount: i128,
+    pub is_nft: bool,
+    pub timestamp: u64,
+}
+
+/// Emitted when a registered arbitration oracle submits a binding resolution.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DisputeOracleSubmittedEvent {
+    pub dispute_id: u64,
+    pub transaction_id: u64,
+    pub oracle: Address,
+    pub resolution: u64,
+    pub timestamp: u64,
+}
+
+/// Emitted when the admin registers, updates, or deactivates an arbitration oracle.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DisputeOracleUpdatedEvent {
+    pub oracle: Address,
+    pub public_key: BytesN<32>,
+    pub is_active: bool,
+    pub updated_by: Address,
+    pub timestamp: u64,
+}
+
+/// Emitted when a dispute auto-resolves because the arbitration timeout elapsed
+/// without the configured quorum being reached.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DisputeTimedOutEvent {
+    pub dispute_id: u64,
+    pub transaction_id: u64,
+    /// The default outcome applied because arbitration stalled.
+    pub resolution: u64,
+    pub deadline: u64,
+    pub timestamp: u64,
+}
+
+/// Emitted when the dispute admin registry is modified.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DisputeAdminUpdatedEvent {
+    pub admin: Address,
+    pub added: bool,
+    pub updated_by: Address,
+    pub timestamp: u64,
+}
+
+/// Emitted when the dispute configuration is replaced.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DisputeConfigUpdatedEvent {
+    pub config: crate::dispute_resolution::DisputeConfig,
+    pub updated_by: Address,
     pub timestamp: u64,
 }
 
@@ -555,6 +628,42 @@ pub fn emit_dispute_vote(env: &Env, event: DisputeVoteEvent) {
 pub fn emit_dispute_resolved(env: &Env, event: DisputeResolvedEvent) {
     env.events()
         .publish(("MarketplaceSettlement", symbol_short!("dsp_rslv")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_dispute_funds_released(env: &Env, event: DisputeFundsReleasedEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("dsp_fund")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_dispute_oracle_submitted(env: &Env, event: DisputeOracleSubmittedEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("dsp_orcl")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_dispute_oracle_updated(env: &Env, event: DisputeOracleUpdatedEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("orc_regd")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_dispute_timed_out(env: &Env, event: DisputeTimedOutEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("dsp_tout")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_dispute_admin_updated(env: &Env, event: DisputeAdminUpdatedEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("dsp_adm")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_dispute_config_updated(env: &Env, event: DisputeConfigUpdatedEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("dsp_cfgu")), event);
 }
 
 #[allow(deprecated)]

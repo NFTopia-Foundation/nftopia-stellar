@@ -7,6 +7,19 @@ use crate::types::Transaction;
 enum DataKey {
     Transaction(u64),
     NextTxId,
+    ConfigAuthority,
+}
+
+/// The address allowed to refresh the contract-wide network mirror (fee ladder
+/// and TTL policy). Set once at deploy time (#291).
+pub fn config_authority(env: &Env) -> Option<Address> {
+    env.storage().instance().get(&DataKey::ConfigAuthority)
+}
+
+pub fn set_config_authority(env: &Env, authority: &Address) {
+    env.storage()
+        .instance()
+        .set(&DataKey::ConfigAuthority, authority);
 }
 
 pub fn next_transaction_id(env: &Env) -> u64 {
@@ -33,4 +46,25 @@ pub fn load_transaction(env: &Env, transaction_id: u64) -> Option<Transaction> {
 
 pub fn require_creator_auth(creator: &Address) {
     creator.require_auth();
+}
+
+/// Extend the TTL of a transaction record (#290).
+///
+/// `threshold == extend_to` makes the call idempotent and guarantees at least
+/// `extend_to` remaining ledgers, whichever branch the host takes. Returns
+/// `false` when the record does not exist (anymore).
+pub fn extend_transaction_ttl(
+    env: &Env,
+    transaction_id: u64,
+    threshold: u32,
+    extend_to: u32,
+) -> bool {
+    let key = DataKey::Transaction(transaction_id);
+    if !env.storage().persistent().has(&key) {
+        return false;
+    }
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, threshold, extend_to);
+    true
 }

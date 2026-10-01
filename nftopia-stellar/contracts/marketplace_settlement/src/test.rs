@@ -128,6 +128,37 @@ fn reg(env: &Env, cid: &Address, nft: &Address, creator: &Address, admin: &Addre
     });
 }
 
+// ─── Allowlist views ─────────────────────────────────────────────────────────
+
+#[test]
+fn test_is_nft_allowed_view_tracks_allowlist() {
+    let (env, cid, client, admin) = new_env();
+    let nft = Address::generate(&env);
+    assert!(!client.is_nft_allowed(&nft));
+    reg(
+        &env,
+        &cid,
+        &nft,
+        &Address::generate(&env),
+        &admin,
+        &mk_asset(&env),
+    );
+    assert!(client.is_nft_allowed(&nft));
+    client.remove_allowed_nft_contract(&admin, &nft);
+    assert!(!client.is_nft_allowed(&nft));
+}
+
+#[test]
+fn test_is_token_allowed_view_tracks_allowlist() {
+    let (env, _cid, client, admin) = new_env();
+    let token = Address::generate(&env);
+    assert!(!client.is_token_allowed(&token));
+    client.add_allowed_token_contract(&admin, &token);
+    assert!(client.is_token_allowed(&token));
+    client.remove_allowed_token_contract(&admin, &token);
+    assert!(!client.is_token_allowed(&token));
+}
+
 // ─── Init ────────────────────────────────────────────────────────────────────
 
 #[test]

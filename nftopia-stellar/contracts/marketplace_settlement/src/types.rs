@@ -142,6 +142,11 @@ pub struct Dispute {
     pub created_at: u64,
     pub resolved_at: u64, // 0 = not resolved
     pub resolution: u64, // 0 = not resolved, 1 = refund buyer, 2 = release to seller, 3 = split funds, 4 = cancel transaction
+    /// When the escrowed funds for this dispute were actually paid out; 0 until
+    /// then. Separates "a resolution was decided" (`resolved_at`) from "the money
+    /// moved" (`settled_at`), and is what stops a resolution from being executed
+    /// twice.
+    pub settled_at: u64,
 }
 
 // Fee configuration structure

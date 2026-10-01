@@ -1,7 +1,10 @@
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { Text, TouchableOpacity } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import ConfirmationDialog from '@/components/wallet/ConfirmationDialog';
+
+const impactAsync = Haptics.impactAsync as jest.Mock;
 
 // react-test-renderer ships its own nested @types/react — see
 // EmptyState.test.tsx (#472) for why this cast is needed.
@@ -99,5 +102,69 @@ describe('ConfirmationDialog (#471 additions: children, confirmDisabled)', () =>
       (confirmButton.props as { onPress: () => void }).onPress();
     });
     expect(onConfirm).toHaveBeenCalledTimes(1);
+  });
+
+  describe('haptics (#467)', () => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+    });
+
+    // Only the Confirm button carries an explicit accessibilityLabel; Cancel
+    // is found by its rendered text instead.
+    function findButton(renderer: TestRenderer.ReactTestRenderer, label: 'Confirm' | 'Cancel') {
+      return renderer.root
+        .findAllByType(TouchableOpacity as never)
+        .find((b) =>
+          b.findAllByType(Text as never).some((t) => t.props.children === label),
+        )!;
+    }
+
+    it('fires a medium impact on confirm', () => {
+      const renderer = render(
+        <ConfirmationDialog visible title="t" message="m" onConfirm={jest.fn()} onCancel={jest.fn()} />,
+      );
+      act(() => {
+        (findButton(renderer, 'Confirm').props as { onPress: () => void }).onPress();
+      });
+      expect(impactAsync).toHaveBeenCalledWith(Haptics.ImpactFeedbackStyle.Medium);
+    });
+
+    it('fires a light impact on cancel', () => {
+      const renderer = render(
+        <ConfirmationDialog visible title="t" message="m" onConfirm={jest.fn()} onCancel={jest.fn()} />,
+      );
+      act(() => {
+        (findButton(renderer, 'Cancel').props as { onPress: () => void }).onPress();
+      });
+      expect(impactAsync).toHaveBeenCalledWith(Haptics.ImpactFeedbackStyle.Light);
+    });
+
+    it('fires an error notification when an async onConfirm rejects', async () => {
+      const notificationAsync = Haptics.notificationAsync as jest.Mock;
+      const onConfirm = jest.fn().mockRejectedValue(new Error('failed'));
+      const renderer = render(
+        <ConfirmationDialog visible title="t" message="m" onConfirm={onConfirm} onCancel={jest.fn()} />,
+      );
+      await act(async () => {
+        (findButton(renderer, 'Confirm').props as { onPress: () => void }).onPress();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(notificationAsync).toHaveBeenCalledWith(Haptics.NotificationFeedbackType.Error);
+    });
+
+    it('does not fire an error notification when a async onConfirm resolves', async () => {
+      const notificationAsync = Haptics.notificationAsync as jest.Mock;
+      const onConfirm = jest.fn().mockResolvedValue(undefined);
+      const renderer = render(
+        <ConfirmationDialog visible title="t" message="m" onConfirm={onConfirm} onCancel={jest.fn()} />,
+      );
+      await act(async () => {
+        (findButton(renderer, 'Confirm').props as { onPress: () => void }).onPress();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(notificationAsync).not.toHaveBeenCalled();
+    });
   });
 });

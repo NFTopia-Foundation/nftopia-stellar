@@ -1,4 +1,13 @@
 # NFTopia Backend
+
+## Transaction boundary
+
+The backend is the system of record and execution orchestrator for marketplace
+transactions. Its Soroban transaction-contract integration records an
+on-chain lifecycle/audit view; the contract does not submit marketplace
+operations. See the monorepo's
+[`transaction architecture decision`](../docs/transaction-architecture.md)
+before integrating clients or changing this boundary.
 **Stellar API Gateway and Marketplace Services**
 
 ![NestJS](https://img.shields.io/badge/NestJS-11-e0234e)

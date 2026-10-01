@@ -2,6 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { colors, spacing, borderRadius, shadows } from '@/constants/theme';
 import { TokenBalance } from '@/src/services/stellar/balance.service';
+import { convertToFiat } from '@/src/services/stellar/price';
+import { formatCurrencyCompact } from '@/src/utils/formatCurrency';
 
 interface BalanceDisplayProps {
   xlmBalance: string | null;
@@ -10,6 +12,17 @@ interface BalanceDisplayProps {
   error?: string | null;
   onRefresh?: () => void;
   publicKey?: string;
+  /**
+   * XLM/fiat price (#470) — the fiat line is only shown once this is a
+   * number; pass null (e.g. offline, API unreachable, still loading) and
+   * the raw balance renders exactly as before, degrading gracefully
+   * rather than showing an error or a broken conversion.
+   */
+  fiatPrice?: number | null;
+  /** ISO 4217 code the price above is denominated in — only meaningful together with fiatPrice. Defaults to 'USD'. */
+  fiatCurrency?: string;
+  /** True when fiatPrice is older than the freshness threshold — shows a "may be outdated" cue rather than presenting it as current. */
+  fiatStale?: boolean;
 }
 
 export default function BalanceDisplay({
@@ -19,7 +32,12 @@ export default function BalanceDisplay({
   error,
   onRefresh,
   publicKey,
+  fiatPrice = null,
+  fiatCurrency = 'USD',
+  fiatStale = false,
 }: BalanceDisplayProps) {
+  const xlmFiatValue =
+    fiatPrice !== null && xlmBalance !== null ? convertToFiat(xlmBalance, fiatPrice) : null;
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -49,9 +67,23 @@ export default function BalanceDisplay({
         <>
           <View style={styles.balanceRow}>
             <Text style={styles.balanceLabel}>XLM</Text>
-            <Text style={styles.balanceValue}>
-              {xlmBalance !== null ? parseFloat(xlmBalance).toFixed(4) : '--'}
-            </Text>
+            <View style={styles.balanceValueColumn}>
+              <Text style={styles.balanceValue}>
+                {xlmBalance !== null ? parseFloat(xlmBalance).toFixed(4) : '--'}
+              </Text>
+              {xlmFiatValue !== null ? (
+                <View style={styles.fiatRow}>
+                  <Text style={styles.fiatValue}>
+                    ≈ {formatCurrencyCompact(xlmFiatValue, { currency: fiatCurrency })}
+                  </Text>
+                  {fiatStale ? (
+                    <Text style={styles.staleBadge} accessibilityLabel="Price may be outdated">
+                      ⚠
+                    </Text>
+                  ) : null}
+                </View>
+              ) : null}
+            </View>
           </View>
 
           {tokenBalances.map((token, index) => (
@@ -118,6 +150,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.text,
     fontFamily: 'monospace',
+  },
+  balanceValueColumn: {
+    alignItems: 'flex-end',
+  },
+  fiatRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  fiatValue: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  staleBadge: {
+    fontSize: 11,
+    color: colors.warning,
   },
   noTokens: {
     fontSize: 14,

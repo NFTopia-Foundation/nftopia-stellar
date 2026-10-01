@@ -21,7 +21,7 @@ pub fn execute_operations(
     env: &Env,
     operations: &Vec<Operation>,
 ) -> Result<Vec<OperationResult>, TransactionError> {
-    let ordered = dependency_resolver::resolve_execution_order(env, operations);
+    let ordered = dependency_resolver::resolve_execution_order(env, operations)?;
     let mut completed_ids = Vec::new(env);
     let mut results = Vec::new(env);
 
