@@ -13,6 +13,7 @@
     "analyze": "ANALYZE=true next build",
     "lhci:collect": "lhci collect --config=./lighthouserc.js",
     "lhci:assert": "lhci assert --config=./lighthouserc.js",
+    "lighthouse": "lhci autorun",
     "test": "jest",
     "e2e": "playwright test",
     "e2e:install": "playwright install --with-deps",

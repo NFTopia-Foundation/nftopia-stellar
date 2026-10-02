@@ -1,0 +1,96 @@
+name: NFTopia Frontend Lighthouse
+
+# Lighthouse runs as its own workflow so a performance/accessibility regression
+# is reported as its own required check instead of being buried in the build
+# job. It builds the frontend and lets `lhci autorun` start `npm run start`,
+# which is how the budgets in nftopia-frontend/lighthouserc.js are evaluated.
+on:
+  pull_request:
+    paths:
+      - 'nftopia-frontend/**'
+      - '.github/workflows/nftopia-frontend-lighthouse.yml'
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: nftopia-frontend-lighthouse-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  lighthouse:
+    name: Lighthouse budgets
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./nftopia-frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Detect package manager
+        id: detect
+        run: |
+          if [ -f pnpm-lock.yaml ]; then
+            echo "manager=pnpm" >> $GITHUB_OUTPUT
+          elif [ -f package-lock.json ]; then
+            echo "manager=npm" >> $GITHUB_OUTPUT
+          else
+            echo "No lockfile found. CI requires a lockfile."
+            exit 1
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: ${{ steps.detect.outputs.manager }}
+          cache-dependency-path: |
+            nftopia-frontend/pnpm-lock.yaml
+            nftopia-frontend/package-lock.json
+
+      - name: Setup pnpm
+        if: steps.detect.outputs.manager == 'pnpm'
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10
+
+      - name: Install dependencies (pnpm)
+        if: steps.detect.outputs.manager == 'pnpm'
+        run: pnpm install --frozen-lockfile
+
+      - name: Install dependencies (npm)
+        if: steps.detect.outputs.manager == 'npm'
+        run: npm ci
+
+      - name: Build Next.js
+        run: |
+          if [ "${{ steps.detect.outputs.manager }}" = "pnpm" ]; then
+            pnpm run build
+          else
+            npm run build
+          fi
+
+      # `lhci autorun` reads nftopia-frontend/lighthouserc.js, starts the
+      # production server on :5000 and fails the job when a budget regresses.
+      - name: Run Lighthouse CI budgets
+        run: |
+          if [ "${{ steps.detect.outputs.manager }}" = "pnpm" ]; then
+            pnpm exec lhci autorun
+          else
+            npx lhci autorun
+          fi
+        env:
+          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+
+      - name: Upload Lighthouse report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-report
+          path: nftopia-frontend/.lighthouseci
+          retention-days: 7
