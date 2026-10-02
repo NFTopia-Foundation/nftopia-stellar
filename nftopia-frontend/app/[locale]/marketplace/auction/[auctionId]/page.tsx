@@ -5,6 +5,16 @@ import { GET_AUCTION_BY_ID_QUERY } from "@/lib/graphql/queries/auction.queries";
 import { isValidAuctionId } from "@/utils/id-validation";
 import AuctionDetailClient from "./AuctionDetailClient";
 
+/**
+ * Auctions are live data: the price, status and bid list change while the page
+ * is open, and the fixture backend the e2e suite drives rewrites them for every
+ * case. Without this the route is treated as static, so Next's Data Cache keeps
+ * answering the GraphQL read with the first response it ever saw —
+ * `fetchAuction` asking for `network-only` only governs Apollo's own store — and
+ * the page renders that original auction (price, status, `endTime`) forever.
+ */
+export const dynamic = "force-dynamic";
+
 const fallbacks: Record<string, { notFoundTitle: string; notFoundDesc: string }> = {
   en: { notFoundTitle: "Auction Not Found | NFTopia Marketplace", notFoundDesc: "The auction you're looking for doesn't exist or has ended." },
   fr: { notFoundTitle: "Enchère introuvable | NFTopia Marketplace", notFoundDesc: "L'enchère que vous recherchez n'existe pas ou est terminée." },
