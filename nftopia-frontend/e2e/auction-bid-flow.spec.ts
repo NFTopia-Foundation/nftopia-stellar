@@ -16,7 +16,12 @@ import { test, expect, type Page, type APIRequestContext } from "@playwright/tes
  */
 
 const MOCK_API = process.env.E2E_MOCK_API_URL || "http://127.0.0.1:4321";
-const AUCTION_ID = "e2e-auction-1";
+/**
+ * Must satisfy the detail route's id guard (`utils/id-validation.ts` accepts a
+ * UUID or a numeric id) — the route calls `notFound()` before it ever queries,
+ * and it must match the id the fixture backend serves.
+ */
+const AUCTION_ID = "3f9c1b2a-4d5e-4f6a-8b7c-9d0e1f2a3b4c";
 const AUCTION_PATH = `/en/marketplace/auction/${AUCTION_ID}`;
 
 /** Wallet that the `stellar-wallet-store` localStorage seed connects. */
@@ -139,6 +144,16 @@ async function setScenario(
 }
 
 /**
+ * Open the auction detail route and fail fast if the server rendered the
+ * not-found page. Without the status assertion a fixture/validator mismatch
+ * reads as four unrelated element timeouts.
+ */
+async function openAuction(page: Page): Promise<void> {
+  const response = await page.goto(AUCTION_PATH);
+  expect(response?.status()).toBe(200);
+}
+
+/**
  * Answer the `OnAuctionBidPlaced` subscription with the given bids. Playwright
  * intercepts the WebSocket before it reaches the network, so the client sees a
  * deterministic push instead of waiting out the 15s polling fallback.
@@ -186,7 +201,7 @@ test.describe("auction bid flow", () => {
   test("places a bid and reflects it as the current highest bid", async ({ page, request }) => {
     await setScenario(request, { status: "ACTIVE", currentPrice: "100" });
 
-    await page.goto(AUCTION_PATH);
+    await openAuction(page);
 
     // The wallet seed renders the bidding form instead of the connect prompt.
     await expect(page.getByRole("button", { name: "Place Bid" })).toBeVisible();
@@ -216,7 +231,7 @@ test.describe("auction bid flow", () => {
       bid({ amount: "150", id: "bid-2", bidderId: rivalUser.id, bidder: rivalUser }),
     ]);
 
-    await page.goto(AUCTION_PATH);
+    await openAuction(page);
 
     const alert = page.getByTestId("outbid-notification");
     await expect(alert).toBeVisible();
@@ -236,7 +251,7 @@ test.describe("auction bid flow", () => {
       bids: [winningBid],
     });
 
-    await page.goto(AUCTION_PATH);
+    await openAuction(page);
 
     await expect(page.getByText("This auction has ended")).toBeVisible();
     await expect(page.getByText("Winner")).toBeVisible();
@@ -256,7 +271,7 @@ test.describe("auction bid flow", () => {
       bids: [rivalBid],
     });
 
-    await page.goto(AUCTION_PATH);
+    await openAuction(page);
 
     await expect(page.getByText("This auction has ended")).toBeVisible();
     await expect(page.getByText("Winning Bid: 200 XLM")).toBeVisible();

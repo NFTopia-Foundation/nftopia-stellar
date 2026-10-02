@@ -31,14 +31,26 @@ function buildAuction(overrides = {}) {
     image: `http://127.0.0.1:${PORT}/assets/orb.png`,
     tokenId: "42",
     description: "The first orb minted on the e2e fixture chain.",
-    attributes: [{ traitType: "Rarity", value: "Legendary" }],
+    // Apollo Client raises a cache-write error for any field named in the query
+    // that is missing from the response, so the fixture mirrors the whole
+    // `nft.attributes` shape: `displayType` is nullable in the backend
+    // (`nft_metadata.display_type`), hence the explicit `null` on the first
+    // attribute, with a populated value on the second.
+    attributes: [
+      { traitType: "Rarity", value: "Legendary", displayType: null },
+      { traitType: "Boost", value: "5", displayType: "boost_percentage" },
+    ],
     collection: { id: "col-1", name: "Genesis", symbol: "GEN", image: "" },
     creator: { id: "user-creator", username: "creator", walletAddress: "GCREATOR" },
     owner: SELLER,
   };
 
   return {
-    id: "e2e-auction-1",
+    // UUID, like the real backend generates (`Auction` uses
+    // `@PrimaryGeneratedColumn('uuid')`). The detail route validates the id
+    // before it queries (`utils/id-validation.ts` accepts UUIDs and numeric ids
+    // only), so a descriptive slug here would 404 the whole suite.
+    id: "3f9c1b2a-4d5e-4f6a-8b7c-9d0e1f2a3b4c",
     nftId: nft.id,
     sellerId: SELLER.id,
     startPrice: "100",
