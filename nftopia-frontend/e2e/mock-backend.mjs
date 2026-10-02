@@ -71,6 +71,50 @@ function buildAuction(overrides = {}) {
 
 let auction = buildAuction();
 
+/**
+ * Stamp `__typename` onto a payload the way a real GraphQL server does.
+ *
+ * Apollo Client reads a query result back out of its normalized cache, and it
+ * can only do that for objects it can identify — which needs `__typename`
+ * (plus `id`). Without it the store has no `Auction:<id>` entry, and every
+ * field the query selects through the `AuctionFields` fragment (`startPrice`,
+ * `status`, `endTime`, `winnerId`, …) silently disappears from `data.auction`
+ * while the inline fields survive. The route then renders `NaN`/undefined
+ * prices and never polls (`status !== "ACTIVE"`), so the suite has to serve
+ * fully typed responses.
+ */
+function withTypenames(auction) {
+  if (!auction) return auction;
+  const user = (value) => (value ? { __typename: "User", ...value } : value);
+  const bid = (value) =>
+    value ? { __typename: "Bid", ...value, bidder: user(value.bidder) } : value;
+  const nft = auction.nft
+    ? {
+        __typename: "NFT",
+        ...auction.nft,
+        attributes: auction.nft.attributes?.map((attribute) => ({
+          __typename: "NFTAttribute",
+          ...attribute,
+        })),
+        collection: auction.nft.collection
+          ? { __typename: "Collection", ...auction.nft.collection }
+          : auction.nft.collection,
+        creator: user(auction.nft.creator),
+        owner: user(auction.nft.owner),
+      }
+    : auction.nft;
+
+  return {
+    __typename: "Auction",
+    ...auction,
+    nft,
+    bids: auction.bids?.map(bid),
+    highestBid: bid(auction.highestBid),
+    seller: user(auction.seller),
+    winner: user(auction.winner),
+  };
+}
+
 function sendJson(req, res, status, body) {
   const payload = JSON.stringify(body);
   res.writeHead(status, {
@@ -136,7 +180,7 @@ const server = createServer(async (req, res) => {
   if (req.method === "POST" && url.pathname === "/graphql") {
     // Both the SSR page and any client query hit this endpoint; the e2e suite
     // only ever needs an auction by id.
-    return sendJson(req, res, 200, { data: { auction } });
+    return sendJson(req, res, 200, { data: { auction: withTypenames(auction) } });
   }
 
   const auctionMatch = url.pathname.match(/^\/auctions\/([^/]+)$/);

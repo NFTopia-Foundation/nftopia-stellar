@@ -52,6 +52,7 @@ export const GET_AUCTION_BY_ID_QUERY = gql`
         bidder {
           id
           username
+          walletAddress
         }
         createdAt
       }
