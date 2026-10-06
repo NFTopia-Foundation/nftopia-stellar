@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 export type ResolutionOutcome = 'approve' | 'reject' | 'dismiss';
 
@@ -32,8 +32,27 @@ const OUTCOME_DESCRIPTIONS: Record<ResolutionOutcome, string> = {
   dismiss: 'Mark the flag as a false positive without acting on the content.',
 };
 
-export default function ResolveFlagDialog({
-  open,
+/**
+ * Modal that gates a flag resolution behind an explicit confirmation step.
+ *
+ * The form is only mounted while `open` is true and is keyed on its target, so
+ * its local state (outcome, reason, confirmation) always starts from the
+ * defaults for the flag being resolved instead of being reset from an effect.
+ */
+export default function ResolveFlagDialog({ open, ...props }: ResolveFlagDialogProps) {
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <ResolveFlagDialogForm
+      key={`${props.flagId ?? 'bulk'}:${props.flagCount ?? 1}`}
+      {...props}
+    />
+  );
+}
+
+function ResolveFlagDialogForm({
   flagId,
   flagCount,
   defaultOutcome = 'approve',
@@ -41,22 +60,10 @@ export default function ResolveFlagDialog({
   error = null,
   onClose,
   onSubmit,
-}: ResolveFlagDialogProps) {
+}: Omit<ResolveFlagDialogProps, 'open'>) {
   const [outcome, setOutcome] = useState<ResolutionOutcome>(defaultOutcome);
   const [reason, setReason] = useState('');
   const [confirming, setConfirming] = useState(false);
-
-  useEffect(() => {
-    if (open) {
-      setOutcome(defaultOutcome);
-      setReason('');
-      setConfirming(false);
-    }
-  }, [open, defaultOutcome]);
-
-  if (!open) {
-    return null;
-  }
 
   const isBulk = typeof flagCount === 'number' && flagCount > 1;
   const title = isBulk ? `Resolve ${flagCount} flags` : 'Resolve flag';
