@@ -8,6 +8,7 @@ import LoginPage from './pages/LoginPage'
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const CollectionsPage = lazy(() => import('./pages/CollectionsPage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
+const ContentFlagsQueuePage = lazy(() => import('./pages/ContentFlagsQueuePage'))
 
 /** Minimal loading indicator shown during lazy-page suspense. */
 function PageSpinner() {
@@ -34,6 +35,7 @@ function App() {
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/collections" element={<CollectionsPage />} />
+            <Route path="/content-flags" element={<ContentFlagsQueuePage />} />
             <Route path="/settings" element={<SettingsPage />} />
             {/* Catch-all: redirect unknown paths back to dashboard */}
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
