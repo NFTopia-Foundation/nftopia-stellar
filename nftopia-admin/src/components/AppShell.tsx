@@ -69,6 +69,25 @@ function SettingsIcon() {
   )
 }
 
+function FlagIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-4 w-4 shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M4.5 3.75v16.5m0 0h15M4.5 4.5h11.25l-1.5 3.75 1.5 3.75H4.5"
+      />
+    </svg>
+  )
+}
+
 function MenuIcon() {
   return (
     <svg
@@ -131,6 +150,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { to: '/dashboard', labelKey: 'nav.dashboard', icon: <DashboardIcon /> },
   { to: '/collections', labelKey: 'nav.collections', icon: <CollectionsIcon /> },
+  { to: '/content-flags', labelKey: 'nav.contentFlags', icon: <FlagIcon /> },
   { to: '/settings', labelKey: 'nav.settings', icon: <SettingsIcon /> },
 ]
 

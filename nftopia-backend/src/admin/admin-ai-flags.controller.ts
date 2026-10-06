@@ -56,6 +56,7 @@ export class AdminAiFlagsController {
       reviewedBy: user.userId,
       ipAddress: req.ip,
       userAgent: req.get('user-agent'),
+      ...(body.reason !== undefined ? { reason: body.reason } : {}),
     });
   }
 }

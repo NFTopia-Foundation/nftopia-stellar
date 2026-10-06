@@ -33,7 +33,8 @@
   "nav": {
     "dashboard": "Panel",
     "collections": "Colecciones",
-    "settings": "Configuración"
+    "settings": "Configuración",
+    "contentFlags": "Contenido marcado"
   },
   "shell": {
     "openSidebar": "Abrir menú lateral",

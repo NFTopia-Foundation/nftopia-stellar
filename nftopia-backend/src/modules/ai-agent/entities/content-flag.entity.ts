@@ -76,4 +76,8 @@ export class ContentFlag {
 
   @Column({ name: 'reviewed_by', type: 'uuid', nullable: true })
   reviewedBy?: string;
+
+  /** Optional moderator rationale captured when the flag is resolved. */
+  @Column({ name: 'resolution_reason', type: 'text', nullable: true })
+  resolutionReason?: string;
 }

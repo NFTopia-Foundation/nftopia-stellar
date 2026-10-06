@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export type ResolutionOutcome = 'approve' | 'reject' | 'dismiss';
 
@@ -85,7 +85,7 @@ export default function ResolveFlagDialog({
 
         <fieldset className="mt-4" disabled={confirming || submitting}>
           <legend className="text-sm font-medium text-gray-700">Outcome</legend>
-          <div class>Name="mt-2 space-y-2">
+          <div className="mt-2 space-y-2">
             {OUTCOMES.map((option) => (
               <label
                 key={option}
@@ -123,7 +123,7 @@ export default function ResolveFlagDialog({
           <textarea
             id="resolve-reason"
             value={reason}
-            onChange={(e => setReason(e.target.value)}
+            onChange={(e) => setReason(e.target.value)}
             disabled={confirming || submitting}
             rows={3}
             placeholder="Add context for this resolution..."
@@ -138,7 +138,7 @@ export default function ResolveFlagDialog({
         ) : null}
 
         {confirming ? (
-          <div class>Name="mt-4 rounded-md bg-amber-50 border border-amber-200 p-3">
+          <div className="mt-4 rounded-md bg-amber-50 border border-amber-200 p-3">
             <p className="text-sm text-amber-900">
               {isBulk
                 ? `Are you sure you want to ${OUTCOME_LABELS[outcome].toLowerCase()} ${flagCount} flags? This cannot be undone.`
@@ -147,7 +147,7 @@ export default function ResolveFlagDialog({
           </div>
         ) : null}
 
-        <div class>Name="mt-6 flex justify-end gap-2">
+        <div className="mt-6 flex justify-end gap-2">
           <button
             type="button"
             onClick={onClose}
@@ -160,7 +160,7 @@ export default function ResolveFlagDialog({
             <button
               type="button"
               onClick={handleSubmit}
-              disabled=submitting}
+              disabled={submitting}
               className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
             >
               {submitting ? 'Submitting...' : 'Confirm resolution'}
