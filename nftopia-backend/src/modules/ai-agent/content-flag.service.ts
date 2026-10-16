@@ -1,3 +1,5 @@
+import { ConfigService } from '@nestjs/config';
+import { Logger } from '@nestjs/common';
 import {
   BadRequestException,
   Injectable,
@@ -15,6 +17,7 @@ import {
 } from './entities/content-flag.entity';
 import { AuditAction, AuditService } from '../../common/audit/audit.service';
 
+export const DEFAULT_MODERATION_CONFIDENCE_THRESHOLD = 0.7;
 export interface CreateContentFlagInput {
   entityType: ContentFlagEntityType;
   entityId: string;
@@ -45,10 +48,13 @@ export interface ListContentFlagsFilter {
  */
 @Injectable()
 export class ContentFlagService {
+  private readonly logger = new Logger(ContentFlagService.name);
+
   constructor(
     @InjectRepository(ContentFlag)
     private readonly contentFlagRepo: Repository<ContentFlag>,
     private readonly auditService: AuditService,
+    private readonly configService: ConfigService,
   ) {}
 
   /**
@@ -62,6 +68,43 @@ export class ContentFlagService {
     entityId: string,
   ): Promise<ContentFlag | null> {
     return this.contentFlagRepo.findOne({ where: { entityType, entityId } });
+  }
+
+  /**
+   * The configured confidence cutoff (env-backed, see ModerationConfigService).
+   * At-or-above this value a flag is reviewable; below it the result is
+   * auto-cleared and no flag row is written.
+   */
+  getConfidenceThreshold(): number {
+    const raw = this.configService.get<string>(
+      'MODERATION_CONFIDENCE_THRESHOLD',
+    );
+    const parsed = raw !== undefined ? Number(raw) : NaN;
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+    return DEFAULT_MODERATION_CONFIDENCE_THRESHOLD;
+  }
+
+  /**
+   * Writes a reviewable flag only when the model confidence meets the
+   * configured threshold. Below-threshold results are auto-cleared (no row
+   * written, no audit entry) and the caller is told via the returned `flagged`
+   * flag so it can record the appropriate metric/log.
+   */
+  async createFlagIfAboveThreshold(
+    input: CreateContentFlagInput,
+  ): Promise<{ flagged: boolean; flag?: ContentFlag; threshold: number }> {
+    const threshold = this.getConfidenceThreshold();
+    if (input.confidence < threshold) {
+      this.logger.debug(
+        `Auto-cleared moderation result for ${input.entityType}:${input.entityId} ` +
+          `(confidence ${input.confidence} < threshold ${threshold})`,
+      );
+      return { flagged: false, threshold };
+    }
+    const flag = await this.createFlag(input);
+    return { flagged: true, flag, threshold };
   }
 
   async createFlag(input: CreateContentFlagInput): Promise<ContentFlag> {
