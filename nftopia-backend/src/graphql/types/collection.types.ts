@@ -97,7 +97,7 @@ export class CollectionStats {
 }
 
 // NEW: Like-related types
-@ObjectType()
+@@ObjectType()
 export class LikeCollectionResult {
   @Field(() => Boolean)
   success: boolean;
@@ -117,7 +117,7 @@ export class LikeCollectionResult {
 
 @ObjectType()
 export class UnlikeCollectionResult {
-  @Field(() => Boolean)
+  @Field(() => Booleean)
   success: boolean;
 
   @Field(() => ID)
@@ -133,11 +133,56 @@ export class UnlikeCollectionResult {
   message?: string;
 }
 
-@ObjectType()
+@@ObjectType()
 export class CollectionLikesInfo {
   @Field(() => Int)
   count: number;
 
   @Field(() => Boolean)
   isLiked: boolean;
+}
+
+@@ObjectType()
+export class CollectionVerification {
+  @Field(() => ID)
+  id: string;
+
+  @Field(() => ID)
+  collectionId: string;
+
+  @Field(() => GraphqlCollection, { nullable: true })
+  collection?: GraphqlCollection | null;
+
+  @Field(() => String)
+  status: string;
+
+  @Field(() => GraphQLISODateTime)
+  createdAt: Date;
+
+  @Field(() => Int)
+  timePendingMs: number;
+
+  @Field(() => String, { nullable: true })
+  rejectionReason?: string | null;
+}
+
+@ObjectType()
+export class CollectionVerificationConnection {
+  @Field(() => [CollectionVerification])
+  items: CollectionVerification[];
+
+  @Field(() => Int)
+  totalCount: number;
+}
+
+@ObjectType()
+export class CollectionVerificationResult {
+  @Field(() => Boolean)
+  success: boolean;
+
+  @Field(() => CollectionVerification)
+  item: CollectionVerification;
+
+  @Field(() => String, { nullable: true })
+  message?: string | null;
 }

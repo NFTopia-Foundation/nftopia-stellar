@@ -1,0 +1,18 @@
+{
+  "default_branch": "main",
+  "branches": [
+    "fix/issue-562-build-collection-verifications-queue-screen",
+    "main",
+    "origin"
+  ],
+  "parent": {
+    "fix/issue-562-build-collection-verifications-queue-screen": "main",
+    "main": null,
+    "origin": "main"
+  },
+  "order": [
+    "main",
+    "fix/issue-562-build-collection-verifications-queue-screen",
+    "origin"
+  ]
+}

@@ -29,6 +29,33 @@ type RawCollectionAggregates = {
   floorPrice: string | null;
 };
 
+export interface PendingVerificationQueueItem {
+  id: string;
+  collectionId: string;
+  collectionName: string;
+  collectionSymbol: string;
+  collectionDescription: string | null;
+  collectionImageUrl: string | null;
+  collectionBannerImageUrl: string | null;
+  contractAddress: string;
+  requesterId: string;
+  requesterUsername: string | null;
+  proofLinks: string[] | null;
+  additionalInfo: string | null;
+  status: VerificationStatus;
+  createdAt: Date;
+  pendingSince: Date;
+  pendingDurationMs: number;
+}
+
+export interface PendingVerificationQueueResult {
+  data: PendingVerificationQueueItem[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
 @Injectable()
 export class CollectionService {
   constructor(
@@ -256,7 +283,7 @@ export class CollectionService {
 
     if (query.search) {
       qb.andWhere(
-        "(LOWER(collection.name) LIKE :search OR LOWER(collection.symbol) LIKE :search OR LOWER(COALESCE(collection.description, '')) LIKE :search)",
+        "(LOWER(collection.name) LIKE :search OR LOWER(collection.symbol) LIKE :search OR LOWER(COALESCE(collection.description, '') ) LIKE :search)",
         { search: `%${query.search.toLowerCase()}%` },
       );
     }
@@ -369,6 +396,62 @@ export class CollectionService {
     };
   }
 
+  async getPendingVerificationQueue(
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<PendingVerificationQueueResult> {
+    const safePage = Math.max(1, Math.floor(page));
+    const safeLimit = Math.min(Math.max(1, Math.floor(limit)), 100);
+    const skip = (safePage - 1) * safeLimit;
+
+    const [data, total] = await this.verificationRequestRepository.findAndCount(
+      {
+        where: { status: VerificationStatus.PENDING },
+        relations: ['collection', 'requester'],
+        order: { createdAt: 'ASC' },
+        skip,
+        take: safeLimit,
+      },
+    );
+
+    const now = Date.now();
+
+    const items: PendingVerificationQueueItem[] = data.map((request) => {
+      const createdAt = request.createdAt
+        ? new Date(request.createdAt)
+        : new Date();
+      const pendingDurationMs = Math.max(0, now - createdAt.getTime());
+
+      return {
+        id: request.id,
+        collectionId: request.collectionId,
+        collectionName: request.collection?.name ?? 'Unknown collection',
+        collectionSymbol: request.collection?.symbol ?? '',
+        collectionDescription: request.collection?.description ?? null,
+        collectionImageUrl: request.collection?.imageUrl ?? null,
+        collectionBannerImageUrl:
+          request.collection?.bannerImageUrl ?? null,
+        contractAddress: request.collection?.contractAddress ?? '',
+        requesterId: request.requesterId,
+        requesterUsername: request.requester?.username ?? null,
+        proofLinks: request.proofLinks ?? null,
+        additionalInfo: request.additionalInfo ?? null,
+        status: request.status,
+        createdAt,
+        pendingSince: createdAt,
+        pendingDurationMs,
+      };
+    });
+
+    return {
+      data: items,
+      total,
+      page: safePage,
+      limit: safeLimit,
+      totalPages: Math.max(1, Math.ceil(total / safeLimit)),
+    };
+  }
+
   async approveVerificationRequest(
     requestId: string,
     adminId: string,
@@ -421,9 +504,17 @@ export class CollectionService {
       );
     }
 
+    const trimmedReviewNotes = reviewNotes?.trim();
+
+    if (!trimmedReviewNotes) {
+      throw new BadRequestException(
+        'A rejection reason is required when rejecting a verification request',
+      );
+    }
+
     request.status = VerificationStatus.REJECTED;
     request.reviewedBy = adminId;
-    request.reviewNotes = reviewNotes;
+    request.reviewNotes = trimmedReviewNotes;
     request.reviewedAt = new Date();
 
     return this.verificationRequestRepository.save(request);
@@ -450,11 +541,12 @@ export class CollectionService {
       return { likesCount: count, userLiked: true };
     }
 
-    // Create like
+    // Create new like
     const like = this.collectionLikeRepository.create({
       collectionId,
       userId,
     });
+
     await this.collectionLikeRepository.save(like);
 
     const count = await this.getLikesCount(collectionId);
@@ -471,14 +563,8 @@ export class CollectionService {
     // Check if collection exists
     await this.findById(collectionId);
 
-    // Find and remove like
-    const like = await this.collectionLikeRepository.findOne({
-      where: { collectionId, userId },
-    });
-
-    if (like) {
-      await this.collectionLikeRepository.remove(like);
-    }
+    // Delete the like if it exists
+    await this.collectionLikeRepository.delete({ collectionId, userId });
 
     const count = await this.getLikesCount(collectionId);
     return { likesCount: count, userLiked: false };
@@ -494,23 +580,31 @@ export class CollectionService {
   }
 
   /**
-   * Check if a user has liked a collection
+   * Check if user has liked a collection
    */
-  async hasUserLiked(collectionId: string, userId: string): Promise<boolean> {
+  async hasUserLiked(
+    collectionId: string,
+    userId: string,
+  ): Promise<boolean> {
     const like = await this.collectionLikeRepository.findOne({
       where: { collectionId, userId },
     });
+
     return !!like;
   }
 
   /**
-   * Get user's liked collection IDs
+   * Get likes info for a collection (count + whether current user liked)
    */
-  async getUserLikedCollectionIds(userId: string): Promise<string[]> {
-    const likes = await this.collectionLikeRepository.find({
-      where: { userId },
-      select: ['collectionId'],
-    });
-    return likes.map((like) => like.collectionId);
+  async getLikesInfo(
+    collectionId: string,
+    userId?: string,
+  ): Promise<{ likesCount: number; userLiked: boolean }> {
+    const likesCount = await this.getLikesCount(collectionId);
+    const userLiked = userId
+      ? await this.hasUserLiked(collectionId, userId)
+      : false;
+
+    return { likesCount, userLiked };
   }
 }

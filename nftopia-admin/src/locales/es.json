@@ -34,11 +34,12 @@
     "dashboard": "Panel",
     "collections": "Colecciones",
     "settings": "Configuración",
-    "contentFlags": "Contenido marcado"
+    "contentFlags": "Contenido marcado",
+    "collectionVerifications": "Verificaciones de colecciones"
   },
   "shell": {
     "openSidebar": "Abrir menú lateral",
-    "closeSidebar": "Cerrar menú lateral",
+    "closeSidebar": "Cerrar mefú lateral",
     "localeSwitcher": "Selector de idioma"
   },
   "table": {
@@ -108,12 +109,52 @@
       "reason": "Motivo (opcional)",
       "reasonPlaceholder": "Añade contexto para la resolución...",
       "selectedCount": "{{count}} banderas seleccionadas",
-      "confirmation": "±Estás seguro de que quieres resolver esta bandera con el resultado \"{{outcome}}\"? Esta acción no se puede deshacer.",
-      "bulkConfirmation": "±Estás seguro de que quieres resolver {{count}} banderas con el resultado \"{{outcome}}\"? Esta acción no se puede deshacer.",
+      "confirmation": "¿Estás seguro de que quieres resolver esta bandera con el resultado \"{{outcome}}\"? Esta acción no se puede deshacer.",
+      "bulkConfirmation": "¿Estás seguro de que quieres resolver {{count}} banderas con el resultado \"{{outcome}}\"? Esta acción no se puede deshacer.",
       "success": "Bandera resuelta correctamente.",
       "bulkSuccess": "{{count}} banderas resueltas correctamente.",
       "error": "No se pudo resolver la bandera. Inténtalo de nuevo.",
       "bulkError": "No se pudieron resolver las banderas. Inténtalo de nuevo."
+    }
+  },
+  "collectionVerifications": {
+    "title": "Verificaciones de colecciones",
+    "description": "Revisa las solicitudes de verificación de colecciones pendientes.",
+    "empty": "No hay solicitudes de verificación pendientes.",
+    "loading": "Cargando solicitudes de verificación…",
+    "refresh": "Actualizar",
+    "selectPrompt": "Selecciona una solicitud para ver los detalles de la colección.",
+    "error": {
+      "load": "No se pudieron cargar las solicitudes de verificación.",
+      "approve": "No se pudo aprobar la solicitud. Inténtalo de nuevo.",
+      "reject": "No se pudo rechazar la solicitud. Inténtalo de nuevo."
+    },
+    "columns": {
+      "collection": "Colección",
+      "requester": "Solicitante",
+      "pendingFor": "Pendiente desde",
+      "actions": "Acciones"
+    },
+    "actions": {
+      "approve": "Aprobar",
+      "reject": "Rechazar"
+    },
+    "details": {
+      "contract": "Contrato",
+      "supply": "Suministro",
+      "proofLinks": "Enlaces de prueba",
+      "additionalInfo": "Información adicional",
+      "none": "No proporcionado"
+    },
+    "confirm": {
+      "approveTitle": "Confirmar las aprobación",
+      "approveMessage": "¿Estás seguro de que quieres aprobar la verificación de {{name}}? Esto marcará la colección como verificada.",
+      "approve": "Aprobar",
+      "cancel": "Cancelar"
+    },
+    "success": {
+      "approve": "Verificación aprobada.",
+      "reject": "Verificación rechazada."
     }
   }
 }
