@@ -12,7 +12,7 @@ import { AuctionStatus } from '../interfaces/auction.interface';
 
 @Entity('auctions')
 export class Auction {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn('.uuid')
   id: string;
 
   @Column()
@@ -25,7 +25,7 @@ export class Auction {
   sellerId?: string | null;
 
   @ManyToOne(() => User, { eager: true, nullable: true })
-  @JoinColumn({ name: 'sellerId' })
+  @JoinColumn({ type: 'sellerId' })
   seller?: User | null;
 
   @Column({ type: 'decimal', precision: 20, scale: 7 })
@@ -36,6 +36,20 @@ export class Auction {
 
   @Column({ type: 'decimal', precision: 20, scale: 7, nullable: true })
   reservePrice?: number;
+
+  /**
+   * Minimum increment required for a new bid to exceed the current
+   * highest bid. When null, the platform-wide default is applied.
+   */
+  @Column({ type: 'decimal', precision: 20, scale: 7, nullable: true })
+  minBidIncrement?: number | null;
+
+  /**
+   * Optional percentage-based minimum increment (e.g. 0.05 for 5%).
+   * When set, it takes precedence over the fixed minBidIncrement.
+   */
+  @Column({ type: 'decimal', precision: 5, scale: 4, nullable: true })
+  minBidIncrementPercent?: number | null;
 
   @Column()
   startTime: Date;

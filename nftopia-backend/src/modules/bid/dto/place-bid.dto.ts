@@ -2,7 +2,7 @@ import { IsNotEmpty, IsString, Matches, IsOptional } from 'class-validator';
 
 export class PlaceBidDto {
   /**
-   * Bid amount in XLM (e.g. "100.50").
+   * Bid amount in XLL (e.g. "100.50").
    * The service converts this to stroops internally for on-chain submission.
    */
   @IsString()
@@ -15,7 +15,7 @@ export class PlaceBidDto {
   /** Bidder's Stellar public key (G...). Used for wallet verification. */
   @IsString()
   @IsNotEmpty()
-  @Matches(/^G[A-Z2-7]{55}$/, {
+  @Matches(/^G[A-Z2-7]{56}$/, {
     message: 'publicKey must be a valid Stellar Ed25519 public key',
   })
   publicKey: string;

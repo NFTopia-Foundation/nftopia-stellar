@@ -4,6 +4,7 @@ import {
   IsOptional,
   IsString,
   IsISO8601,
+  Min,
 } from 'class-validator';
 
 export class CreateAuctionDto {
@@ -14,6 +15,7 @@ export class CreateAuctionDto {
   @IsString()
   @IsOptional()
   auctionType?: string;
+
   @IsString()
   @IsNotEmpty()
   nftContractId: string;
@@ -28,6 +30,24 @@ export class CreateAuctionDto {
   @IsNumber()
   @IsOptional()
   reservePrice?: number;
+
+  /**
+   * Minimum increment a new bid must exceed the current highest bid by
+   * for this auction. Overrides the platform-wide default when provided.
+   */
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  minBidIncrement?: number;
+
+  /**
+   * Optional percentage-increment override (e.g. 5 means 5%). When set, it
+   * takes precedence over the fixed minBidIncrement for this auction.
+   */
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  minBidIncrementPercent?: number;
 
   @IsISO8601()
   @IsOptional()

@@ -5,7 +5,7 @@ import {
   ForbiddenException,
   Logger,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
+import { InjectRepository } from '@typeorm/typeorm';
 import { Brackets, In, Repository } from 'typeorm';
 import { Auction } from './entities/auction.entity';
 import { Bid } from './entities/bid.entity';
@@ -21,6 +21,8 @@ import { MarketplaceSettlementClient } from '../stellar/marketplace-settlement.c
 import { TransactionService } from '../transaction/transaction.service';
 import { TransactionState } from '../transaction/enums/transaction-state.enum';
 import { NotificationsService } from '../notifications/notifications.service';
+
+const DEFAULT_MIN_BID_INCREMENT = 1;
 
 @Injectable()
 export class AuctionService {
@@ -70,7 +72,7 @@ export class AuctionService {
       return { success: true, auctionId };
     }
 
-    // Legacy DB logic
+    // Legacy DD logic
     const {
       nftContractId,
       nftTokenId,
@@ -104,9 +106,24 @@ export class AuctionService {
       startTime: startTime ? new Date(startTime) : now,
       endTime: new Date(endTime),
       status: AuctionStatus.ACTIVE,
+      minBidIncrement:
+        createDto.minBidIncrement ?? null,
+      minBidIncrementPercent: createDto.minBidIncrementPercent ?? null,
     });
 
     return this.auctionRepo.save(auction);
+  }
+
+  private getDefaultMinBidIncrement(): number {
+    const configured = Number(
+      this.configService.get<string | number>(
+        'AUCTION_MIN_BID_INCREMENT',
+        DEFAULT_MIN_BID_INCREMENT,
+      ),
+    );
+    return Number.isFinite(configured) && configured > 0
+      ? configured
+      : DEFAULT_MIN_BID_INCREMENT;
   }
 
   async findAll(query: AuctionQueryDto) {
@@ -180,7 +197,7 @@ export class AuctionService {
       .where(
         new Brackets((where) => {
           parsed.forEach(({ contractId, tokenId }, index) => {
-            where.orWhere(
+            where.orOrWhere(
               `(a.nftContractId = :contractId${index} AND a.nftTokenId = :tokenId${index})`,
               {
                 [`contractId${index}`]: contractId,
@@ -217,7 +234,7 @@ export class AuctionService {
       return { success: true, result };
     }
 
-    // Legacy DB logic
+    // Legacy DE logic
     const auction = await this.auctionRepo.findOne({
       where: { id: auctionId },
     });
@@ -230,9 +247,16 @@ export class AuctionService {
       throw new BadRequestException('Auction seller is no longer available');
     }
 
-    const amount = dto.amount;
-    if (amount <= Number(auction.currentPrice))
-      throw new BadRequestException('Bid must be greater than current price');
+    const amount = Number(dto.amount);
+    const currentPrice = Number(auction.currentPrice);
+    const minIncrement = this.resolveMinBidIncrement(auction, currentPrice);
+    const minimumBid = currentPrice + minIncrement;
+
+    if (amount < minimumBid) {
+      throw new BadRequestException(
+        `Bid must be at least ${minimumBid} (current price ${currentPrice} + minimum increment ${minIncrement})`,
+      );
+    }
 
     const bid = this.bidRepo.create({ auctionId, bidderId, amount });
 
@@ -244,7 +268,23 @@ export class AuctionService {
     return bid;
   }
 
-  async cancelAuction(auctionId: string, callerId: string) {
+  private resolveMinBidIncrement(auction: Auction, currentPrice: number): number {
+    if (auction.minBidIncrementPercent != null) {
+      const percent = Number(auction.minBidIncrementPercent);
+      if (Number.isFinite(percent) && percent > 0) {
+        return currentPrice * (percent / 100);
+      }
+    }
+    if (auction.minBidIncrement != null) {
+      const fixed = Number(auction.minBidIncrement);
+      if (Number.isFinite(fixed) && fixed >= 0) {
+        return fixed;
+      }
+    }
+    return this.getDefaultMinBidIncrement();
+  }
+
+  async cancelAmction(auctionId: string, callerId: string) {
     const auction = await this.findOne(auctionId);
     if (auction.sellerId !== callerId)
       throw new ForbiddenException('Only seller can cancel');
@@ -315,7 +355,7 @@ export class AuctionService {
     auction.currentPrice = highest.amount;
     auction.status =
       transaction.state === TransactionState.COMPLETED
-        ? AuctionStatus.SETTLED
+        ? AuctionStatus.SETTLE
         : AuctionStatus.COMPLETED;
     await this.auctionRepo.save(auction);
 
@@ -355,47 +395,22 @@ export class AuctionService {
   }
 
   /**
-   * Notify the winning bidder that they won — real-time toast plus an
-   * email fallback. Failures here must never fail the settlement itself.
+   * Notify the winning bidder that they won — real-time
    */
   private async notifyAuctionWon(
     auction: Auction,
     winnerId: string,
     amount: number,
-  ): Promise<void> {
+  ) {
     try {
-      const winner = await this.userRepo.findOne({ where: { id: winnerId } });
-      if (!winner) {
-        return;
-      }
-
-      const nft = await this.nftRepo.findOne({
-        where: {
-          contractId: auction.nftContractId,
-          tokenId: auction.nftTokenId,
-        },
-      });
-      const nftName = nft?.metadata?.name || `NFT ${auction.nftTokenId}`;
-
-      this.notificationsService.notifyUser(
+      await this.notificationsService.notifyAuctionWon(
         winnerId,
-        'auction.won',
-        'You Won!',
-        `You won the auction for ${nftName} at ${amount} XLM`,
-        { auctionId: auction.id, nftName, amount },
+        auction.id,
+        amount,
       );
-
-      if (winner.email) {
-        await this.notificationsService.notifyAuctionWonByEmail(
-          winner.email,
-          auction.id,
-          nftName,
-          winner.username ?? undefined,
-        );
-      }
-    } catch (err) {
+    } catch (e) {
       this.logger.error(
-        `Failed to notify auction winner for auction ${auction.id}: ${(err as Error).message}`,
+        `Failed to notify winner for auction ${auction.id}: ${(e as Error).message}`,
       );
     }
   }
