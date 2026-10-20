@@ -1,7 +1,13 @@
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { JwtService } from '@nestjs/jwt';
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  HttpStatus,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
+import * as crypto from 'crypto';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { AuthService } from './auth.service';
 import { User } from '../users/user.entity';
@@ -19,6 +25,20 @@ import {
   WALLET_NONCE_STORE,
 } from './wallet-nonce.store';
 import { FakeRedisServer } from '../../test/helpers/fake-wallet-nonce-redis';
+import {
+  LOGIN_ATTEMPT_STORE,
+  RedisLoginAttemptStore,
+} from './login-attempt.store';
+import type { LoginAttemptStore } from './login-attempt.store';
+import {
+  LOGIN_LOCKOUT_POLICY,
+  LoginLockedException,
+  LoginLockoutService,
+  accountRef,
+  loginLockoutPolicyFrom,
+} from './login-lockout.service';
+import type { LoginLockoutPolicy } from './login-lockout.service';
+import { PrometheusService } from '../common/metrics/prometheus';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -95,11 +115,41 @@ describe('AuthService', () => {
     sendAuctionWonEmail: jest.fn(),
   };
 
-  /** A fresh AuthService (new process state) on the shared nonce Redis. */
-  async function buildService(): Promise<AuthService> {
+  const prometheusService = {
+    incrementLoginFailure: jest.fn(),
+    incrementLoginLockout: jest.fn(),
+    incrementLoginLockedRejection: jest.fn(),
+    incrementLoginLockoutStoreError: jest.fn(),
+  };
+
+  /** Lockout defaults, as when no LOGIN_LOCKOUT_* variable is set. */
+  const defaultLockoutPolicy = () => loginLockoutPolicyFrom(() => undefined);
+
+  /**
+   * A fresh AuthService (new process state) on the shared nonce Redis, which
+   * also holds the login lockout counters.
+   */
+  async function buildService(
+    options: {
+      lockoutPolicy?: LoginLockoutPolicy;
+      lockoutStore?: LoginAttemptStore;
+    } = {},
+  ): Promise<AuthService> {
     const moduleRef = await Test.createTestingModule({
       providers: [
         AuthService,
+        LoginLockoutService,
+        {
+          provide: LOGIN_ATTEMPT_STORE,
+          useValue:
+            options.lockoutStore ??
+            new RedisLoginAttemptStore(nonceRedis.createClient()),
+        },
+        {
+          provide: LOGIN_LOCKOUT_POLICY,
+          useValue: options.lockoutPolicy ?? defaultLockoutPolicy(),
+        },
+        { provide: PrometheusService, useValue: prometheusService },
         {
           provide: JwtService,
           useValue: jwtService,
@@ -830,6 +880,214 @@ describe('AuthService', () => {
       );
 
       expect(refreshTokenRepository.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('email login lockout (#648)', () => {
+    const EMAIL = 'victim@nftopia.io';
+    const PASSWORD = 'Correct-horse1!';
+    let passwordHash: string;
+    let warnSpy: jest.SpyInstance;
+    let errorSpy: jest.SpyInstance;
+
+    /** First argument of each call to a logger spy. */
+    function logged(spy: jest.SpyInstance): string[] {
+      return (spy.mock.calls as unknown[][]).map((call) => String(call[0]));
+    }
+
+    function hashFor(password: string): string {
+      const salt = crypto.randomBytes(16).toString('hex');
+      return `${salt}:${crypto.scryptSync(password, salt, 64).toString('hex')}`;
+    }
+
+    function withUser(email = EMAIL) {
+      userRepository.findOne.mockImplementation(
+        ({ where }: { where: { email: string } }) =>
+          Promise.resolve(
+            where.email === email
+              ? { id: 'user-victim', email, username: 'victim', passwordHash }
+              : null,
+          ),
+      );
+    }
+
+    function login(password: string, email = EMAIL, ip = '203.0.113.7') {
+      return service.loginWithEmail({ email, password }, ip);
+    }
+
+    async function failTimes(n: number, email = EMAIL, ip = '203.0.113.7') {
+      for (let i = 0; i < n; i++) {
+        await expect(login('Wrong-pass1!', email, ip)).rejects.toBeInstanceOf(
+          UnauthorizedException,
+        );
+      }
+    }
+
+    beforeAll(() => {
+      passwordHash = hashFor(PASSWORD);
+    });
+
+    beforeEach(() => {
+      withUser();
+      userRepository.save.mockImplementation((value: unknown) =>
+        Promise.resolve(value),
+      );
+      jwtService.sign.mockReturnValue('signed-token');
+      warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+      errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    });
+
+    afterEach(() => {
+      warnSpy.mockRestore();
+      errorSpy.mockRestore();
+    });
+
+    it('logs in normally and clears earlier failures on success', async () => {
+      await failTimes(4);
+      await expect(login(PASSWORD)).resolves.toHaveProperty(
+        'access_token',
+        'signed-token',
+      );
+      // The count restarted, so four more failures still don't lock.
+      await failTimes(4);
+      await expect(login(PASSWORD)).resolves.toHaveProperty('access_token');
+      expect(prometheusService.incrementLoginLockout).not.toHaveBeenCalled();
+    });
+
+    it('locks the account once the threshold is reached, even for the right password', async () => {
+      await failTimes(5);
+      userRepository.findOne.mockClear();
+
+      const locked = await login(PASSWORD).catch((e: unknown) => e);
+      expect(locked).toBeInstanceOf(LoginLockedException);
+      expect((locked as LoginLockedException).getStatus()).toBe(
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+      expect((locked as LoginLockedException).retryAfterSeconds).toBe(60);
+      // Rejected before the user lookup and password check.
+      expect(userRepository.findOne).not.toHaveBeenCalled();
+      expect(prometheusService.incrementLoginLockout).toHaveBeenCalledWith(
+        'account',
+      );
+      expect(
+        prometheusService.incrementLoginLockedRejection,
+      ).toHaveBeenCalled();
+    });
+
+    it('lets the owner back in once the lockout expires', async () => {
+      await failTimes(5);
+      nonceRedis.advance(59_000);
+      await expect(login(PASSWORD)).rejects.toBeInstanceOf(
+        LoginLockedException,
+      );
+      nonceRedis.advance(2_000);
+      await expect(login(PASSWORD)).resolves.toHaveProperty('access_token');
+    });
+
+    it('doubles the lockout each time and caps it', async () => {
+      const policy = defaultLockoutPolicy();
+      policy.account.maxLockSeconds = 150;
+      service = await buildService({ lockoutPolicy: policy });
+
+      const lockouts: number[] = [];
+      for (let round = 0; round < 3; round++) {
+        await failTimes(5);
+        const locked = (await login(PASSWORD).catch(
+          (e: unknown) => e,
+        )) as LoginLockedException;
+        lockouts.push(locked.retryAfterSeconds);
+        nonceRedis.advance(locked.retryAfterSeconds * 1000 + 1000);
+      }
+      expect(lockouts).toEqual([60, 120, 150]);
+    });
+
+    it('treats unknown emails the same way, so a lockout reveals nothing', async () => {
+      const ghost = 'nobody@nftopia.io';
+      const wrongReal = await login('Wrong-pass1!').catch((e: unknown) => e);
+      const wrongGhost = await login('Wrong-pass1!', ghost).catch(
+        (e: unknown) => e,
+      );
+      expect((wrongGhost as Error).message).toBe((wrongReal as Error).message);
+
+      await failTimes(4, ghost);
+      await failTimes(4);
+      const ghostLocked = (await login(PASSWORD, ghost).catch(
+        (e: unknown) => e,
+      )) as LoginLockedException;
+      const realLocked = (await login(PASSWORD).catch(
+        (e: unknown) => e,
+      )) as LoginLockedException;
+
+      expect(ghostLocked).toBeInstanceOf(LoginLockedException);
+      expect(realLocked).toBeInstanceOf(LoginLockedException);
+      expect(ghostLocked.getResponse()).toEqual(realLocked.getResponse());
+      expect(ghostLocked.retryAfterSeconds).toBe(realLocked.retryAfterSeconds);
+    });
+
+    it('locks a source IP that fails across many accounts', async () => {
+      const policy = defaultLockoutPolicy();
+      policy.ip = { ...policy.account, maxAttempts: 3 };
+      service = await buildService({ lockoutPolicy: policy });
+
+      for (const email of ['a@nftopia.io', 'b@nftopia.io', 'c@nftopia.io']) {
+        await failTimes(1, email, '198.51.100.9');
+      }
+      await expect(
+        login(PASSWORD, EMAIL, '198.51.100.9'),
+      ).rejects.toBeInstanceOf(LoginLockedException);
+      // Another source is unaffected.
+      await expect(login(PASSWORD, EMAIL, '192.0.2.1')).resolves.toHaveProperty(
+        'access_token',
+      );
+      expect(prometheusService.incrementLoginLockout).toHaveBeenCalledWith(
+        'ip',
+      );
+    });
+
+    it('keeps the lockout across restarts and instances', async () => {
+      await failTimes(5);
+      const otherInstance = await buildService();
+      await expect(
+        otherInstance.loginWithEmail({ email: EMAIL, password: PASSWORD }),
+      ).rejects.toBeInstanceOf(LoginLockedException);
+    });
+
+    it('logs lockouts without the raw email, and alerts on repeated ones', async () => {
+      await failTimes(5);
+      const warning = logged(warnSpy).join('\n');
+      expect(warning).toContain('"event":"login_lockout"');
+      expect(warning).toContain(`"accountRef":"${accountRef(EMAIL)}"`);
+      expect(warning).toContain('"userId":"user-victim"');
+      expect(warning).not.toContain(EMAIL);
+      expect(errorSpy).not.toHaveBeenCalled();
+
+      for (let round = 0; round < 2; round++) {
+        nonceRedis.advance(3_600_000);
+        await failTimes(5);
+      }
+      const alerts = logged(errorSpy);
+      expect(alerts).toHaveLength(1);
+      expect(alerts[0]).toContain('ALERT sustained failed-login pressure');
+      expect(alerts[0]).toContain('"level":3');
+    });
+
+    it('allows login when the lockout store is down, and reports it', async () => {
+      const brokenStore: LoginAttemptStore = {
+        lockedFor: () => Promise.reject(new Error('ECONNREFUSED')),
+        recordFailure: () => Promise.reject(new Error('ECONNREFUSED')),
+        reset: () => Promise.reject(new Error('ECONNREFUSED')),
+      };
+      service = await buildService({ lockoutStore: brokenStore });
+
+      await failTimes(6);
+      await expect(login(PASSWORD)).resolves.toHaveProperty('access_token');
+      expect(
+        prometheusService.incrementLoginLockoutStoreError,
+      ).toHaveBeenCalledWith('check');
+      expect(
+        prometheusService.incrementLoginLockoutStoreError,
+      ).toHaveBeenCalledWith('record');
+      expect(logged(errorSpy)[0]).toContain('allowing login');
     });
   });
 });

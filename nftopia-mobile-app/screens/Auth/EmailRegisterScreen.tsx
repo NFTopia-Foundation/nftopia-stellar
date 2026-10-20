@@ -7,6 +7,8 @@ import { KeyboardAwareScreen } from '@/src/components/KeyboardAwareScreen';
 import FormInput from './components/FormInput';
 import PasswordStrengthIndicator from './components/PasswordStrengthIndicator';
 import { validateEmail, validatePassword, validateUsername, validateConfirmPassword } from './utils/validation';
+import { authService } from '@/services/auth/auth.service';
+import { ApiAuthError } from '@/services/auth/types';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'EmailRegister'>;
 
@@ -78,27 +80,56 @@ export default function EmailRegisterScreen({ navigation }: Props) {
     try {
       setIsLoading(true);
       setAuthError(null);
-      
-      // TODO: Implement actual registration logic with backend
-      // For now, just simulate registration
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Simulate user data
+
+      const response = await authService.emailRegister(
+        email.trim(),
+        password,
+        username.trim(),
+      );
+
+      // Store the backend's user; flipping isAuthenticated makes
+      // AppNavigator swap AuthNavigator for MainNavigator, which is how
+      // this screen hands the user into the authenticated app.
       setUser({
-        id: Date.now().toString(),
-        email: email,
+        id: response.user.id,
+        email: response.user.email ?? email.trim(),
+        username: response.user.username ?? username.trim(),
         createdAt: new Date(),
       });
 
       Alert.alert('Success', 'Account created successfully!');
-      
-      // Navigate to main app (to be implemented)
-      // navigation.reset({ routes: [{ name: 'Main' }] });
     } catch (error) {
       console.error('Registration error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to register';
+
+      const apiError = (error ?? {}) as ApiAuthError;
+      const statusCode =
+        typeof apiError.statusCode === 'number' ? apiError.statusCode : undefined;
+      const errorMessage =
+        typeof apiError.message === 'string' && apiError.message.length > 0
+          ? apiError.message
+          : 'Failed to register';
+
+      // The auth service reports failures as { message, statusCode }: a 4xx
+      // status means the backend rejected the submitted values (e.g. 409
+      // "Email is already registered"), while a failure with no status at
+      // all is a transport problem (server unreachable, timeout, offline).
+      const isNetworkError =
+        statusCode === undefined &&
+        /network|timeout|connection|offline/i.test(errorMessage);
+      const isValidationError =
+        statusCode !== undefined && statusCode >= 400 && statusCode < 500;
+
       setAuthError(errorMessage);
-      Alert.alert('Error', errorMessage);
+      if (isNetworkError) {
+        Alert.alert(
+          'Network Error',
+          'Unable to reach the server. Check your connection and try again.',
+        );
+      } else if (isValidationError) {
+        Alert.alert('Validation Error', errorMessage);
+      } else {
+        Alert.alert('Error', errorMessage);
+      }
     } finally {
       setIsLoading(false);
     }

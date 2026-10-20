@@ -286,6 +286,16 @@ function ProfileContent({ navigation }: Props) {
           </Text>
           <Text style={styles.arrow} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">→</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.linkRow}
+          onPress={() => navigation.navigate('AddressBook')}
+          accessibilityRole="button"
+          accessibilityLabel="Address Book"
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Text style={styles.linkText}>Address Book</Text>
+          <Text style={styles.arrow} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">→</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.card}>

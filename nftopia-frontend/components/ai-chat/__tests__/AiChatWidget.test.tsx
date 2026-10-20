@@ -1,15 +1,17 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { sendAiChat, streamAiChat } from "@/lib/api/ai-chat";
+import { checkAiHealth, sendAiChat, streamAiChat } from "@/lib/api/ai-chat";
 import { useAiChatStore } from "@/lib/stores/ai-chat-store";
 import { AiChatWidget } from "@/components/ai-chat/AiChatWidget";
 
 jest.mock("@/lib/api/ai-chat", () => ({
   sendAiChat: jest.fn(),
   streamAiChat: jest.fn(),
+  checkAiHealth: jest.fn(),
 }));
 
 const mockedStreamAiChat = jest.mocked(streamAiChat);
 const mockedSendAiChat = jest.mocked(sendAiChat);
+const mockedCheckAiHealth = jest.mocked(checkAiHealth);
 
 /** Minimal SSE-style stream mock: pushes `onText` then resolves. */
 function mockStreamingReply(reply: string, sessionId: string, text = reply) {
@@ -22,6 +24,10 @@ function mockStreamingReply(reply: string, sessionId: string, text = reply) {
 describe("AiChatWidget", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockedCheckAiHealth.mockResolvedValue({
+      status: "up",
+      timestamp: "2026-10-19T00:00:00.000Z",
+    });
     act(() => {
       // The store is module-scoped, so clear both the transcript and the open
       // state between cases.
@@ -30,14 +36,16 @@ describe("AiChatWidget", () => {
     });
   });
 
-  it("is reachable from anywhere and opens the assistant panel", () => {
+  it("is reachable from anywhere and opens the assistant panel", async () => {
     render(<AiChatWidget />);
 
     const launcher = screen.getByRole("button", { name: "Open AI assistant" });
     expect(launcher).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
-    fireEvent.click(launcher);
+    await act(async () => {
+      fireEvent.click(launcher);
+    });
 
     const dialog = screen.getByRole("dialog", { name: "NFTopia assistant" });
     expect(dialog).toHaveAttribute("aria-modal", "false");
@@ -141,7 +149,9 @@ describe("AiChatWidget", () => {
   it("closes on Escape and returns focus to the launcher", async () => {
     render(<AiChatWidget />);
     const launcher = screen.getByRole("button", { name: "Open AI assistant" });
-    fireEvent.click(launcher);
+    await act(async () => {
+      fireEvent.click(launcher);
+    });
     expect(screen.getByRole("dialog")).toBeInTheDocument();
 
     fireEvent.keyDown(document, { key: "Escape" });
@@ -153,4 +163,182 @@ describe("AiChatWidget", () => {
       ).toHaveFocus(),
     );
   });
+
+  it("shows a clear unavailable state when opening during a known outage (status: down)", async () => {
+    mockedCheckAiHealth.mockResolvedValue({
+      status: "down",
+      timestamp: "2026-10-19T00:00:00.000Z",
+    });
+
+    render(<AiChatWidget />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Open AI assistant" }));
+    });
+
+    // Unavailable banner should be visible before attempting to send anything
+    const degradedBanner = await screen.findByTestId("ai-chat-degraded");
+    expect(degradedBanner).toBeInTheDocument();
+    expect(degradedBanner).toHaveTextContent("Assistant temporarily unavailable");
+    expect(degradedBanner).toHaveTextContent(
+      "The AI service is currently unavailable. Please check back shortly.",
+    );
+
+    // Input must be disabled during the outage
+    const input = screen.getByLabelText("Message the AI assistant");
+    expect(input).toBeDisabled();
+    expect(input).toHaveAttribute(
+      "placeholder",
+      "Assistant temporarily unavailable",
+    );
+
+    // Send button must be disabled
+    const sendBtn = screen.getByRole("button", { name: "Send message" });
+    expect(sendBtn).toBeDisabled();
+
+    // Suggestion chips must also be disabled during outage
+    const suggestionChips = screen.getAllByRole("button", {
+      name: /trending|auctions|royalties/i,
+    });
+    for (const chip of suggestionChips) {
+      expect(chip).toBeDisabled();
+    }
+
+    // Attempting to send should not invoke stream or send
+    fireEvent.click(sendBtn);
+    expect(mockedStreamAiChat).not.toHaveBeenCalled();
+    expect(mockedSendAiChat).not.toHaveBeenCalled();
+  });
+
+  it("shows unavailable state when backend reports unconfigured", async () => {
+    mockedCheckAiHealth.mockResolvedValue({
+      status: "unconfigured",
+      timestamp: "2026-10-19T00:00:00.000Z",
+    });
+
+    render(<AiChatWidget />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Open AI assistant" }));
+    });
+
+    const degradedBanner = await screen.findByTestId("ai-chat-degraded");
+    expect(degradedBanner).toBeInTheDocument();
+    expect(screen.getByLabelText("Message the AI assistant")).toBeDisabled();
+  });
+
+  it("shows unavailable state when health check fails with a network error", async () => {
+    mockedCheckAiHealth.mockRejectedValue(new Error("Failed to fetch"));
+
+    render(<AiChatWidget />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Open AI assistant" }));
+    });
+
+    const degradedBanner = await screen.findByTestId("ai-chat-degraded");
+    expect(degradedBanner).toBeInTheDocument();
+    expect(screen.getByLabelText("Message the AI assistant")).toBeDisabled();
+  });
+
+  it("re-enables the input and clears unavailable state when manual recheck action succeeds", async () => {
+    mockedCheckAiHealth.mockResolvedValueOnce({
+      status: "down",
+      timestamp: "2026-10-19T00:00:00.000Z",
+    });
+
+    render(<AiChatWidget />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Open AI assistant" }));
+    });
+
+    const degradedBanner = await screen.findByTestId("ai-chat-degraded");
+    expect(degradedBanner).toBeInTheDocument();
+
+    const input = screen.getByLabelText("Message the AI assistant");
+    expect(input).toBeDisabled();
+
+    // Now Anthropic recovers
+    mockedCheckAiHealth.mockResolvedValueOnce({
+      status: "up",
+      timestamp: "2026-10-19T00:01:00.000Z",
+    });
+
+    const recheckBtn = screen.getByRole("button", { name: "Retry health check" });
+    await act(async () => {
+      fireEvent.click(recheckBtn);
+    });
+
+    // Unavailable banner should disappear and input should become enabled
+    await waitFor(() => {
+      expect(screen.queryByTestId("ai-chat-degraded")).not.toBeInTheDocument();
+    });
+    expect(input).not.toBeDisabled();
+    expect(input).toHaveAttribute("placeholder", "Ask about the marketplace");
+
+    // Suggestion chips should also be enabled now
+    const chips = screen.getAllByRole("button", {
+      name: /trending|auctions|royalties/i,
+    });
+    for (const chip of chips) {
+      expect(chip).not.toBeDisabled();
+    }
+  });
+
+  it("unavailable state is visually distinct from normal post-failure error banner", async () => {
+    mockedCheckAiHealth.mockResolvedValueOnce({
+      status: "down",
+      timestamp: "2026-10-19T00:00:00.000Z",
+    });
+
+    render(<AiChatWidget />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Open AI assistant" }));
+    });
+
+    const degradedBanner = await screen.findByTestId("ai-chat-degraded");
+    // Amber degraded styling
+    expect(degradedBanner.className).toContain("border-amber-500");
+    expect(degradedBanner.className).toContain("bg-amber-500");
+    expect(degradedBanner.className).toContain("text-amber-200");
+    expect(degradedBanner).toHaveTextContent("Assistant temporarily unavailable");
+    expect(
+      screen.getByRole("button", { name: "Retry health check" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Try again" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("automatically re-enables input when periodic health polling detects recovery", async () => {
+    jest.useFakeTimers();
+
+    mockedCheckAiHealth.mockResolvedValueOnce({
+      status: "down",
+      timestamp: "2026-10-19T00:00:00.000Z",
+    });
+
+    render(<AiChatWidget />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Open AI assistant" }));
+    });
+
+    expect(screen.getByTestId("ai-chat-degraded")).toBeInTheDocument();
+    const input = screen.getByLabelText("Message the AI assistant");
+    expect(input).toBeDisabled();
+
+    // Anthropic recovers on next periodic poll
+    mockedCheckAiHealth.mockResolvedValueOnce({
+      status: "up",
+      timestamp: "2026-10-19T00:00:30.000Z",
+    });
+
+    await act(async () => {
+      jest.advanceTimersByTime(30_000);
+    });
+
+    expect(screen.queryByTestId("ai-chat-degraded")).not.toBeInTheDocument();
+    expect(input).not.toBeDisabled();
+
+    jest.useRealTimers();
+  });
 });
+
+

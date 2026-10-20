@@ -16,9 +16,13 @@ export function useAiChat() {
   const messages = useAiChatStore((state) => state.messages);
   const status = useAiChatStore((state) => state.status);
   const error = useAiChatStore((state) => state.error);
+  const healthStatus = useAiChatStore((state) => state.healthStatus);
+  const isDegraded = useAiChatStore((state) => state.isDegraded);
+  const isCheckingHealth = useAiChatStore((state) => state.isCheckingHealth);
   const sendMessage = useAiChatStore((state) => state.sendMessage);
   const retry = useAiChatStore((state) => state.retry);
   const cancel = useAiChatStore((state) => state.cancel);
+  const checkHealth = useAiChatStore((state) => state.checkHealth);
 
   useEffect(() => () => cancel(), [cancel]);
 
@@ -26,8 +30,12 @@ export function useAiChat() {
     messages,
     isStreaming: status === "sending",
     error,
+    healthStatus,
+    isDegraded,
+    isCheckingHealth,
     sendMessage,
     retry,
     cancel,
+    checkHealth,
   };
 }

@@ -63,6 +63,7 @@ describe('AuctionService — settlement winner notification', () => {
     reservePrice: 0,
     startTime: new Date(Date.now() - 60_000),
     endTime: new Date(Date.now() - 1_000),
+    extensionCount: 0,
     status: AuctionStatus.ACTIVE,
     createdAt: new Date(),
     updatedAt: new Date(),

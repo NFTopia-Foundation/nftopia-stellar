@@ -21,6 +21,7 @@ import { MarketplaceSettlementClient } from '../stellar/marketplace-settlement.c
 import { TransactionService } from '../transaction/transaction.service';
 import { TransactionState } from '../transaction/enums/transaction-state.enum';
 import { NotificationsService } from '../notifications/notifications.service';
+import { extendAuctionForLastMinuteBid } from './anti-sniping';
 
 const DEFAULT_MIN_BID_INCREMENT = 1;
 
@@ -241,7 +242,9 @@ export class AuctionService {
     if (!auction) throw new NotFoundException('Auction not found');
     if (auction.status !== AuctionStatus.ACTIVE)
       throw new BadRequestException('Auction is not active');
-    if (new Date(auction.endTime) <= new Date())
+    const now = Date.now();
+    const endTime = new Date(auction.endTime).getTime();
+    if (endTime <= now)
       throw new BadRequestException('Auction expired');
     if (!auction.sellerId) {
       throw new BadRequestException('Auction seller is no longer available');
@@ -263,7 +266,19 @@ export class AuctionService {
     await this.bidRepo.save(bid);
 
     auction.currentPrice = amount;
+    const extended = extendAuctionForLastMinuteBid(
+      auction,
+      this.configService,
+      now,
+    );
     await this.auctionRepo.save(auction);
+
+    if (extended) {
+      this.notificationsService.broadcastAuctionExtended(auctionId, {
+        endTime: auction.endTime.toISOString(),
+        extensionCount: auction.extensionCount,
+      });
+    }
 
     return bid;
   }

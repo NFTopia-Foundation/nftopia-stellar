@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MainStackParamList } from '@/navigation/MainNavigator';
-import { colors, spacing } from '@/constants/theme';
+import { colors, spacing, borderRadius, shadows } from '@/constants/theme';
 import { useMarketplaceListings } from '@/hooks/useMarketplaceListings';
 import { useMarketplaceFiltersStore } from '@/stores/marketplaceFiltersStore';
 import type { MarketplaceListingCard as MarketplaceListingCardVM, MarketplaceSortOption } from '@/src/utils/marketplaceViewModels';
@@ -130,6 +130,22 @@ function MarketplaceContent() {
     navigation.navigate('NFTDetail', { nftId: item.nftId });
   };
 
+  const handleAssistantPress = () => {
+    track(ANALYTICS_EVENTS.ASSISTANT_OPENED_FROM_MARKETPLACE, {
+      category: filters.category,
+      sortBy: filters.sortBy,
+      hasActiveFilters: activeFilterCount > 0,
+    });
+    navigation.navigate('Assistant', {
+      context: {
+        source: 'marketplace',
+        category: filters.category,
+        sortBy: filters.sortBy,
+        hasActiveFilters: activeFilterCount > 0,
+      },
+    });
+  };
+
   const renderItem = ({ item }: { item: MarketplaceListingCardVM }) => (
     <MarketplaceListingCard
       item={item}
@@ -197,6 +213,17 @@ function MarketplaceContent() {
         </TouchableOpacity>
         <Text style={styles.title}>{t('marketplace.title')}</Text>
       </View>
+
+      <TouchableOpacity
+        style={styles.assistantFab}
+        onPress={handleAssistantPress}
+        accessibilityRole="button"
+        accessibilityLabel="Open AI Assistant"
+        accessibilityHint="Get help with marketplace browsing"
+        testID="marketplace-assistant-fab"
+      >
+        <Text style={styles.assistantFabIcon}>🤖</Text>
+      </TouchableOpacity>
 
       <View style={styles.filters}>
         <View style={styles.filtersTopRow}>
@@ -385,5 +412,21 @@ const styles = StyleSheet.create({
   footerLoader: {
     paddingVertical: spacing.md,
     alignItems: 'center',
+  },
+  assistantFab: {
+    position: 'absolute',
+    bottom: spacing.xl,
+    right: spacing.xl,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#6C5CE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.md,
+    elevation: 5,
+  },
+  assistantFabIcon: {
+    fontSize: 28,
   },
 });

@@ -234,11 +234,53 @@ class ApiClient {
   }
 
   async followUser(userId: string): Promise<void> {
-    await this.request(`/users/${userId}/follow`, { method: 'POST' });
+    await this.request(`/social/users/${userId}/follow`, { method: 'POST' });
   }
 
   async unfollowUser(userId: string): Promise<void> {
-    await this.request(`/users/${userId}/follow`, { method: 'DELETE' });
+    await this.request(`/social/users/${userId}/follow`, { method: 'DELETE' });
+  }
+
+  async getFollowers(
+    userId: string,
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<CreatorProfile[]> {
+    return this.request<CreatorProfile[]>(
+      `/social/users/${userId}/followers?page=${page}&limit=${limit}`,
+    );
+  }
+
+  async getFollowing(
+    userId: string,
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<CreatorProfile[]> {
+    return this.request<CreatorProfile[]>(
+      `/social/users/${userId}/following?page=${page}&limit=${limit}`,
+    );
+  }
+
+  async getFollowCounts(
+    userId: string,
+  ): Promise<{ followers: number; following: number }> {
+    return this.request<{ followers: number; following: number }>(
+      `/social/users/${userId}/counts`,
+    );
+  }
+
+  async getMutualFollows(otherUserId: string): Promise<CreatorProfile[]> {
+    return this.request<CreatorProfile[]>(`/social/mutual/${otherUserId}`);
+  }
+
+  async getUserSocialActivity(
+    userId: string,
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<ActivityEvent[]> {
+    return this.request<ActivityEvent[]>(
+      `/social/users/${userId}/activities?page=${page}&limit=${limit}`,
+    );
   }
 
   async updateProfile(data: Partial<CreatorProfile>): Promise<CreatorProfile> {

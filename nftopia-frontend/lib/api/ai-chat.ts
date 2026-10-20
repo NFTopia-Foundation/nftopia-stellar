@@ -144,3 +144,28 @@ export async function sendAiChat(
   if (!response.ok) throw new Error(`AI request failed with status ${response.status}`);
   return response.json() as Promise<AiChatReply>;
 }
+
+export type AnthropicHealthStatus = "up" | "down" | "unconfigured";
+
+export type AiHealthResponse = {
+  status: AnthropicHealthStatus;
+  timestamp: string;
+};
+
+export async function checkAiHealth(
+  signal?: AbortSignal,
+): Promise<AiHealthResponse> {
+  const response = await fetch(`${API_CONFIG.baseUrl}/ai/health`, {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+    },
+    signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(`AI health check failed with status ${response.status}`);
+  }
+
+  return response.json() as Promise<AiHealthResponse>;
+}

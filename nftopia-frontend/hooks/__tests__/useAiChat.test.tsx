@@ -1,14 +1,17 @@
 import { act, renderHook } from "@testing-library/react";
-import { sendAiChat, streamAiChat } from "@/lib/api/ai-chat";
+import { checkAiHealth, sendAiChat, streamAiChat } from "@/lib/api/ai-chat";
 import { useAiChat } from "@/hooks/useAiChat";
+import { useAiChatStore } from "@/lib/stores/ai-chat-store";
 
 jest.mock("@/lib/api/ai-chat", () => ({
   sendAiChat: jest.fn(),
   streamAiChat: jest.fn(),
+  checkAiHealth: jest.fn(),
 }));
 
 const mockedStreamAiChat = jest.mocked(streamAiChat);
 const mockedSendAiChat = jest.mocked(sendAiChat);
+const mockedCheckAiHealth = jest.mocked(checkAiHealth);
 
 describe("useAiChat", () => {
   beforeEach(() => jest.clearAllMocks());
@@ -38,5 +41,42 @@ describe("useAiChat", () => {
     expect(signal?.aborted).toBe(true);
     expect(mockedSendAiChat).not.toHaveBeenCalled();
     resolveStream({ reply: "Hello world", sessionId: "session-1" });
+  });
+
+  it("exposes degraded state and checkHealth function", async () => {
+    act(() => {
+      useAiChatStore.getState().reset();
+    });
+
+    mockedCheckAiHealth.mockResolvedValueOnce({
+      status: "down",
+      timestamp: "2026-10-19T00:00:00.000Z",
+    });
+
+    const { result } = renderHook(() => useAiChat());
+    expect(result.current.isDegraded).toBe(false);
+    expect(result.current.healthStatus).toBeNull();
+
+    await act(async () => {
+      const isHealthy = await result.current.checkHealth();
+      expect(isHealthy).toBe(false);
+    });
+
+    expect(result.current.isDegraded).toBe(true);
+    expect(result.current.healthStatus).toBe("down");
+
+    // Recovers when checkHealth reports up
+    mockedCheckAiHealth.mockResolvedValueOnce({
+      status: "up",
+      timestamp: "2026-10-19T00:01:00.000Z",
+    });
+
+    await act(async () => {
+      const isHealthy = await result.current.checkHealth();
+      expect(isHealthy).toBe(true);
+    });
+
+    expect(result.current.isDegraded).toBe(false);
+    expect(result.current.healthStatus).toBe("up");
   });
 });

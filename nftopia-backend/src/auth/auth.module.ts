@@ -1,4 +1,4 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Logger, Module, forwardRef } from '@nestjs/common';
 import { JwtModule, JwtSignOptions } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -21,6 +21,24 @@ import {
   RedisWalletNonceStore,
   WALLET_NONCE_STORE,
 } from './wallet-nonce.store';
+import {
+  LOGIN_ATTEMPT_STORE,
+  RedisLoginAttemptStore,
+} from './login-attempt.store';
+import {
+  LOGIN_LOCKOUT_POLICY,
+  LoginLockoutService,
+  loginLockoutPolicyFrom,
+} from './login-lockout.service';
+
+function redisFromConfig(config: ConfigService): Redis {
+  return new Redis({
+    host: config.get<string>('REDIS_HOST') || 'localhost',
+    port: parseInt(config.get<string>('REDIS_PORT') || '6379', 10),
+    password: config.get<string>('REDIS_PASSWORD') || undefined,
+    db: parseInt(config.get<string>('REDIS_DB') || '0', 10),
+  });
+}
 
 @Module({
   imports: [
@@ -61,15 +79,25 @@ import {
       provide: WALLET_NONCE_STORE,
       inject: [ConfigService],
       useFactory: (config: ConfigService) =>
-        new RedisWalletNonceStore(
-          new Redis({
-            host: config.get<string>('REDIS_HOST') || 'localhost',
-            port: parseInt(config.get<string>('REDIS_PORT') || '6379', 10),
-            password: config.get<string>('REDIS_PASSWORD') || undefined,
-            db: parseInt(config.get<string>('REDIS_DB') || '0', 10),
-          }),
+        new RedisWalletNonceStore(redisFromConfig(config)),
+    },
+    {
+      // Failed-login counters and lockouts (#648), shared by every instance.
+      provide: LOGIN_ATTEMPT_STORE,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) =>
+        new RedisLoginAttemptStore(redisFromConfig(config)),
+    },
+    {
+      provide: LOGIN_LOCKOUT_POLICY,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) =>
+        loginLockoutPolicyFrom(
+          (key) => config.get<string>(key),
+          new Logger('LoginLockoutPolicy'),
         ),
     },
+    LoginLockoutService,
   ],
   exports: [AuthService, JwtStrategy, StellarSignatureStrategy, JwtAuthGuard],
 })

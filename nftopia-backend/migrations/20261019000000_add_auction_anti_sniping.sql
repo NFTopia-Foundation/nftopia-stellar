@@ -1,0 +1,2 @@
+ALTER TABLE auctions
+ADD COLUMN extension_count INTEGER NOT NULL DEFAULT 0;

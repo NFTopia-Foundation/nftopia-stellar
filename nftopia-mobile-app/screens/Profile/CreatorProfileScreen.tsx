@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import apiClient from '@/lib/api/sample';
 import { useAuthStore } from '@/stores/authStore';
+import { useSocialStore } from '@/stores/socialStore';
 import { CreatorProfile, NFT, Collection, ActivityEvent } from '@/types';
 
 function FollowButton({ isFollowing, onPress }: { isFollowing: boolean; onPress: () => void }) {
@@ -32,29 +33,45 @@ type TabType = 'nfts' | 'collections' | 'activity';
 export default function CreatorProfileScreen({ route, navigation }: any) {
   const { userId } = route.params;
   const { user } = useAuthStore();
+  const {
+    isFollowing,
+    getFollowCounts,
+    getMutualFollowers,
+    getUserActivity,
+    followUser,
+    unfollowUser,
+    fetchFollowCounts,
+    fetchMutualFollowers,
+    fetchUserSocialActivity,
+    setFollowState,
+  } = useSocialStore();
+
   const [profile, setProfile] = useState<CreatorProfile | null>(null);
   const [nfts, setNfts] = useState<NFT[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('nfts');
-  const [isFollowing, setIsFollowing] = useState(false);
+
+  const followingState = isFollowing(userId);
+  const counts = getFollowCounts(userId);
+  const mutualFollowers = getMutualFollowers(userId);
 
   const fetchProfile = useCallback(async () => {
     setLoading(true);
     try {
       const profileData = await apiClient.getCreatorProfile(userId);
       setProfile(profileData);
-      setIsFollowing(profileData.isFollowing);
 
-      const [nftsData, collectionsData, activityData] = await Promise.all([
+      // Seed follow state from profile response
+      setFollowState(userId, profileData.isFollowing);
+
+      const [nftsData, collectionsData] = await Promise.all([
         apiClient.getCreatorNFTs(userId),
         apiClient.getCreatorCollections(userId),
-        apiClient.getCreatorActivity(userId),
       ]);
       setNfts(nftsData);
       setCollections(collectionsData);
-      setActivity(activityData);
     } catch (err) {
       console.error('Failed to load profile:', err);
     } finally {
@@ -64,21 +81,27 @@ export default function CreatorProfileScreen({ route, navigation }: any) {
 
   useEffect(() => {
     fetchProfile();
+    // Fetch social data from dedicated endpoints
+    fetchFollowCounts(userId);
+    fetchMutualFollowers(userId);
+    fetchUserSocialActivity(userId);
     apiClient.trackEvent('creator_profile_view', { userId });
   }, [userId]);
 
+  // Keep local activity state in sync with the store
+  useEffect(() => {
+    const storeActivity = getUserActivity(userId);
+    if (storeActivity.length > 0) setActivity(storeActivity);
+  }, [getUserActivity(userId).length]);
+
   const handleFollow = async () => {
     try {
-      if (isFollowing) {
-        await apiClient.unfollowUser(userId);
-        setIsFollowing(false);
-        setProfile((p) => p ? { ...p, isFollowing: false, followerCount: p.followerCount - 1 } : p);
+      if (followingState) {
+        await unfollowUser(userId);
       } else {
-        await apiClient.followUser(userId);
-        setIsFollowing(true);
-        setProfile((p) => p ? { ...p, isFollowing: true, followerCount: p.followerCount + 1 } : p);
+        await followUser(userId);
       }
-      apiClient.trackEvent('profile_follow_toggle', { userId, following: !isFollowing });
+      apiClient.trackEvent('profile_follow_toggle', { userId, following: !followingState });
     } catch (err) {
       console.error('Failed to toggle follow:', err);
     }
@@ -101,6 +124,7 @@ export default function CreatorProfileScreen({ route, navigation }: any) {
   };
 
   const isOwnProfile = user?.id === userId;
+
 
   if (loading && !profile) {
     return (
@@ -137,7 +161,7 @@ export default function CreatorProfileScreen({ route, navigation }: any) {
           <Text style={styles.username}>@{profile.username}</Text>
         </View>
         <View style={styles.profileActions}>
-          {!isOwnProfile && <FollowButton isFollowing={isFollowing} onPress={handleFollow} />}
+          {!isOwnProfile && <FollowButton isFollowing={followingState} onPress={handleFollow} />}
           <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
             <Text style={styles.shareIcon}>📤</Text>
           </TouchableOpacity>
@@ -151,7 +175,7 @@ export default function CreatorProfileScreen({ route, navigation }: any) {
         </View>
       )}
 
-      {/* Stats */}
+      {/* Stats – counts come from socialStore, volume from profile */}
       <View style={styles.statsRow}>
         <View style={styles.statItem}>
           <Text style={styles.statValue}>{profile.nftCount}</Text>
@@ -159,12 +183,12 @@ export default function CreatorProfileScreen({ route, navigation }: any) {
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>{profile.followerCount}</Text>
+          <Text style={styles.statValue}>{counts.followers}</Text>
           <Text style={styles.statLabel}>Followers</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>{profile.followingCount}</Text>
+          <Text style={styles.statValue}>{counts.following}</Text>
           <Text style={styles.statLabel}>Following</Text>
         </View>
         <View style={styles.statDivider} />
@@ -173,6 +197,29 @@ export default function CreatorProfileScreen({ route, navigation }: any) {
           <Text style={styles.statLabel}>Volume</Text>
         </View>
       </View>
+
+      {/* Mutual Followers */}
+      {!isOwnProfile && mutualFollowers.length > 0 && (
+        <View style={styles.mutualSection}>
+          <Text style={styles.mutualLabel}>
+            {mutualFollowers.length} mutual follower{mutualFollowers.length !== 1 ? 's' : ''}
+          </Text>
+          <View style={styles.mutualAvatars}>
+            {mutualFollowers.slice(0, 4).map((m) => (
+              <Image
+                key={m.id}
+                source={{ uri: m.avatarUrl }}
+                style={styles.mutualAvatar}
+              />
+            ))}
+            {mutualFollowers.length > 4 && (
+              <View style={styles.mutualMoreBadge}>
+                <Text style={styles.mutualMoreText}>+{mutualFollowers.length - 4}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      )}
 
       {/* Social Links */}
       <View style={styles.socialLinks}>
@@ -291,6 +338,13 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 18, fontWeight: 'bold', color: '#1A1A1A' },
   statLabel: { fontSize: 11, color: '#999', marginTop: 4 },
   statDivider: { width: 1, backgroundColor: '#E8E8E8' },
+  // Mutual followers
+  mutualSection: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginTop: -4, marginBottom: 8 },
+  mutualLabel: { fontSize: 12, color: '#666', marginRight: 8 },
+  mutualAvatars: { flexDirection: 'row' },
+  mutualAvatar: { width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, borderColor: '#FFFFFF', marginLeft: -6 },
+  mutualMoreBadge: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#6C5CE7', alignItems: 'center', justifyContent: 'center', marginLeft: -6 },
+  mutualMoreText: { fontSize: 8, color: '#FFFFFF', fontWeight: '700' },
   socialLinks: { flexDirection: 'row', padding: 16, paddingTop: 0, gap: 8 },
   socialButton: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: '#F0F0F0' },
   socialIcon: { fontSize: 14, marginRight: 4 },

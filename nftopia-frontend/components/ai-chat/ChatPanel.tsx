@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Loader2, Send, Sparkles, Square, X } from "lucide-react";
+import { AlertCircle, Loader2, Send, Sparkles, Square, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -29,8 +29,17 @@ export type ChatPanelProps = {
 };
 
 export function ChatPanel({ id = AI_CHAT_PANEL_ID, onClose }: ChatPanelProps) {
-  const { messages, isStreaming, error, sendMessage, retry, cancel } =
-    useAiChat();
+  const {
+    messages,
+    isStreaming,
+    error,
+    isDegraded,
+    isCheckingHealth,
+    sendMessage,
+    retry,
+    cancel,
+    checkHealth,
+  } = useAiChat();
   const [draft, setDraft] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
@@ -39,10 +48,34 @@ export function ChatPanel({ id = AI_CHAT_PANEL_ID, onClose }: ChatPanelProps) {
   const inputId = `${id}-input`;
   const lastMessageId = messages[messages.length - 1]?.id;
 
-  // Focus management: move focus into the panel as soon as it opens.
+  // Proactively check assistant health when opened, and periodically while open.
   useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+    void checkHealth();
+
+    const intervalId = window.setInterval(() => {
+      void checkHealth();
+    }, 30_000);
+
+    if (
+      typeof intervalId === "object" &&
+      intervalId !== null &&
+      "unref" in intervalId &&
+      typeof (intervalId as { unref?: () => void }).unref === "function"
+    ) {
+      (intervalId as { unref: () => void }).unref();
+    }
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [checkHealth]);
+
+  // Focus management: move focus into the panel as soon as it opens (when available).
+  useEffect(() => {
+    if (!isDegraded) {
+      inputRef.current?.focus();
+    }
+  }, [isDegraded]);
 
   // Keep the newest message in view.
   useEffect(() => {
@@ -53,7 +86,7 @@ export function ChatPanel({ id = AI_CHAT_PANEL_ID, onClose }: ChatPanelProps) {
   const submit = async (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault();
     const message = draft.trim();
-    if (!message || isStreaming) return;
+    if (!message || isStreaming || isDegraded) return;
     setDraft("");
     await sendMessage(message);
   };
@@ -125,6 +158,7 @@ export function ChatPanel({ id = AI_CHAT_PANEL_ID, onClose }: ChatPanelProps) {
                   variant="outline"
                   size="sm"
                   className="h-auto text-xs"
+                  disabled={isDegraded}
                   onClick={() => void sendMessage(suggestion)}
                 >
                   {suggestion}
@@ -169,7 +203,40 @@ export function ChatPanel({ id = AI_CHAT_PANEL_ID, onClose }: ChatPanelProps) {
         ) : null}
       </div>
 
-      {error ? (
+      {isDegraded ? (
+        <div
+          role="alert"
+          data-testid="ai-chat-degraded"
+          className="flex flex-col gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200"
+        >
+          <div className="flex items-center gap-2 font-medium text-amber-300">
+            <AlertCircle aria-hidden className="h-4 w-4 shrink-0 text-amber-400" />
+            <span>Assistant temporarily unavailable</span>
+          </div>
+          <p className="text-white/80">
+            The AI service is currently unavailable. Please check back shortly.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            data-testid="ai-health-retry"
+            aria-label="Retry health check"
+            className="h-auto self-start text-xs border-amber-500/30 text-amber-200 hover:bg-amber-500/20"
+            onClick={() => void checkHealth()}
+            disabled={isCheckingHealth}
+          >
+            {isCheckingHealth ? (
+              <>
+                <Loader2 aria-hidden className="mr-1 h-3 w-3 animate-spin" />
+                Checking…
+              </>
+            ) : (
+              "Check again"
+            )}
+          </Button>
+        </div>
+      ) : error ? (
         <div
           role="alert"
           className="flex flex-col gap-2 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-200"
@@ -196,8 +263,12 @@ export function ChatPanel({ id = AI_CHAT_PANEL_ID, onClose }: ChatPanelProps) {
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={handleInputKeyDown}
-          placeholder="Ask about the marketplace"
-          disabled={isStreaming}
+          placeholder={
+            isDegraded
+              ? "Assistant temporarily unavailable"
+              : "Ask about the marketplace"
+          }
+          disabled={isStreaming || isDegraded}
           rows={2}
           className="flex-1 resize-none"
         />
@@ -215,7 +286,7 @@ export function ChatPanel({ id = AI_CHAT_PANEL_ID, onClose }: ChatPanelProps) {
           <Button
             type="submit"
             size="icon"
-            disabled={!draft.trim()}
+            disabled={!draft.trim() || isDegraded}
             aria-label="Send message"
           >
             <Send aria-hidden />

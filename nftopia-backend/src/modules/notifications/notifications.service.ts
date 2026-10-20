@@ -87,6 +87,16 @@ export class NotificationsService {
     );
   }
 
+  broadcastAuctionExtended(
+    auctionId: string,
+    payload: { endTime: string; extensionCount: number },
+  ): void {
+    this.gateway
+      .getServer()
+      .to(auctionRoom(auctionId))
+      .emit('auction_extended', { auctionId, ...payload });
+  }
+
   /**
    * Email fallback for a new bid — sent to the auction's seller in addition
    * to the real-time `notification` toast. Never throws: a failed send is

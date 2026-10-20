@@ -1,11 +1,18 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from "axios";
-import { EmailAuthResponse, ApiAuthError } from "./types";
+import { AuthResponse, EmailAuthResponse, ApiAuthError } from "./types";
 import { tokenStorage } from "./tokenStorage";
 
 // error handling function
 function handleError(error: unknown): never {
   if (axios.isAxiosError(error)) {
-    const message = error.response?.data?.message ?? error.message;
+    const rawMessage = error.response?.data?.message ?? error.message;
+    // The backend's validation pipe reports multiple field errors as an
+    // array - collapse it so callers always get a printable string.
+    const message = Array.isArray(rawMessage)
+      ? rawMessage.join("\n")
+      : typeof rawMessage === "string"
+        ? rawMessage
+        : error.message;
     const statusCode = error.response?.status;
     const authError: ApiAuthError = { message, statusCode };
     throw authError;
@@ -16,7 +23,7 @@ function handleError(error: unknown): never {
 // Endpoints the request/response interceptors leave alone: attaching a
 // (possibly expired) access token to a login/register call makes no sense,
 // and refreshing on a 401 *from the refresh call itself* would recurse.
-const AUTH_ENDPOINT_MARKERS = ["/auth/email/login", "/auth/email/register", "/auth/refresh"];
+const AUTH_ENDPOINT_MARKERS = ["/auth/email/login", "/auth/register", "/auth/refresh"];
 
 type RetryableRequestConfig = InternalAxiosRequestConfig & { _retry?: boolean };
 
@@ -119,24 +126,36 @@ export class AuthService {
   }
 
   // Register with email, password and username
+  //
+  // The backend exposes this as POST /api/v1/auth/register (AuthController
+  // @Controller('auth') + @Post('register')) and wraps the payload in the
+  // same { data: { success, data } } envelope walletAuth.service unwraps,
+  // with snake_case token keys.
   async emailRegister(
     email: string,
     password: string,
     username: string,
-  ): Promise<EmailAuthResponse> {
+  ): Promise<AuthResponse> {
+    let payload: AuthResponse | undefined;
     try {
-      const { data } = await this.api.post<EmailAuthResponse>(
-        "/api/v1/auth/email/register",
-        { email, password, username },
-      );
-      await tokenStorage.saveTokens(
-        data.tokens.accessToken,
-        data.tokens.refreshToken,
-      );
-      return data;
+      const { data } = await this.api.post<
+        { data?: { data?: AuthResponse } } & Partial<AuthResponse>
+      >("/api/v1/auth/register", { email, password, username });
+      payload = (data?.data?.data ?? data) as AuthResponse | undefined;
     } catch (error) {
       handleError(error);
     }
+
+    // Fail loudly instead of storing undefined tokens - mirrors the
+    // invalid-response guard in walletAuth.service.
+    if (!payload?.access_token || !payload.refresh_token || !payload.user) {
+      throw {
+        message: "Registration failed: invalid response from server",
+      } as ApiAuthError;
+    }
+
+    await tokenStorage.saveTokens(payload.access_token, payload.refresh_token);
+    return payload;
   }
 
   // Refresh access token using refresh token

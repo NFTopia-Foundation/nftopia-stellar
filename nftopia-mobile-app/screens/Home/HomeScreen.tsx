@@ -281,7 +281,14 @@ function HomeContent() {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.actionCard}
-            onPress={() => navigation.navigate('Assistant')}
+            onPress={() => {
+              track(ANALYTICS_EVENTS.ASSISTANT_OPENED_FROM_HOME);
+              navigation.navigate('Assistant', {
+                context: {
+                  source: 'home',
+                },
+              });
+            }}
             accessibilityRole="button"
             accessibilityLabel="AI Assistant"
           >

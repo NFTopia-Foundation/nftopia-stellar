@@ -229,6 +229,15 @@ export function SendScreen({ navigation, route, onSend }: SendScreenProps) {
     navigation?.navigate?.('QRScanner');
   };
 
+  const handleAddressBook = () => {
+    navigation?.navigate?.('AddressBook', {
+      onSelect: (addr: string) => {
+        setRecipient(addr);
+        setAddressError(null);
+      },
+    });
+  };
+
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -252,6 +261,9 @@ export function SendScreen({ navigation, route, onSend }: SendScreenProps) {
             autoCorrect={false}
             accessibilityLabel="Recipient address"
           />
+          <TouchableOpacity style={styles.scanBtn} onPress={handleAddressBook} accessibilityLabel="Open Address Book">
+            <Text style={styles.scanBtnText}>Contacts</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.scanBtn} onPress={handleScan} accessibilityLabel="Scan QR">
             <Text style={styles.scanBtnText}>Scan</Text>
           </TouchableOpacity>
@@ -377,7 +389,12 @@ export function SendScreen({ navigation, route, onSend }: SendScreenProps) {
                   <TouchableOpacity
                     onPress={() => {
                       setShowPicker(false);
-                      navigation?.navigate?.('AddressBook');
+                      navigation?.navigate?.('AddressBook', {
+                        onSelect: (addr: string) => {
+                          setRecipient(addr);
+                          setAddressError(null);
+                        },
+                      });
                     }}
                   >
                     <Text style={styles.linkText}>Go to Address Book</Text>

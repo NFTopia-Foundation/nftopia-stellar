@@ -33,6 +33,8 @@ import { PlaceBidDto } from './dto/place-bid.dto';
 import { BidQueryDto } from './dto/bid-query.dto';
 import { StellarSignatureStrategy } from '../../auth/strategies/stellar.strategy';
 import { MarketplaceSettlementClient } from '../stellar/marketplace-settlement.client';
+import { NotificationsService } from '../notifications/notifications.service';
+import { extendAuctionForLastMinuteBid } from '../auction/anti-sniping';
 import {
   BID_PLACED_EVENT,
   BID_CACHE_PREFIX,
@@ -70,6 +72,7 @@ export class BidService {
     private readonly stellarStrategy: StellarSignatureStrategy,
     private readonly configService: ConfigService,
     private readonly settlementClient: MarketplaceSettlementClient,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   // ─── Public API ──────────────────────────────────────────────────────────────
@@ -99,10 +102,18 @@ export class BidService {
 
     const savedBid = await this.bidRepo.save(bid);
 
-    // Update auction current price
-    await this.auctionRepo.update(auctionId, {
-      currentPrice: amount,
-    });
+    auction.currentPrice = amount;
+    const extended = extendAuctionForLastMinuteBid(
+      auction,
+      this.configService,
+    );
+    await this.auctionRepo.save(auction);
+    if (extended) {
+      this.notificationsService.broadcastAuctionExtended(auctionId, {
+        endTime: auction.endTime.toISOString(),
+        extensionCount: auction.extensionCount,
+      });
+    }
 
     return savedBid;
   }
@@ -167,7 +178,17 @@ export class BidService {
 
     // Update auction current price in DB
     auction.currentPrice = amountXlm;
+    const extended = extendAuctionForLastMinuteBid(
+      auction,
+      this.configService,
+    );
     await this.auctionRepo.save(auction);
+    if (extended) {
+      this.notificationsService.broadcastAuctionExtended(auctionId, {
+        endTime: auction.endTime.toISOString(),
+        extensionCount: auction.extensionCount,
+      });
+    }
 
     // Invalidate cached highest bid
     await this.cacheManager.del(`${BID_CACHE_PREFIX}${auctionId}`);

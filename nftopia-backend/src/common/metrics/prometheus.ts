@@ -92,6 +92,32 @@ const nftImageOptimizationFallbacksTotal = new Counter({
   registers: [registry],
 });
 
+const authLoginFailuresTotal = new Counter({
+  name: 'auth_login_failures_total',
+  help: 'Failed email/password login attempts',
+  registers: [registry],
+});
+
+const authLoginLockoutsTotal = new Counter({
+  name: 'auth_login_lockouts_total',
+  help: 'Login lockouts applied after repeated failures, by scope (account or ip)',
+  labelNames: ['scope'],
+  registers: [registry],
+});
+
+const authLoginLockedRejectionsTotal = new Counter({
+  name: 'auth_login_locked_rejections_total',
+  help: 'Login attempts rejected because the account or source IP was locked',
+  registers: [registry],
+});
+
+const authLoginLockoutStoreErrorsTotal = new Counter({
+  name: 'auth_login_lockout_store_errors_total',
+  help: 'Lockout store (Redis) failures; login is allowed when this happens',
+  labelNames: ['operation'],
+  registers: [registry],
+});
+
 @Injectable()
 export class PrometheusService {
   private readonly logger = new Logger(PrometheusService.name);
@@ -229,6 +255,46 @@ export class PrometheusService {
     } catch (error) {
       this.logger.warn(
         `Failed to increment nft_image_optimization_fallbacks_total: ${error}`,
+      );
+    }
+  }
+
+  incrementLoginFailure(): void {
+    try {
+      authLoginFailuresTotal.inc();
+    } catch (error) {
+      this.logger.warn(
+        `Failed to increment auth_login_failures_total: ${error}`,
+      );
+    }
+  }
+
+  incrementLoginLockout(scope: 'account' | 'ip'): void {
+    try {
+      authLoginLockoutsTotal.inc({ scope });
+    } catch (error) {
+      this.logger.warn(
+        `Failed to increment auth_login_lockouts_total: ${error}`,
+      );
+    }
+  }
+
+  incrementLoginLockedRejection(): void {
+    try {
+      authLoginLockedRejectionsTotal.inc();
+    } catch (error) {
+      this.logger.warn(
+        `Failed to increment auth_login_locked_rejections_total: ${error}`,
+      );
+    }
+  }
+
+  incrementLoginLockoutStoreError(operation: string): void {
+    try {
+      authLoginLockoutStoreErrorsTotal.inc({ operation });
+    } catch (error) {
+      this.logger.warn(
+        `Failed to increment auth_login_lockout_store_errors_total: ${error}`,
       );
     }
   }

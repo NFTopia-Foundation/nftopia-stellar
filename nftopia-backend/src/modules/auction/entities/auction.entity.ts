@@ -57,6 +57,9 @@ export class Auction {
   @Column()
   endTime: Date;
 
+  @Column({ name: 'extension_count', default: 0 })
+  extensionCount: number;
+
   @Column({ default: AuctionStatus.ACTIVE })
   status: AuctionStatus;
 

@@ -36,6 +36,23 @@ const fakeResponse: EmailAuthResponse = {
   },
 };
 
+// What POST /api/v1/auth/register actually returns: the snake_case payload
+// wrapped in the backend's { data: { success, data } } envelope.
+const fakeRegisterEnvelope = {
+  data: {
+    success: true,
+    data: {
+      access_token: "access-abc",
+      refresh_token: "refresh-xyz",
+      user: {
+        id: "user-1",
+        email: "test@example.com",
+        username: "testuser",
+      },
+    },
+  },
+};
+
 describe("AuthService", () => {
   let service: AuthService;
   let mockPost: jest.Mock;
@@ -100,8 +117,21 @@ describe("AuthService", () => {
   });
 
   describe("emailRegister", () => {
-    it("calls the register endpoint with email, password, and username", async () => {
-      mockPost.mockResolvedValue({ data: fakeResponse });
+    it("calls the backend's register endpoint with email, password, and username", async () => {
+      mockPost.mockResolvedValue({ data: fakeRegisterEnvelope });
+      mockedTokenStorage.saveTokens.mockResolvedValue(undefined);
+
+      await service.emailRegister("test@example.com", "secret", "testuser");
+
+      expect(mockPost).toHaveBeenCalledWith("/api/v1/auth/register", {
+        email: "test@example.com",
+        password: "secret",
+        username: "testuser",
+      });
+    });
+
+    it("unwraps the { data: { data } } envelope and returns the payload", async () => {
+      mockPost.mockResolvedValue({ data: fakeRegisterEnvelope });
       mockedTokenStorage.saveTokens.mockResolvedValue(undefined);
 
       const result = await service.emailRegister(
@@ -110,16 +140,11 @@ describe("AuthService", () => {
         "testuser",
       );
 
-      expect(mockPost).toHaveBeenCalledWith("/api/v1/auth/email/register", {
-        email: "test@example.com",
-        password: "secret",
-        username: "testuser",
-      });
-      expect(result).toEqual(fakeResponse);
+      expect(result).toEqual(fakeRegisterEnvelope.data.data);
     });
 
-    it("saves tokens after successful registration", async () => {
-      mockPost.mockResolvedValue({ data: fakeResponse });
+    it("saves the snake_case tokens after successful registration", async () => {
+      mockPost.mockResolvedValue({ data: fakeRegisterEnvelope });
       mockedTokenStorage.saveTokens.mockResolvedValue(undefined);
 
       await service.emailRegister("test@example.com", "secret", "testuser");
@@ -128,6 +153,84 @@ describe("AuthService", () => {
         "access-abc",
         "refresh-xyz",
       );
+    });
+
+    it("rejects instead of storing tokens when the response has no tokens", async () => {
+      mockPost.mockResolvedValue({ data: { data: { success: true } } });
+      mockedTokenStorage.saveTokens.mockResolvedValue(undefined);
+
+      await expect(
+        service.emailRegister("test@example.com", "secret", "testuser"),
+      ).rejects.toMatchObject({
+        message: "Registration failed: invalid response from server",
+      });
+
+      expect(mockedTokenStorage.saveTokens).not.toHaveBeenCalled();
+    });
+
+    it("surfaces the backend's conflict message with its status code", async () => {
+      const axiosError = Object.assign(new Error("Request failed"), {
+        isAxiosError: true,
+        response: {
+          status: 409,
+          data: { message: "Email is already registered" },
+        },
+      });
+      mockPost.mockRejectedValue(axiosError);
+
+      await expect(
+        service.emailRegister("taken@example.com", "secret", "testuser"),
+      ).rejects.toMatchObject({
+        message: "Email is already registered",
+        statusCode: 409,
+      });
+      expect(mockedTokenStorage.saveTokens).not.toHaveBeenCalled();
+    });
+
+    it("collapses the validation pipe's array of field errors into one message", async () => {
+      const axiosError = Object.assign(new Error("Request failed"), {
+        isAxiosError: true,
+        response: {
+          status: 400,
+          data: {
+            message: [
+              "password must include uppercase, lowercase, number, and special character",
+              "email must be an email",
+            ],
+          },
+        },
+      });
+      mockPost.mockRejectedValue(axiosError);
+
+      await expect(
+        service.emailRegister("bad", "weak", "x"),
+      ).rejects.toMatchObject({
+        statusCode: 400,
+        message: expect.stringContaining("password must include uppercase"),
+      });
+    });
+
+    it("throws a generic error when the request never reaches the server", async () => {
+      mockPost.mockRejectedValue(new Error("Network Error"));
+
+      await expect(
+        service.emailRegister("test@example.com", "secret", "testuser"),
+      ).rejects.toMatchObject({
+        message: "Something went wrong. Please try again.",
+      });
+    });
+
+    it("passes an axios connection failure through without a status code", async () => {
+      // Axios network failures carry no `response` object at all - that
+      // absence is what the screen keys its distinct network-error UI on.
+      const axiosError = Object.assign(new Error("Network Error"), {
+        isAxiosError: true,
+      });
+      mockPost.mockRejectedValue(axiosError);
+
+      await expect(
+        service.emailRegister("test@example.com", "secret", "testuser"),
+      ).rejects.toMatchObject({ message: "Network Error" });
     });
   });
 

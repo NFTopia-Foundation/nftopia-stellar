@@ -30,6 +30,38 @@
     "welcome": "Welcome to Stellar NFT Admin",
     "walletHelp": "Connect your Stellar wallet to get started"
   },
+  "dashboard": {
+    "title": "Platform Metrics",
+    "subtitle": "Real-time overview of users, listings, volume, and active auctions.",
+    "timeRange": {
+      "label": "Time range",
+      "24h": "Last 24 hours",
+      "7d": "Last 7 days",
+      "30d": "Last 30 days",
+      "all": "All time"
+    },
+    "metrics": {
+      "totalUsers": "Total Users",
+      "totalListings": "Total Listings",
+      "volume": "Volume ({{range}})",
+      "activeAuctions": "Active Auctions"
+    },
+    "subtext": {
+      "users": "Registered accounts",
+      "listings": "Active market items",
+      "volume": "Settled volume in XLM",
+      "auctions": "Live bidding rooms"
+    },
+    "actions": {
+      "refresh": "Refresh",
+      "retry": "Try again"
+    },
+    "loading": "Loading metrics…",
+    "error": {
+      "load": "Unable to load platform metrics.",
+      "network": "The server could not be reached."
+    }
+  },
   "nav": {
     "dashboard": "Dashboard",
     "users": "Users",

@@ -21,9 +21,10 @@ import * as Clipboard from 'expo-clipboard';
 
 interface AddressBookScreenProps {
   navigation?: any;
+  route?: any;
 }
 
-export function AddressBookScreen({ navigation }: AddressBookScreenProps) {
+export function AddressBookScreen({ navigation, route }: AddressBookScreenProps) {
   const {
     entries,
     recentRecipients,
@@ -164,8 +165,31 @@ export function AddressBookScreen({ navigation }: AddressBookScreenProps) {
     if (text) setImportText(text);
   };
 
+  const handleSelectAddress = (address: string) => {
+    if (route?.params?.onSelect) {
+      route.params.onSelect(address);
+    }
+    // Also navigate back to Send with prefilledAddress if opened from Send or in stack
+    if (navigation?.navigate) {
+      try {
+        navigation.navigate('Send', { prefilledAddress: address });
+        return;
+      } catch {
+        // Fallback to goBack
+      }
+    }
+    if (navigation?.goBack) {
+      navigation.goBack();
+    }
+  };
+
   const renderEntry = ({ item }: { item: AddressBookEntry }) => (
-    <View style={styles.card}>
+    <TouchableOpacity
+      style={styles.card}
+      activeOpacity={0.7}
+      onPress={() => handleSelectAddress(item.address)}
+      accessibilityLabel={`Select contact ${item.label}`}
+    >
       <View style={styles.cardHeader}>
         <Text style={styles.label} numberOfLines={1}>
           {item.label}
@@ -186,11 +210,16 @@ export function AddressBookScreen({ navigation }: AddressBookScreenProps) {
       </TouchableOpacity>
       {item.memo ? <Text style={styles.memo}>Memo: {item.memo}</Text> : null}
       <Text style={styles.meta}>Added {new Date(item.createdAt).toLocaleDateString()}</Text>
-    </View>
+    </TouchableOpacity>
   );
 
   const renderRecent = ({ item }: { item: RecentRecipient }) => (
-    <View style={styles.recentItem}>
+    <TouchableOpacity
+      style={styles.recentItem}
+      activeOpacity={0.7}
+      onPress={() => handleSelectAddress(item.address)}
+      accessibilityLabel={`Select recent ${item.address}`}
+    >
       <Text style={styles.recentAddress} numberOfLines={1}>
         {item.address}
       </Text>
@@ -200,15 +229,26 @@ export function AddressBookScreen({ navigation }: AddressBookScreenProps) {
       <TouchableOpacity onPress={() => handleCopy(item.address)} style={styles.smallBtn}>
         <Text style={styles.smallBtnText}>Copy</Text>
       </TouchableOpacity>
-    </View>
+    </TouchableOpacity>
   );
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Address Book</Text>
-          <Text style={styles.subtitle}>{entries.length} saved · {recentFiltered.length} recent</Text>
+        <View style={styles.headerLeft}>
+          {navigation?.canGoBack?.() && (
+            <TouchableOpacity
+              style={styles.backBtn}
+              onPress={() => navigation.goBack()}
+              accessibilityLabel="Go back"
+            >
+              <Text style={styles.backBtnText}>‹</Text>
+            </TouchableOpacity>
+          )}
+          <View>
+            <Text style={styles.title}>Address Book</Text>
+            <Text style={styles.subtitle}>{entries.length} saved · {recentFiltered.length} recent</Text>
+          </View>
         </View>
         <TouchableOpacity style={styles.addButton} onPress={openAdd} accessibilityLabel="Add contact">
           <Text style={styles.addButtonText}>+ Add</Text>
@@ -380,6 +420,21 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  backBtn: {
+    paddingRight: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  backBtnText: {
+    fontSize: 28,
+    lineHeight: 28,
+    color: colors.text,
+    fontWeight: '300',
   },
   title: { fontSize: 20, fontWeight: '700', color: colors.text },
   subtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },

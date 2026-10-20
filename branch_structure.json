@@ -1,0 +1,18 @@
+{
+  "default_branch": "main",
+  "branches": [
+    "fix/issue-652-add-minimum-bid-increment-enforcement",
+    "main",
+    "origin"
+  ],
+  "parent": {
+    "fix/issue-652-add-minimum-bid-increment-enforcement": "main",
+    "main": null,
+    "origin": "main"
+  },
+  "order": [
+    "main",
+    "fix/issue-652-add-minimum-bid-increment-enforcement",
+    "origin"
+  ]
+}

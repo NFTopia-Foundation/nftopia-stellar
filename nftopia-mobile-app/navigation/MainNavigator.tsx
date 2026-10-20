@@ -34,6 +34,7 @@ import MyNFTsScreen from '@/screens/Creator/MyNFTsScreen';
 import MintNFTScreen from '@/screens/Creator/MintNFTScreen';
 import CreateCollectionScreen from '@/screens/Creator/CreateCollectionScreen';
 import EarningsScreen from '@/screens/Creator/EarningsScreen';
+import CreatorProfileScreen from '@/screens/Profile/CreatorProfileScreen';
 
 // Notification Screens
 import NotificationsScreen from '@/screens/Notifications/NotificationsScreen';
@@ -42,6 +43,7 @@ import SettingsScreen from '@/screens/Settings/SettingsScreen';
 import { SendScreen } from '@/screens/Wallet/SendScreen';
 import { QRScannerScreen } from '@/screens/Wallet/QRScannerScreen';
 import { ReceiveScreen } from '@/screens/Wallet/ReceiveScreen';
+import { AddressBookScreen } from '@/screens/Wallet/AddressBookScreen';
 
 // Backup Reminder Screen
 import BackupReminderScreen from '@/screens/BackupReminder/BackupReminderScreen';
@@ -61,7 +63,7 @@ export type MainStackParamList = {
   Auctions: undefined;
   AuctionDetail: { auctionId: string };
   CreateAuction: undefined;
-  Assistant: undefined;
+  Assistant: { context?: { source: 'home' | 'marketplace'; category?: string; sortBy?: string; hasActiveFilters?: boolean } } | undefined;
   Earnings: undefined;
   Transactions: undefined;
   Notifications: undefined;
@@ -70,9 +72,11 @@ export type MainStackParamList = {
   Send: { prefilledAddress?: string } | undefined;
   QRScanner: undefined;
   Receive: undefined;
+  AddressBook: { onSelect?: (address: string) => void } | undefined;
   Marketplace: { category?: string } | undefined;
   BackupReminder: undefined;
   Favorites: undefined;
+  CreatorProfile: { userId: string };
 };
 
 const Stack = createNativeStackNavigator<MainStackParamList>();
@@ -169,6 +173,14 @@ export default function MainNavigator() {
             </ScreenErrorBoundary>
           )}
         </Stack.Screen>
+
+        <Stack.Screen name="AddressBook" options={getTransitionConfig('detail')}>
+          {(props) => (
+            <ScreenErrorBoundary name="AddressBookScreen">
+              <AddressBookScreen {...props} />
+            </ScreenErrorBoundary>
+          )}
+        </Stack.Screen>
         
         {/* Marketplace with detail transition */}
         <Stack.Screen 
@@ -205,6 +217,18 @@ export default function MainNavigator() {
           {() => (
             <ScreenErrorBoundary name="FavoritesScreen">
               <FavoritesScreen />
+            </ScreenErrorBoundary>
+          )}
+        </Stack.Screen>
+
+        {/* Creator Profile - public view of any creator */}
+        <Stack.Screen
+          name="CreatorProfile"
+          options={getTransitionConfig('detail')}
+        >
+          {(props) => (
+            <ScreenErrorBoundary name="CreatorProfileScreen">
+              <CreatorProfileScreen {...props} />
             </ScreenErrorBoundary>
           )}
         </Stack.Screen>

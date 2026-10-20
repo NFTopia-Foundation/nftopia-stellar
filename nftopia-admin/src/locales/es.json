@@ -30,6 +30,38 @@
     "welcome": "Bienvenido al Admin NFT de Stellar",
     "walletHelp": "Conecta tu cartera Stellar para comenzar"
   },
+  "dashboard": {
+    "title": "Métricas de la plataforma",
+    "subtitle": "Resumen en tiempo real de usuarios, publicaciones, volumen y subastas activas.",
+    "timeRange": {
+      "label": "Rango de tiempo",
+      "24h": "Últimas 24 horas",
+      "7d": "Últimos 7 días",
+      "30d": "Últimos 30 días",
+      "all": "Todo el tiempo"
+    },
+    "metrics": {
+      "totalUsers": "Usuarios totales",
+      "totalListings": "Publicaciones totales",
+      "volume": "Volumen ({{range}})",
+      "activeAuctions": "Subastas activas"
+    },
+    "subtext": {
+      "users": "Cuentas registradas",
+      "listings": "Artículos activos en el mercado",
+      "volume": "Volumen liquidado en XLM",
+      "auctions": "Salas de subasta en vivo"
+    },
+    "actions": {
+      "refresh": "Actualizar",
+      "retry": "Reintentar"
+    },
+    "loading": "Cargando métricas…",
+    "error": {
+      "load": "No se pudieron cargar las métricas de la plataforma.",
+      "network": "No se pudo contactar con el servidor."
+    }
+  },
   "nav": {
     "dashboard": "Panel",
     "users": "Usuarios",

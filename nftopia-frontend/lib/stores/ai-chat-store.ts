@@ -1,8 +1,10 @@
 import { create } from "zustand";
 import {
+  checkAiHealth,
   sendAiChat,
   streamAiChat,
   type AiChatRequest,
+  type AnthropicHealthStatus,
 } from "@/lib/api/ai-chat";
 
 export type AiChatRole = "user" | "assistant";
@@ -27,6 +29,12 @@ export type AiChatStore = {
   sessionId: string | null;
   status: AiChatStatus;
   error: string | null;
+  /** Status reported by GET /ai/health ('up' | 'down' | 'unconfigured' | null) */
+  healthStatus: AnthropicHealthStatus | null;
+  /** Whether the AI assistant is in a degraded/unavailable state. */
+  isDegraded: boolean;
+  /** Whether a health check is currently in flight. */
+  isCheckingHealth: boolean;
 
   open: () => void;
   close: () => void;
@@ -38,6 +46,8 @@ export type AiChatStore = {
   cancel: () => void;
   /** Aborts and clears the conversation. */
   reset: () => void;
+  /** Checks backend /ai/health and updates degraded state. */
+  checkHealth: () => Promise<boolean>;
 };
 
 /**
@@ -45,6 +55,7 @@ export type AiChatStore = {
  * re-render, and so a single turn can be in flight at a time.
  */
 let activeController: AbortController | null = null;
+let activeHealthPromise: Promise<boolean> | null = null;
 
 let messageCounter = 0;
 
@@ -73,10 +84,54 @@ export const useAiChatStore = create<AiChatStore>()((set, get) => ({
   sessionId: null,
   status: "idle",
   error: null,
+  healthStatus: null,
+  isDegraded: false,
+  isCheckingHealth: false,
 
   open: () => set({ isOpen: true }),
   close: () => set({ isOpen: false }),
   toggle: () => set((state) => ({ isOpen: !state.isOpen })),
+
+  checkHealth: async () => {
+    if (activeHealthPromise) {
+      return activeHealthPromise;
+    }
+
+    if (typeof checkAiHealth !== "function") {
+      set({ isDegraded: false, isCheckingHealth: false, healthStatus: "up" });
+      return true;
+    }
+
+    set({ isCheckingHealth: true });
+
+    activeHealthPromise = (async () => {
+      try {
+        const result = await checkAiHealth();
+        const isDegraded = result.status !== "up";
+        set({
+          healthStatus: result.status,
+          isDegraded,
+          isCheckingHealth: false,
+        });
+        return !isDegraded;
+      } catch (err) {
+        if (isAbortError(err)) {
+          set({ isCheckingHealth: false });
+          return false;
+        }
+        set({
+          healthStatus: "down",
+          isDegraded: true,
+          isCheckingHealth: false,
+        });
+        return false;
+      } finally {
+        activeHealthPromise = null;
+      }
+    })();
+
+    return activeHealthPromise;
+  },
 
   cancel: () => {
     activeController?.abort();
@@ -87,7 +142,16 @@ export const useAiChatStore = create<AiChatStore>()((set, get) => ({
   reset: () => {
     activeController?.abort();
     activeController = null;
-    set({ messages: [], sessionId: null, status: "idle", error: null });
+    activeHealthPromise = null;
+    set({
+      messages: [],
+      sessionId: null,
+      status: "idle",
+      error: null,
+      healthStatus: null,
+      isDegraded: false,
+      isCheckingHealth: false,
+    });
   },
 
   retry: async () => {
@@ -100,8 +164,8 @@ export const useAiChatStore = create<AiChatStore>()((set, get) => ({
 
   sendMessage: async (message: string) => {
     const trimmed = message.trim();
-    // Ignore empty input, and extra sends while a turn is already in flight.
-    if (!trimmed || activeController) return;
+    // Ignore empty input, sends while degraded, and extra sends while a turn is already in flight.
+    if (!trimmed || activeController || get().isDegraded) return;
 
     const controller = new AbortController();
     activeController = controller;
@@ -151,6 +215,7 @@ export const useAiChatStore = create<AiChatStore>()((set, get) => ({
         status: "error",
         error: error instanceof Error ? error.message : fallbackMessage,
       });
+      void get().checkHealth();
     };
 
     let receivedContent = false;
@@ -197,3 +262,4 @@ export const useAiChatStore = create<AiChatStore>()((set, get) => ({
     }
   },
 }));
+

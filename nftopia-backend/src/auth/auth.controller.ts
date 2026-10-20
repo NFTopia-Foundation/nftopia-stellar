@@ -6,12 +6,13 @@ import {
   Param,
   Post,
   Req,
+  Res,
   UnauthorizedException,
   UseGuards,
   NotFoundException,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { EmailLoginDto, EmailRegisterDto } from './dto/email-auth.dto';
 import {
@@ -30,6 +31,7 @@ import {
 } from './dto/password-reset.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { EmailRateLimitGuard } from '../modules/email/email-rate-limit.guard';
+import { LoginLockedException } from './login-lockout.service';
 
 type RequestWithUser = Request & {
   user?: {
@@ -108,8 +110,20 @@ export class AuthController {
 
   @Post('email/login')
   @ApiOperation({ summary: 'Login with email and password' })
-  async emailLogin(@Body() dto: EmailLoginDto) {
-    const res = await this.authService.loginWithEmail(dto);
+  async emailLogin(
+    @Body() dto: EmailLoginDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    let res: Awaited<ReturnType<AuthService['loginWithEmail']>>;
+    try {
+      res = await this.authService.loginWithEmail(dto, req.ip);
+    } catch (error) {
+      if (error instanceof LoginLockedException) {
+        response.setHeader('Retry-After', String(error.retryAfterSeconds));
+      }
+      throw error;
+    }
     return {
       data: {
         success: true,

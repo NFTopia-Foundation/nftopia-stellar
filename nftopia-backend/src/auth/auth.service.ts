@@ -42,6 +42,7 @@ import { TwoFactorService } from './two-factor.service';
 import { EmailService } from '../modules/email/email.service';
 import { WALLET_NONCE_STORE } from './wallet-nonce.store';
 import type { WalletNonceStore } from './wallet-nonce.store';
+import { LoginLockoutService } from './login-lockout.service';
 
 type JwtUserPayload = {
   sub: string;
@@ -138,6 +139,7 @@ export class AuthService {
     private readonly emailService: EmailService,
     @Inject(WALLET_NONCE_STORE)
     private readonly walletNonceStore: WalletNonceStore,
+    private readonly loginLockout: LoginLockoutService,
   ) {}
 
   async registerWithEmail(dto: EmailRegisterDto) {
@@ -290,13 +292,20 @@ export class AuthService {
     return { success: true };
   }
 
-  async loginWithEmail(dto: EmailLoginDto) {
+  async loginWithEmail(dto: EmailLoginDto, requestIp?: string) {
     const normalizedEmail = this.normalizeEmail(dto.email);
+    // Checked before looking the user up or verifying the password, so a
+    // locked login gets the same answer whether the account exists and
+    // whether the password was right (#648).
+    await this.loginLockout.assertNotLocked(normalizedEmail, requestIp);
+
     const user = await this.userRepository.findOne({
       where: { email: normalizedEmail },
     });
 
     if (!user || !user.passwordHash) {
+      // Unknown emails count too, so a lockout never confirms an account.
+      await this.loginLockout.registerFailure(normalizedEmail, requestIp);
       throw new UnauthorizedException('Invalid email or password');
     }
 
@@ -305,8 +314,15 @@ export class AuthService {
       user.passwordHash,
     );
     if (!isValidPassword) {
+      await this.loginLockout.registerFailure(
+        normalizedEmail,
+        requestIp,
+        user.id,
+      );
       throw new UnauthorizedException('Invalid email or password');
     }
+
+    await this.loginLockout.registerSuccess(normalizedEmail);
 
     // Check if 2FA is enabled
     if (user.twoFactorEnabled) {

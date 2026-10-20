@@ -230,6 +230,14 @@ export const useAuthStore = createStore<AuthStore>({
         // key or recovery phrase.
         await tokenStorage.clearTokens();
         useWalletStore.getState().disconnectWallet();
+        // Clear persisted assistant chat history on sign-out to prevent exposure across accounts.
+        // Dynamic import avoids circular dependency (authStore -> assistantStore -> aiChat.service -> sample -> authStore).
+        try {
+          const { useAssistantStore } = await import('@/stores/assistantStore');
+          useAssistantStore.getState().clearConversation();
+        } catch {
+          // Ignore if assistantStore is unavailable
+        }
       } catch (error) {
         set({
           error: error instanceof Error ? error.message : 'Failed to logout',

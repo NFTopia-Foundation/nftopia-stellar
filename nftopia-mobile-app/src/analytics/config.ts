@@ -103,6 +103,11 @@ export const ANALYTICS_EVENTS = {
   DISCOVERY_NEW_DROPS_IMPRESSION: 'discovery_new_drops_impression',
   DISCOVERY_NEW_DROPS_ITEM_CLICK: 'discovery_new_drops_item_click',
 
+  // AI Assistant
+  ASSISTANT_OPENED: 'assistant_opened',
+  ASSISTANT_OPENED_FROM_HOME: 'assistant_opened_from_home',
+  ASSISTANT_OPENED_FROM_MARKETPLACE: 'assistant_opened_from_marketplace',
+
   // Auction actions
   AUCTION_VIEW: 'auction_view',
   AUCTION_CREATE: 'auction_create',

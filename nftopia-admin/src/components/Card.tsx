@@ -30,19 +30,28 @@ export function Card({ children, className = '', glass = false }: CardProps) {
   )
 }
 
-interface StatCardProps {
+export interface StatCardProps {
   label: string
   value: string
+  subtext?: string
+  loading?: boolean
+  testId?: string
 }
 
 /**
  * A compact metric/stat card for dashboard-style grids.
  */
-export function StatCard({ label, value }: StatCardProps) {
+export function StatCard({ label, value, subtext, loading, testId }: StatCardProps) {
   return (
-    <article className="rounded-xl border border-white/10 bg-slate-800/70 p-4">
+    <article
+      data-testid={testId}
+      className="rounded-xl border border-white/10 bg-slate-800/70 p-4 transition-colors"
+    >
       <h2 className="text-sm font-medium text-slate-300">{label}</h2>
-      <p className="mt-2 text-lg font-semibold text-white">{value}</p>
+      <p className="mt-2 text-2xl font-semibold tracking-tight text-white">
+        {loading ? <span className="animate-pulse text-slate-500">…</span> : value}
+      </p>
+      {subtext && <p className="mt-1 text-xs text-slate-400">{subtext}</p>}
     </article>
   )
 }

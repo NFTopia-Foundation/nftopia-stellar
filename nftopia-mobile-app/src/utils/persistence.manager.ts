@@ -99,6 +99,7 @@ class PersistenceManager {
       'favorites-storage',
       'offline-storage',
       'language-storage',
+      'assistant-storage',
     ];
 
     await clearAllPersistedData(storeNames);

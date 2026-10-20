@@ -40,6 +40,11 @@ export const AccessibilityInfo = {
   setAccessibilityFocus: jest.fn(),
 };
 
+/** Stand-in for RN's static Alert API - tests assert on `Alert.alert` calls directly since the mock fn is shared per test file. */
+export const Alert = {
+  alert: jest.fn(),
+};
+
 export const Platform = {
   OS: 'ios' as const,
   select: <T,>(spec: { ios?: T; android?: T; default?: T }): T | undefined =>

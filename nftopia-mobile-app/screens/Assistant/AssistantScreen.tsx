@@ -11,6 +11,8 @@ import {
   ActivityIndicator,
   AccessibilityInfo,
 } from 'react-native';
+import { useRoute, RouteProp } from '@react-navigation/native';
+import { MainStackParamList } from '@/navigation/MainNavigator';
 import { useAssistantStore, ChatMessage } from '@/stores/assistantStore';
 
 function MessageBubble({ item }: { item: ChatMessage }) {
@@ -34,10 +36,19 @@ function MessageBubble({ item }: { item: ChatMessage }) {
 }
 
 export default function AssistantScreen({ navigation }: any) {
+  const route = useRoute<RouteProp<MainStackParamList, 'Assistant'>>();
   const { messages, isStreaming, error, sendMessage, cancelStream, clearConversation } =
     useAssistantStore();
   const [input, setInput] = useState('');
   const listRef = useRef<FlatList>(null);
+
+  // Context-aware initialization for future use
+  useEffect(() => {
+    if (route.params?.context) {
+      // Future: could initialize the conversation with context-aware prompt
+      // e.g., "I'm browsing the marketplace with category X and filters Y. How can I help?"
+    }
+  }, [route.params?.context]);
 
   useEffect(() => {
     return () => {

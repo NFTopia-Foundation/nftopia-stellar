@@ -228,6 +228,23 @@ describe('NotificationsService', () => {
     });
   });
 
+  describe('broadcastAuctionExtended', () => {
+    it('emits the new end time to the auction room', () => {
+      const payload = {
+        endTime: '2026-10-19T10:00:00.000Z',
+        extensionCount: 1,
+      };
+
+      service.broadcastAuctionExtended('auction-abc', payload);
+
+      expect(mockServer.to).toHaveBeenCalledWith('auction:auction-abc');
+      expect(room.emit).toHaveBeenCalledWith('auction_extended', {
+        auctionId: 'auction-abc',
+        ...payload,
+      });
+    });
+  });
+
   // ── notifyBidReceivedByEmail ─────────────────────────────────────────────
 
   describe('notifyBidReceivedByEmail', () => {
