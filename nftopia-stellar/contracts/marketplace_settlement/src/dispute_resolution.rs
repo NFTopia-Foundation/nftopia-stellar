@@ -31,6 +31,7 @@ const SELECTION_SEED: Symbol = symbol_short!("arb_seed");
 
 /// Basis-point denominator (100%).
 const BPS_DENOMINATOR: u64 = 10_000;
+const MAX_EVIDENCE_URI_BYTES: u32 = 512;
 
 /// Reputation points that buy one extra entry in the arbitrator selection pool.
 const REPUTATION_WEIGHT_UNIT: u64 = 1_000;
@@ -114,6 +115,10 @@ impl DisputeResolutionManager {
         reason: &Bytes,
         evidence_uri: Option<Bytes>,
     ) -> Result<u64, SettlementError> {
+        if let Some(uri) = evidence_uri.as_ref() {
+            Self::validate_evidence_uri(uri)?;
+        }
+
         // Check if dispute already exists for this transaction
         if DisputeStore::exists_for_transaction(env, transaction_id) {
             return Err(SettlementError::AlreadyExists);
@@ -224,6 +229,8 @@ impl DisputeResolutionManager {
         submitter: &Address,
         evidence_uri: &Bytes,
     ) -> Result<(), SettlementError> {
+        Self::validate_evidence_uri(evidence_uri)?;
+
         let mut dispute = DisputeStore::get(env, dispute_id)?;
 
         // Only initiator or arbitrators can submit evidence
@@ -244,6 +251,27 @@ impl DisputeResolutionManager {
 
         dispute.evidence_uri = Some(evidence_uri.clone());
         DisputeStore::update(env, &dispute)?;
+
+        Ok(())
+    }
+
+    fn validate_evidence_uri(uri: &Bytes) -> Result<(), SettlementError> {
+        let has_scheme = |prefix: &[u8]| {
+            uri.len() > prefix.len() as u32
+                && prefix
+                    .iter()
+                    .enumerate()
+                    .all(|(index, byte)| uri.get(index as u32) == Some(*byte))
+        };
+
+        if uri.len() > MAX_EVIDENCE_URI_BYTES
+            || !(has_scheme(b"ipfs://")
+                || has_scheme(b"https://")
+                || has_scheme(b"http://")
+                || has_scheme(b"ar://"))
+        {
+            return Err(DisputeError::InvalidEvidenceUri.into());
+        }
 
         Ok(())
     }

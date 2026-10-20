@@ -275,6 +275,15 @@ pub fn batch_mint(
 /// - Emits Burn event on success
 /// - Emits BurnFailed event on failure
 pub fn burn(env: &Env, caller: &Address, token_id: u64) -> Result<(), ContractError> {
+    if env
+        .storage()
+        .instance()
+        .get::<_, bool>(&DataKey::IsPaused)
+        .unwrap_or(false)
+    {
+        return Err(ContractError::ContractPaused);
+    }
+
     // 1. Validate token exists
     let owner: Address = env
         .storage()
