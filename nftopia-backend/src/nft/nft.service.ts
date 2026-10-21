@@ -1,9 +1,17 @@
-import { Injectable, Logger, OnModuleInit, Inject } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  OnModuleInit,
+  Inject,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import { ConfigService } from '@nestjs/config';
+import { Client as NftContractClient } from '@nftopia/nft-contract-client';
+import { Networks } from 'stellar-sdk';
 import { NftFilterDto } from './dto/nft-filter.dto';
 import { StellarNft } from './entities/stellar-nft.entity';
 import { NftMetadata } from './entities/nft-metadata.entity';
@@ -74,6 +82,25 @@ export class NftService implements OnModuleInit {
       where: { contractId, tokenId },
       relations: ['metadata'],
     });
+  }
+
+  async getOnChainOwner(contractId: string, tokenId: string): Promise<string> {
+    if (!/^\d+$/.test(tokenId)) {
+      throw new BadRequestException('tokenId must be a non-negative integer');
+    }
+
+    const network =
+      this.configService.get<string>('STELLAR_NETWORK') ?? 'testnet';
+    const client = new NftContractClient({
+      contractId,
+      rpcUrl:
+        this.configService.get<string>('SOROBAN_RPC_URL') ??
+        'https://soroban-testnet.stellar.org',
+      networkPassphrase:
+        network === 'mainnet' ? Networks.PUBLIC : Networks.TESTNET,
+    });
+    const { result } = await client.owner_of({ token_id: BigInt(tokenId) });
+    return result.unwrap();
   }
 
   async getPopular() {

@@ -59,4 +59,13 @@ export class NftController {
   ) {
     return this.nftService.findOne(contractId, tokenId);
   }
+
+  @Get(':contractId/:tokenId/owner')
+  @ApiOperation({ summary: 'Get the current on-chain NFT owner' })
+  async getOnChainOwner(
+    @Param('contractId') contractId: string,
+    @Param('tokenId') tokenId: string,
+  ): Promise<string> {
+    return this.nftService.getOnChainOwner(contractId, tokenId);
+  }
 }

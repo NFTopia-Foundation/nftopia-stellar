@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use crate::{
-    atomic_swap::{AtomicSwapEngine, SwapState},
+    atomic_swap::{AtomicSwapEngine, EscrowManager, SwapState},
     error::{SettlementError, SwapTimeoutError},
     royalty_distributor::RoyaltyDistributor,
     settlement_core::{MarketplaceSettlement, MarketplaceSettlementClient},
@@ -917,22 +917,16 @@ fn new_swap_env() -> (
     (env, cid, client, seller, nft, currency, transaction_id)
 }
 
-/// Deposit both sides of the swap so it reaches `Ready` with real escrow holdings.
+/// Deposit the buyer-side payment; `create_sale` already escrows the seller NFT.
 fn fund_swap(
     env: &Env,
     cid: &Address,
     seller: &Address,
-    nft: &Address,
+    _nft: &Address,
     currency: &Asset,
     transaction_id: u64,
 ) {
-    let nft_asset = Asset::Token(TokenAsset {
-        contract: nft.clone(),
-        symbol: Symbol::new(env, "NFT"),
-    });
     env.as_contract(cid, || {
-        AtomicSwapEngine::deposit_to_escrow(env, transaction_id, seller, &nft_asset, 1, true)
-            .unwrap();
         AtomicSwapEngine::deposit_to_escrow(
             env,
             transaction_id,
@@ -942,6 +936,78 @@ fn fund_swap(
             false,
         )
         .unwrap();
+    });
+}
+
+fn deposit_sale_payment(
+    env: &Env,
+    cid: &Address,
+    seller: &Address,
+    currency: &Asset,
+    transaction_id: u64,
+) {
+    env.as_contract(cid, || {
+        AtomicSwapEngine::deposit_to_escrow(
+            env,
+            transaction_id,
+            seller,
+            currency,
+            SALE_PRICE,
+            false,
+        )
+        .unwrap();
+    });
+}
+
+#[test]
+fn test_escrow_balance_tracks_partial_and_full_release() {
+    let (env, cid, _client, seller, _nft, currency, transaction_id) = new_swap_env();
+    let recipient = Address::generate(&env);
+    deposit_sale_payment(&env, &cid, &seller, &currency, transaction_id);
+
+    env.as_contract(&cid, || {
+        assert_eq!(
+            EscrowManager::check_escrow_balance(&env, transaction_id, &currency),
+            Ok(SALE_PRICE)
+        );
+        EscrowManager::release_escrow(&env, transaction_id, &recipient, &currency, 400_000)
+            .unwrap();
+        assert_eq!(
+            EscrowManager::check_escrow_balance(&env, transaction_id, &currency),
+            Ok(SALE_PRICE - 400_000)
+        );
+        EscrowManager::release_escrow(
+            &env,
+            transaction_id,
+            &recipient,
+            &currency,
+            SALE_PRICE - 400_000,
+        )
+        .unwrap();
+        assert_eq!(
+            EscrowManager::check_escrow_balance(&env, transaction_id, &currency),
+            Ok(0)
+        );
+    });
+}
+
+#[test]
+fn test_escrow_rejects_a_second_full_release() {
+    let (env, cid, _client, seller, _nft, currency, transaction_id) = new_swap_env();
+    let recipient = Address::generate(&env);
+    deposit_sale_payment(&env, &cid, &seller, &currency, transaction_id);
+
+    env.as_contract(&cid, || {
+        EscrowManager::release_escrow(&env, transaction_id, &recipient, &currency, SALE_PRICE)
+            .unwrap();
+        assert_eq!(
+            EscrowManager::release_escrow(&env, transaction_id, &recipient, &currency, SALE_PRICE,),
+            Err(SettlementError::InsufficientFunds)
+        );
+        assert_eq!(
+            EscrowManager::check_escrow_balance(&env, transaction_id, &currency),
+            Ok(0)
+        );
     });
 }
 
