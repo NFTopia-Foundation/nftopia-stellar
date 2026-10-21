@@ -10,6 +10,22 @@ export type AiChatReply = {
   sessionId: string;
 };
 
+export type AiChatSessionSummary = {
+  id: string;
+  title?: string;
+  preview?: string;
+  createdAt: string;
+  updatedAt: string;
+  messageCount?: number;
+};
+
+export type AiChatMessageDto = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  createdAt?: string;
+};
+
 type StreamEvent = {
   type?: string;
   data?: unknown;
@@ -270,4 +286,95 @@ export async function getAiUsage(signal?: AbortSignal): Promise<AiUsageSummary> 
   }
 
   return response.json() as Promise<AiUsageSummary>;
+}
+
+export async function fetchAiChatSessions(
+  signal?: AbortSignal,
+): Promise<AiChatSessionSummary[]> {
+  const token = getAccessToken();
+  const headers = new Headers({ Accept: "application/json" });
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  const response = await fetch(`${API_CONFIG.baseUrl}/ai/sessions`, {
+    method: "GET",
+    headers,
+    credentials: "include",
+    signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch AI chat sessions with status ${response.status}`);
+  }
+
+  const data = await response.json();
+  const rawSessions = Array.isArray(data)
+    ? data
+    : Array.isArray(data?.sessions)
+    ? data.sessions
+    : [];
+
+  return rawSessions.map((s: Record<string, unknown>) => ({
+    id: String(s.id),
+    title: (s.title as string | undefined) || (s.preview ? String(s.preview).slice(0, 45) : undefined),
+    preview: (s.preview as string | undefined) || (s.lastMessage as string | undefined) || (s.content as string | undefined),
+    createdAt: (s.createdAt as string | undefined) || (s.created_at as string | undefined) || new Date().toISOString(),
+    updatedAt: (s.updatedAt as string | undefined) || (s.updated_at as string | undefined) || (s.createdAt as string | undefined) || new Date().toISOString(),
+    messageCount: typeof s.messageCount === "number" ? s.messageCount : (typeof s.messages_count === "number" ? s.messages_count : undefined),
+  }));
+}
+
+export async function fetchAiChatSessionMessages(
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<AiChatMessageDto[]> {
+  const token = getAccessToken();
+  const headers = new Headers({ Accept: "application/json" });
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  const response = await fetch(`${API_CONFIG.baseUrl}/ai/sessions/${sessionId}/messages`, {
+    method: "GET",
+    headers,
+    credentials: "include",
+    signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch AI chat session messages with status ${response.status}`);
+  }
+
+  const data = await response.json();
+  const rawList = Array.isArray(data)
+    ? data
+    : Array.isArray(data?.messages)
+    ? data.messages
+    : Array.isArray(data?.history)
+    ? data.history
+    : [];
+
+  return rawList.map((m: Record<string, unknown>, index: number) => ({
+    id: (m.id as string | undefined) || `${m.role || "turn"}-${index}-${Date.now()}`,
+    role: (m.role === "assistant" ? "assistant" : "user") as "user" | "assistant",
+    content: typeof m.content === "string" ? m.content : "",
+    createdAt: (m.createdAt as string | undefined) || (m.created_at as string | undefined),
+  }));
+}
+
+export async function deleteAiChatSession(
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  const token = getAccessToken();
+  const headers = new Headers();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  const response = await fetch(`${API_CONFIG.baseUrl}/ai/sessions/${sessionId}`, {
+    method: "DELETE",
+    headers,
+    credentials: "include",
+    signal,
+  });
+
+  if (!response.ok && response.status !== 404) {
+    throw new Error(`Failed to delete AI chat session with status ${response.status}`);
+  }
 }
