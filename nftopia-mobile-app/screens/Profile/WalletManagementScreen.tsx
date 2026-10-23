@@ -229,6 +229,14 @@ export default function WalletManagementScreen({ navigation, route }: Props) {
         >
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Transaction history"
+          onPress={() => navigation.navigate('Transactions')}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Text style={{ color: colors.primary, fontWeight: '600' }}>History</Text>
+        </TouchableOpacity>
         <Text style={styles.title} accessibilityRole="header">
           Wallets
         </Text>
