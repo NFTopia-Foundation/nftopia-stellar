@@ -30,6 +30,7 @@ import { ContentFlagService } from './content-flag.service';
 import { AuditModule } from '../../common/audit/audit.module';
 import { PromptInjectionService } from './prompt-injection.service';
 import { AiModerationProcessor } from './ai-moderation.processor';
+import { AiChatStreamRegistryService } from './ai-chat-stream-registry.service';
 
 @Module({
   imports: [
@@ -69,6 +70,7 @@ import { AiModerationProcessor } from './ai-moderation.processor';
     AiModerationProcessor,
     ContentFlagService,
     PromptInjectionService,
+    AiChatStreamRegistryService,
   ],
   controllers: [AiAgentController],
   exports: [AiAgentService, AiUsageService],

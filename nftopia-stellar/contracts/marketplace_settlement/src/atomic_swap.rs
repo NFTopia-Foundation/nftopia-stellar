@@ -103,6 +103,15 @@ pub struct EscrowRelease {
 /// Atomic swap engine for secure NFT and token transfers
 pub struct AtomicSwapEngine;
 
+/// Public helper classification (these are not `#[contractimpl]` entrypoints):
+/// mutating helpers are `set_timeout_config`, `initialize_swap`, `deposit_to_escrow`,
+/// `execute_swap`, `execute_sale_swap`, `cancel_swap`, `expire_swap`,
+/// `cleanup_expired_swaps`, `reclaim_expired_escrow`, `settle_dispute_escrow`, and
+/// `emergency_withdraw`. `EscrowManager::release_escrow` also mutates external token
+/// state. These helpers must only be called from guarded settlement entrypoints.
+/// Read-only helpers are `is_terminal`, `timeout_config`, `validate_timeout_config`,
+/// `is_expired`, `is_expiry_confirmed`, `time_remaining`, `get_swap_by_transaction`,
+/// `check_escrow_balance`, and `get_escrow_holdings`.
 impl AtomicSwapEngine {
     // ── Timeout configuration ────────────────────────────────────────────────
 
@@ -1152,14 +1161,32 @@ pub struct EscrowManager;
 
 impl EscrowManager {
     /// Return the remaining deposited fungible balance held for a transaction.
+    ///
+    /// Sums `asset` across both the seller's and buyer's escrow holdings for this
+    /// transaction. A holding only counts once `is_deposited` is true and
+    /// `released_at` is still `None`: `initialize_swap` pre-populates holdings with
+    /// their eventual amount before any transfer happens (see `EscrowHolding`'s own
+    /// doc comment on `is_deposited`), so without that gate this would report funds
+    /// that were only ever reserved, not actually escrowed. NFT holdings are always
+    /// excluded: their `amount` is a `token_id`, not a fungible quantity, and an NFT
+    /// holding's asset is a `Token` keyed on the NFT contract's address, so it can
+    /// otherwise look like a fungible holding for that same asset.
+    ///
+    /// A transaction with no recorded swap at all has nothing escrowed, so this
+    /// returns `Ok(0)` rather than an error — same as an existing swap whose
+    /// matching asset simply hasn't been deposited yet.
     pub fn check_escrow_balance(
         env: &Env,
         transaction_id: u64,
         asset: &Asset,
     ) -> Result<i128, SettlementError> {
-        let swap = AtomicSwapEngine::get_swap_by_transaction(env, transaction_id)?;
-        let mut balance = 0i128;
+        let swap = match AtomicSwapEngine::get_swap_by_transaction(env, transaction_id) {
+            Ok(swap) => swap,
+            Err(SettlementError::NotFound) => return Ok(0),
+            Err(err) => return Err(err),
+        };
 
+        let mut balance = 0i128;
         for holding in swap.seller_escrow.iter().chain(swap.buyer_escrow.iter()) {
             if holding.is_deposited
                 && holding.released_at.is_none()

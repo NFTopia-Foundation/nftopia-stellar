@@ -2,9 +2,13 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { ScheduleModule } from '@nestjs/schedule';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { NotificationsGateway } from './notifications.gateway';
 import { NotificationsService } from './notifications.service';
 import { EmailModule } from '../email/email.module';
+import { PushSubscription } from './entities/push-subscription.entity';
+import { PushNotificationService } from './push-notification.service';
+import { PushNotificationController } from './push-notification.controller';
 
 /**
  * NotificationsModule
@@ -44,8 +48,14 @@ import { EmailModule } from '../email/email.module';
     }),
     ScheduleModule.forRoot(),
     EmailModule,
+    TypeOrmModule.forFeature([PushSubscription]),
   ],
-  providers: [NotificationsGateway, NotificationsService],
-  exports: [NotificationsService],
+  controllers: [PushNotificationController],
+  providers: [
+    NotificationsGateway,
+    NotificationsService,
+    PushNotificationService,
+  ],
+  exports: [NotificationsService, PushNotificationService],
 })
 export class NotificationsModule {}

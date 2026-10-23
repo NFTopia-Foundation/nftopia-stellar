@@ -166,6 +166,136 @@ fn test_batch_mint() {
 }
 
 #[test]
+fn test_batch_mint_rejects_mismatched_arrays() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+    let recipients = Vec::from_array(&env, [Address::generate(&env)]);
+
+    let result = client.try_batch_mint(&admin, &recipients, &Vec::new(&env), &Vec::new(&env));
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_tokens_of_owner_empty_and_single_page() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+    let owner = Address::generate(&env);
+
+    let (empty, empty_cursor) = client.tokens_of_owner(&owner, &None, &10);
+    assert_eq!(empty.len(), 0);
+    assert_eq!(empty_cursor, None);
+
+    let first_id = client.mint(
+        &admin,
+        &owner,
+        &String::from_str(&env, "uri1"),
+        &Vec::new(&env),
+        &None,
+    );
+    let second_id = client.mint(
+        &admin,
+        &owner,
+        &String::from_str(&env, "uri2"),
+        &Vec::new(&env),
+        &None,
+    );
+
+    let (ids, next_cursor) = client.tokens_of_owner(&owner, &None, &10);
+    assert_eq!(ids.len(), 2);
+    assert_eq!(ids.get(0), Some(second_id));
+    assert_eq!(ids.get(1), Some(first_id));
+    assert_eq!(next_cursor, None);
+}
+
+#[test]
+fn test_tokens_of_owner_paginates_with_exclusive_cursor() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+    let owner = Address::generate(&env);
+    let mut minted_ids = Vec::new(&env);
+
+    for _ in 0..5 {
+        minted_ids.push_back(client.mint(
+            &admin,
+            &owner,
+            &String::from_str(&env, "uri"),
+            &Vec::new(&env),
+            &None,
+        ));
+    }
+
+    let (first_page, first_cursor) = client.tokens_of_owner(&owner, &None, &2);
+    assert_eq!(first_page.len(), 2);
+    assert_eq!(first_page.get(0), Some(minted_ids.get(4).unwrap()));
+    assert_eq!(first_page.get(1), Some(minted_ids.get(3).unwrap()));
+    assert_eq!(first_cursor, first_page.get(1));
+
+    let (second_page, second_cursor) = client.tokens_of_owner(&owner, &first_cursor, &2);
+    assert_eq!(second_page.len(), 2);
+    assert_eq!(second_page.get(0), Some(minted_ids.get(2).unwrap()));
+    assert_eq!(second_page.get(1), Some(minted_ids.get(1).unwrap()));
+    assert_eq!(second_cursor, second_page.get(1));
+
+    let (last_page, last_cursor) = client.tokens_of_owner(&owner, &second_cursor, &2);
+    assert_eq!(last_page.len(), 1);
+    assert_eq!(last_page.get(0), Some(minted_ids.get(0).unwrap()));
+    assert_eq!(last_cursor, None);
+}
+
+#[test]
+fn test_tokens_of_owner_rejects_invalid_limit_and_cursor() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+    let owner = Address::generate(&env);
+    let other_owner = Address::generate(&env);
+    let token_id = client.mint(
+        &admin,
+        &owner,
+        &String::from_str(&env, "uri"),
+        &Vec::new(&env),
+        &None,
+    );
+
+    assert!(client.try_tokens_of_owner(&owner, &None, &0).is_err());
+    assert!(client.try_tokens_of_owner(&owner, &None, &51).is_err());
+    assert!(
+        client
+            .try_tokens_of_owner(&other_owner, &Some(token_id), &1)
+            .is_err()
+    );
+}
+
+#[test]
+fn test_owner_token_index_tracks_transfer_and_burn() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+    let owner = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let token_id = client.mint(
+        &admin,
+        &owner,
+        &String::from_str(&env, "uri"),
+        &Vec::new(&env),
+        &None,
+    );
+
+    client.transfer(&owner, &owner, &recipient, &token_id);
+    assert_eq!(client.tokens_of_owner(&owner, &None, &10).0.len(), 0);
+    assert_eq!(
+        client.tokens_of_owner(&recipient, &None, &10).0.get(0),
+        Some(token_id)
+    );
+
+    client.burn(&recipient, &token_id);
+    assert_eq!(client.tokens_of_owner(&recipient, &None, &10).0.len(), 0);
+}
+
+#[test]
 fn test_batch_transfer() {
     let env = Env::default();
     env.mock_all_auths();
@@ -459,6 +589,29 @@ fn test_burn_by_owner_succeeds() {
     client.burn(&owner, &token_id);
     assert_eq!(client.total_supply(), 0);
     assert!(client.try_owner_of(&token_id).is_err());
+}
+
+#[test]
+fn test_burn_rejected_while_paused() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+    let owner = Address::generate(&env);
+    let token_id = client.mint(
+        &admin,
+        &owner,
+        &String::from_str(&env, "ipfs://hash"),
+        &Vec::new(&env),
+        &None,
+    );
+
+    client.set_pause(&admin, &true);
+    match client.try_burn(&owner, &token_id) {
+        Err(Ok(error)) => assert_eq!(error, crate::error::ContractError::ContractPaused),
+        other => panic!("Expected ContractPaused, got: {:?}", other),
+    }
+    assert_eq!(client.total_supply(), 1);
+    assert_eq!(client.owner_of(&token_id), owner);
 }
 
 #[test]

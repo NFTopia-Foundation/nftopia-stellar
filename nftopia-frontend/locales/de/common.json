@@ -134,6 +134,7 @@
     "creatorProfile": {
       "verified": "Verifiziert",
       "followers": "Follower",
+      "following": "Folge ich",
       "nftsCreated": "NFTs",
       "volume": "Volumen",
       "tabNfts": "NFTs",
@@ -159,6 +160,7 @@
       "edit": "Bearbeiten",
       "view": "Anzeigen",
       "close": "Schließen",
+      "dismiss": "Verwerfen",
       "confirm": "Bestätigen",
       "back": "Zurück",
       "next": "Weiter",
@@ -408,5 +410,18 @@
         "failedToCreate": "Erstellung der Sammlung fehlgeschlagen"
       },
       "success": "Sammlung erfolgreich erstellt!"
-    }
+    },
+  "pushNotifications": {
+    "promptTitle": "Push-Benachrichtigungen aktivieren",
+    "promptBody": "Erhalte Benachrichtigungen zu neuen Geboten, Verkäufen und Followern – auch wenn NFTopia nicht geöffnet ist.",
+    "notNow": "Nicht jetzt",
+    "enable": "Aktivieren",
+    "enabling": "Wird aktiviert...",
+    "subscribeError": "Push-Benachrichtigungen konnten nicht aktiviert werden. Bitte versuche es erneut.",
+    "settingsTitle": "Push-Benachrichtigungen",
+    "settingsDescription": "Erhalte Benachrichtigungen zu Geboten, Verkäufen und Followern, auch wenn dieser Tab geschlossen ist.",
+    "settingsToggleOn": "Push-Benachrichtigungen sind aktiviert",
+    "settingsToggleOff": "Push-Benachrichtigungen sind deaktiviert",
+    "unsupported": "Push-Benachrichtigungen werden von diesem Browser nicht unterstützt."
   }
+}

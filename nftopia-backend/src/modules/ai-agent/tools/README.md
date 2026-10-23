@@ -164,6 +164,43 @@ model actually calls `flag_content`.
 
 ---
 
+## Rate limiting (#645)
+
+Two independently-configured, independently-tracked rate limits apply to
+the chat-shaped/tool-set endpoints, both enforced server-side via Redis
+(`rate-limiter-flexible`), keyed by the authenticated user id (falling back
+to IP only if a user id is unexpectedly missing):
+
+| Guard | Routes | Keying | Why separate |
+| --- | --- | --- | --- |
+| `AiChatRateLimitGuard` | `POST /ai/chat`, `POST /ai/chat/stream` | Per user **and** per AI tool set — see below | One request can trigger several Anthropic calls inside the tool-calling loop, so this is tuned independently of the generic per-IP `RedisRateGuard`. |
+| `CopilotRateLimitGuard` | `POST /ai/copilot/draft-listing` | Per user, its own bucket | Pre-existing, separate from the above (#528) — drafting a listing is a single forced-tool-choice call, not an open-ended loop, so it's tracked in its own bucket entirely rather than as another `AiChatRateLimitGuard` tool set. |
+
+### Per-tool-set buckets on `AiChatRateLimitGuard`
+
+`AiChatRateLimitGuard` keys its Redis bucket by **both** the user and the AI
+tool set the route targets, read from the route's `@ToolSet(...)` decorator
+(`common/decorators/tool-set.decorator.ts`) — defaulting to
+`marketplace-assistant` for a route carrying no decorator, which both chat
+routes are tagged with explicitly. Each tool set has its own
+`RateLimiterRedis` instance (own Redis key prefix, own configured points),
+so **exhausting one tool set's budget never blocks a different tool set for
+the same user** — the mechanism that made `CopilotRateLimitGuard` a
+separate class in the first place, generalized so a future tool set reachable
+through `/ai/chat`/`/ai/chat/stream` (e.g. `trading`) gets the same
+independent-bucket guarantee without a new guard class.
+
+| Tool set | Points (default) | TTL (default) | Config |
+| --- | --- | --- | --- |
+| `marketplace-assistant` | 20 | 600s | `AI_CHAT_RATE_LIMIT_POINTS` / `AI_CHAT_RATE_LIMIT_TTL` |
+| `creator-copilot` | 5 (stricter — write-capable) | 600s (shared `AI_CHAT_RATE_LIMIT_TTL`) | `AI_CHAT_RATE_LIMIT_POINTS_CREATOR_COPILOT` |
+
+A tool set with no entry in `AiChatRateLimitGuard`'s limiter map falls back
+to the `marketplace-assistant` limiter/budget — see
+`DEFAULT_RATE_LIMITED_TOOL_SET` in `ai-chat-rate-limit.guard.ts`.
+
+---
+
 ## Prompt-injection / jailbreak detection (#569)
 
 `PromptInjectionService` (`prompt-injection.service.ts`) runs a lightweight

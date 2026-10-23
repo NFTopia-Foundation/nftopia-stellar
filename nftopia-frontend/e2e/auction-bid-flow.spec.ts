@@ -215,7 +215,9 @@ test.describe("auction bid flow", () => {
     // backend returns the accepted bid as the new highest.
     await expect(page.getByText("Minimum bid: 125.01 XLM")).toBeVisible();
     await expect(page.getByText("HIGHEST")).toBeVisible();
-    await expect(page.getByText("125", { exact: true }).first()).toBeVisible();
+    // Current bid is rendered via the shared display-currency formatter
+    // (2 decimal places for XLM), not the raw input string.
+    await expect(page.getByText("125.00 XLM", { exact: true }).first()).toBeVisible();
   });
 
   test("shows the outbid alert when a rival raises the bid", async ({ page, request }) => {
@@ -256,7 +258,7 @@ test.describe("auction bid flow", () => {
     await expect(page.getByText("This auction has ended")).toBeVisible();
     await expect(page.getByText("Winner")).toBeVisible();
     await expect(page.getByText("e2e-bidder").first()).toBeVisible();
-    await expect(page.getByText("Winning Bid: 150 XLM")).toBeVisible();
+    await expect(page.getByText("Winning Bid: 150.00 XLM")).toBeVisible();
   });
 
   test("reflects a loss when another wallet settles as the winner", async ({ page, request }) => {
@@ -274,7 +276,7 @@ test.describe("auction bid flow", () => {
     await openAuction(page);
 
     await expect(page.getByText("This auction has ended")).toBeVisible();
-    await expect(page.getByText("Winning Bid: 200 XLM")).toBeVisible();
+    await expect(page.getByText("Winning Bid: 200.00 XLM")).toBeVisible();
     // The connected wallet is not the winner, so the settlement banner names
     // the rival instead.
     await expect(page.getByText("rival", { exact: true }).first()).toBeVisible();

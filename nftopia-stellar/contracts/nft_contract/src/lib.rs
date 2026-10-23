@@ -156,6 +156,18 @@ impl NftContract {
         token::balance_of(&env, &owner)
     }
 
+    /// Returns up to `limit` token IDs owned by `owner` and an exclusive cursor for the next page.
+    /// `limit` must be between 1 and 50. Pass the returned cursor to the next call unchanged.
+    /// The cursor is valid only while its token remains owned by `owner`.
+    pub fn tokens_of_owner(
+        env: Env,
+        owner: Address,
+        cursor: Option<u64>,
+        limit: u32,
+    ) -> Result<(Vec<u64>, Option<u64>), ContractError> {
+        token::tokens_of_owner(&env, &owner, cursor, limit)
+    }
+
     pub fn total_supply(env: Env) -> u64 {
         token::total_supply(&env)
     }

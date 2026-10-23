@@ -18,13 +18,12 @@ import * as crypto from 'crypto';
 import { User } from '../users/user.entity';
 import { TwoFactorConfig } from './interfaces/two-factor.interface';
 import { AuthService } from './auth.service';
+import { TwoFactorThrottleService } from './two-factor-throttle.service';
 
 @Injectable()
 export class TwoFactorService {
   private readonly logger = new Logger(TwoFactorService.name);
   private readonly config: TwoFactorConfig;
-  private readonly maxVerificationAttempts = 5;
-  private readonly verificationWindowMs = 60000; // 1 minute
 
   constructor(
     @InjectRepository(User)
@@ -34,6 +33,7 @@ export class TwoFactorService {
     private readonly configService: ConfigService,
     @Inject(forwardRef(() => AuthService))
     private readonly authService: AuthService,
+    private readonly throttleService: TwoFactorThrottleService,
   ) {
     this.config = this.loadConfig();
   }
@@ -137,6 +137,8 @@ export class TwoFactorService {
    * Verify TOTP code and enable 2FA for user
    */
   async verifyAndEnable(user: User, code: string): Promise<User> {
+    await this.throttleService.assertNotLockedOut(user.id);
+
     if (user.twoFactorEnabled) {
       throw new ConflictException('2FA is already enabled for this user');
     }
@@ -158,11 +160,13 @@ export class TwoFactorService {
     // Verify TOTP code
     const isValid = this.verifyTotp(code, setupData.secret);
     if (!isValid) {
+      await this.throttleService.recordFailure(user.id);
       this.logAuditEvent(user.id, 'verify', false, {
         reason: 'Invalid TOTP code',
       });
       throw new UnauthorizedException('Invalid TOTP code');
     }
+    await this.throttleService.recordSuccess(user.id);
 
     // Enable 2FA for user
     user.twoFactorSecret = setupData.secret;
@@ -185,6 +189,8 @@ export class TwoFactorService {
    * Disable 2FA for user with TOTP verification
    */
   async disableWithTotp(user: User, code: string): Promise<User> {
+    await this.throttleService.assertNotLockedOut(user.id);
+
     if (!user.twoFactorEnabled) {
       throw new BadRequestException('2FA is not enabled for this user');
     }
@@ -196,11 +202,13 @@ export class TwoFactorService {
     // Verify TOTP code
     const isValid = this.verifyTotp(code, user.twoFactorSecret);
     if (!isValid) {
+      await this.throttleService.recordFailure(user.id);
       this.logAuditEvent(user.id, 'disable', false, {
         reason: 'Invalid TOTP code',
       });
       throw new UnauthorizedException('Invalid TOTP code');
     }
+    await this.throttleService.recordSuccess(user.id);
 
     return this.disableTwoFactor(user);
   }
@@ -209,6 +217,8 @@ export class TwoFactorService {
    * Disable 2FA using backup code
    */
   async disableWithBackupCode(user: User, backupCode: string): Promise<User> {
+    await this.throttleService.assertNotLockedOut(user.id);
+
     if (!user.twoFactorEnabled) {
       throw new BadRequestException('2FA is not enabled for this user');
     }
@@ -223,11 +233,13 @@ export class TwoFactorService {
     // Check if the code exists and is not used
     const codeIndex = user.twoFactorBackupCodes.indexOf(hashedCode);
     if (codeIndex === -1) {
+      await this.throttleService.recordFailure(user.id);
       this.logAuditEvent(user.id, 'recovery', false, {
         reason: 'Invalid backup code',
       });
       throw new UnauthorizedException('Invalid backup code');
     }
+    await this.throttleService.recordSuccess(user.id);
 
     // Remove the used backup code
     user.twoFactorBackupCodes.splice(codeIndex, 1);
@@ -245,6 +257,8 @@ export class TwoFactorService {
    * Regenerate backup codes for user
    */
   async regenerateBackupCodes(user: User, code: string): Promise<string[]> {
+    await this.throttleService.assertNotLockedOut(user.id);
+
     if (!user.twoFactorEnabled) {
       throw new BadRequestException('2FA is not enabled for this user');
     }
@@ -256,11 +270,13 @@ export class TwoFactorService {
     // Verify TOTP code
     const isValid = this.verifyTotp(code, user.twoFactorSecret);
     if (!isValid) {
+      await this.throttleService.recordFailure(user.id);
       this.logAuditEvent(user.id, 'regenerate', false, {
         reason: 'Invalid TOTP code',
       });
       throw new UnauthorizedException('Invalid TOTP code');
     }
+    await this.throttleService.recordSuccess(user.id);
 
     // Generate new backup codes
     const newBackupCodes = this.generateBackupCodes();
@@ -326,35 +342,23 @@ export class TwoFactorService {
       };
     }
 
-    // Check rate limiting
-    const rateLimitKey = `2fa_attempts:${user.id}`;
-    const attempts = (await this.cacheManager.get<number>(rateLimitKey)) || 0;
-
-    if (attempts >= this.maxVerificationAttempts) {
-      return {
-        verified: false,
-        error: 'Too many failed attempts. Please try again later.',
-      };
-    }
+    // Throws a distinct 429 (TWO_FACTOR_LOCKED_OUT) if this user has
+    // exhausted their consecutive-failure budget — propagates past this
+    // method's own {verified:false} result shape on purpose, so a lockout
+    // is never indistinguishable from a wrong-code rejection downstream.
+    await this.throttleService.assertNotLockedOut(user.id);
 
     // Verify TOTP code
     const isValid = this.verifyTotp(code, user.twoFactorSecret);
     if (!isValid) {
-      // Increment failed attempts
-      await this.cacheManager.set(
-        rateLimitKey,
-        attempts + 1,
-        this.verificationWindowMs,
-      );
+      await this.throttleService.recordFailure(user.id);
       this.logAuditEvent(user.id, 'failed_attempt', false);
       return {
         verified: false,
         error: 'Invalid TOTP code',
       };
     }
-
-    // Clear rate limit on success
-    await this.cacheManager.del(rateLimitKey);
+    await this.throttleService.recordSuccess(user.id);
 
     // Delete session data (one-time use)
     await this.cacheManager.del(sessionKey);
@@ -424,16 +428,11 @@ export class TwoFactorService {
       };
     }
 
-    // Check rate limiting for backup codes
-    const rateLimitKey = `2fa_recovery_attempts:${user.id}`;
-    const attempts = (await this.cacheManager.get<number>(rateLimitKey)) || 0;
-
-    if (attempts >= this.maxVerificationAttempts) {
-      return {
-        verified: false,
-        error: 'Too many failed attempts. Please try again later.',
-      };
-    }
+    // Throws a distinct 429 (TWO_FACTOR_LOCKED_OUT) if this user has
+    // exhausted their consecutive-failure budget — same shared mechanism
+    // and keying (by resolved user.id, not the ephemeral tempToken) as
+    // verifyTwoFactorChallenge above.
+    await this.throttleService.assertNotLockedOut(user.id);
 
     // Hash the provided backup code
     const hashedCode = this.hashBackupCode(backupCode);
@@ -441,12 +440,7 @@ export class TwoFactorService {
     // Check if the code exists and is not used
     const codeIndex = user.twoFactorBackupCodes.indexOf(hashedCode);
     if (codeIndex === -1) {
-      // Increment failed attempts
-      await this.cacheManager.set(
-        rateLimitKey,
-        attempts + 1,
-        this.verificationWindowMs,
-      );
+      await this.throttleService.recordFailure(user.id);
       this.logAuditEvent(user.id, 'failed_attempt', false, {
         type: 'recovery',
       });
@@ -455,9 +449,7 @@ export class TwoFactorService {
         error: 'Invalid backup code',
       };
     }
-
-    // Clear rate limit on success
-    await this.cacheManager.del(rateLimitKey);
+    await this.throttleService.recordSuccess(user.id);
 
     // Remove used backup code
     user.twoFactorBackupCodes.splice(codeIndex, 1);
@@ -598,6 +590,8 @@ export class TwoFactorService {
    * Revoke all backup codes for user (requires TOTP verification)
    */
   async revokeBackupCodes(user: User, code: string): Promise<void> {
+    await this.throttleService.assertNotLockedOut(user.id);
+
     if (!user.twoFactorEnabled) {
       throw new BadRequestException('2FA is not enabled for this user');
     }
@@ -608,11 +602,13 @@ export class TwoFactorService {
 
     const isValid = this.verifyTotp(code, user.twoFactorSecret);
     if (!isValid) {
+      await this.throttleService.recordFailure(user.id);
       this.logAuditEvent(user.id, 'revoke_backup_codes', false, {
         reason: 'Invalid TOTP code',
       });
       throw new UnauthorizedException('Invalid TOTP code');
     }
+    await this.throttleService.recordSuccess(user.id);
 
     user.twoFactorBackupCodes = [];
     await this.userRepository.save(user);

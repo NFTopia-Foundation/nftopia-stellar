@@ -1,3 +1,11 @@
+//! Rate limits are keyed by `(caller address, function)` and enforce a rolling
+//! fixed window for that address. They slow repeated calls from one address;
+//! they do not identify real-world actors or resist Sybil bypass via multiple
+//! addresses. Use an independent identity, stake, or aggregate signal if a
+//! product requirement needs actor-level limits. Follow-up: decide whether the
+//! marketplace needs actor-level protection and implement a complementary signal
+//! before treating these limits as protection against coordinated address rotation.
+
 use crate::error::SettlementError;
 use soroban_sdk::{contracttype, Address, Env, Symbol};
 
@@ -123,5 +131,58 @@ impl RateLimiter {
                 Ok(())
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RateLimiter;
+    use crate::error::SettlementError;
+    use crate::settlement_core::MarketplaceSettlement;
+    use soroban_sdk::{testutils::Address as _, Address, Env, Symbol};
+
+    #[test]
+    fn throttles_repeated_calls_from_one_address() {
+        let env = Env::default();
+        let contract = env.register(MarketplaceSettlement, ());
+        let caller = Address::generate(&env);
+        let function = Symbol::new(&env, "limited");
+
+        env.as_contract(&contract, || {
+            RateLimiter::set_config(&env, &function, 2, 60);
+            assert_eq!(
+                RateLimiter::check_rate_limit(&env, &caller, &function),
+                Ok(())
+            );
+            assert_eq!(
+                RateLimiter::check_rate_limit(&env, &caller, &function),
+                Ok(())
+            );
+            assert_eq!(
+                RateLimiter::check_rate_limit(&env, &caller, &function),
+                Err(SettlementError::CooldownActive)
+            );
+        });
+    }
+
+    #[test]
+    fn distinct_addresses_bypass_the_per_address_limit() {
+        let env = Env::default();
+        let contract = env.register(MarketplaceSettlement, ());
+        let first_caller = Address::generate(&env);
+        let second_caller = Address::generate(&env);
+        let function = Symbol::new(&env, "limited");
+
+        env.as_contract(&contract, || {
+            RateLimiter::set_config(&env, &function, 1, 60);
+            assert_eq!(
+                RateLimiter::check_rate_limit(&env, &first_caller, &function),
+                Ok(())
+            );
+            assert_eq!(
+                RateLimiter::check_rate_limit(&env, &second_caller, &function),
+                Ok(())
+            );
+        });
     }
 }

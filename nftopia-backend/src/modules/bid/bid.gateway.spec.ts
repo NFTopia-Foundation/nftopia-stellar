@@ -25,6 +25,7 @@ const makeMockClient = (id = 'client-abc'): jest.Mocked<Socket> =>
 const makeBidPayload = (
   override: Partial<BidPlacedEvent> = {},
 ): BidPlacedEvent => ({
+  bidId: 'bid-123',
   auctionId: 'auction-123',
   sellerId: 'seller-789',
   bidderId: 'user-456',

@@ -215,6 +215,48 @@ describe('BidService', () => {
         extensionCount: 1,
       });
     });
+
+    it('emits BID_PLACED_EVENT so the GraphQL mutation path feeds the same cache/notification/subscription pipeline as placeBid (#650)', async () => {
+      const auction = makeAuction();
+      const persisted = makeBid({ amount: 15, amountXlm: '15.0000000' });
+
+      mockAuctionRepo.findOne.mockResolvedValue(auction);
+      mockAuctionRepo.save.mockResolvedValue(auction);
+      mockBidRepo.create.mockReturnValue(persisted);
+      mockBidRepo.save.mockResolvedValue(persisted);
+
+      await service.create({
+        auctionId: auction.id,
+        bidderId: 'bidder-uuid',
+        amount: 15,
+      });
+
+      expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+        BID_PLACED_EVENT,
+        expect.objectContaining({
+          bidId: persisted.id,
+          auctionId: auction.id,
+          sellerId: auction.sellerId,
+          bidderId: 'bidder-uuid',
+          amount: 15,
+          amountXlm: '15.0000000',
+        }),
+      );
+    });
+
+    it('throws BadRequestException when the auction has no seller', async () => {
+      const auction = makeAuction({ sellerId: null });
+      mockAuctionRepo.findOne.mockResolvedValue(auction);
+
+      await expect(
+        service.create({
+          auctionId: auction.id,
+          bidderId: 'bidder-uuid',
+          amount: 15,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(mockEventEmitter.emit).not.toHaveBeenCalled();
+    });
   });
 
   // ── placeBid ────────────────────────────────────────────────────────────────

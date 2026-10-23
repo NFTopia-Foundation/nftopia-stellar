@@ -13,6 +13,7 @@ import { API_CONFIG } from "@/lib/config";
 import { cn } from "@/lib/utils";
 import { TransactionFeePreview } from "@/components/wallet/TransactionFeePreview";
 import { FavoriteButton } from "@/components/ui/FavoriteButton";
+import { useDisplayCurrency } from "@/lib/stores/preferences-store";
 import {
   ArrowLeft, Clock, Gavel, User, Award, Wallet, Check, Share2, Heart,
   TrendingUp, Loader2, Info, Tag, AlertTriangle, X, Radio,
@@ -130,6 +131,7 @@ export default function AuctionDetailClient({
   const { t } = useTranslation();
   const { connected, address } = useWalletStore();
   const { showWarning } = useToast();
+  const { format: formatDisplayCurrency } = useDisplayCurrency();
   const [auction, setAuction] = useState<AuctionDetail>(initialAuction);
   const [bidAmount, setBidAmount] = useState("");
   const [placingBid, setPlacingBid] = useState(false);
@@ -198,7 +200,7 @@ export default function AuctionDetailClient({
 
           if (wasUserHighest && isFromDifferentUser) {
             const outbidText = t("auctionDetail.outbid") || "You've been outbid!";
-            showWarning(`${outbidText} New highest bid: ${formattedBid.amount} XLM`);
+            showWarning(`${outbidText} New highest bid: ${formatDisplayCurrency(formattedBid.amount)}`);
             setOutbidAlert({
               show: true,
               amount: formattedBid.amount,
@@ -218,7 +220,7 @@ export default function AuctionDetailClient({
         };
       });
     },
-    [connected, address, showWarning, t]
+    [connected, address, showWarning, t, formatDisplayCurrency]
   );
 
   const { isSubscribed, shouldFallbackToPolling } = useAuctionBidSubscription({
@@ -374,14 +376,14 @@ export default function AuctionDetailClient({
                   <Gavel className="h-3.5 w-3.5 text-purple-400" />
                   <span>{t("auctionDetail.currentBid")}</span>
                 </div>
-                <p className="text-lg font-bold text-white">{auction.highestBid?.amount || auction.startPrice} <span className="text-xs font-normal text-gray-400">XLM</span></p>
+                <p className="text-lg font-bold text-white">{formatDisplayCurrency(auction.highestBid?.amount || auction.startPrice)}</p>
               </div>
               <div className="p-4 rounded-xl bg-[#1E1A45] border border-purple-900/30">
                 <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-1">
                   <Tag className="h-3.5 w-3.5 text-purple-400" />
                   <span>{t("auctionDetail.startingPrice")}</span>
                 </div>
-                <p className="text-lg font-bold text-white">{auction.startPrice} <span className="text-xs font-normal text-gray-400">XLM</span></p>
+                <p className="text-lg font-bold text-white">{formatDisplayCurrency(auction.startPrice)}</p>
               </div>
               <div className="p-4 rounded-xl bg-[#1E1A45] border border-purple-900/30">
                 <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-1">
@@ -399,7 +401,7 @@ export default function AuctionDetailClient({
                   : "bg-yellow-500/5 border-yellow-500/20 text-yellow-400")}>
                 <Info className="h-4 w-4" />
                 <span>{parseFloat(auction.currentPrice) >= parseFloat(auction.reservePrice)
-                  ? t("auctionDetail.reserveMet") : t("auctionDetail.reserveNotMet")} ({auction.reservePrice} XLM)</span>
+                  ? t("auctionDetail.reserveMet") : t("auctionDetail.reserveNotMet")} ({formatDisplayCurrency(auction.reservePrice)})</span>
               </div>
             )}
 
@@ -410,7 +412,7 @@ export default function AuctionDetailClient({
                   <span>{t("auctionDetail.winner")}</span>
                 </div>
                 <p className="text-white font-medium">{auction.winner.username || formatAddress(auction.winner.walletAddress)}</p>
-                {auction.highestBid && <p className="text-sm text-emerald-400 mt-1">{t("auctionDetail.winningBid")}: {auction.highestBid.amount} XLM</p>}
+                {auction.highestBid && <p className="text-sm text-emerald-400 mt-1">{t("auctionDetail.winningBid")}: {formatDisplayCurrency(auction.highestBid.amount)}</p>}
               </div>
             )}
 
@@ -541,8 +543,7 @@ export default function AuctionDetailClient({
                       {idx === 0 && <span className="text-[10px] font-semibold text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded flex-shrink-0">HIGHEST</span>}
                     </div>
                     <div className="text-center">
-                      <span className="text-sm font-semibold text-white">{bid.amount}</span>
-                      <span className="text-xs text-gray-400 ml-1">XLM</span>
+                      <span className="text-sm font-semibold text-white">{formatDisplayCurrency(bid.amount)}</span>
                     </div>
                     <div className="text-right text-xs text-gray-400">{formatDate(bid.createdAt)}</div>
                   </div>

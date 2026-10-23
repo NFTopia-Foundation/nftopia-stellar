@@ -35,6 +35,7 @@ import type { Listing } from '../../modules/listing/entities/listing.entity';
 import type { Auction } from '../../modules/auction/entities/auction.entity';
 import type { OrderInterface } from '../../modules/order/interfaces/order.interface';
 import type { OrderPaginatedResponseDto } from '../../modules/order/dto/order-paginated-response.dto';
+import { paginatedComplexity } from '../complexity';
 
 @Resolver(() => GraphqlUserType)
 export class UserResolver {
@@ -128,6 +129,7 @@ export class UserResolver {
     name: 'nfts',
     nullable: true,
     description: 'Fetch NFTs created by this user',
+    complexity: paginatedComplexity(),
   })
   async nfts(
     @Parent() user: GraphqlUserType,
@@ -150,6 +152,7 @@ export class UserResolver {
     name: 'ownedNFTs',
     nullable: true,
     description: 'Fetch NFTs owned by this user',
+    complexity: paginatedComplexity(),
   })
   async ownedNFTs(
     @Parent() user: GraphqlUserType,
@@ -172,6 +175,7 @@ export class UserResolver {
     name: 'listings',
     nullable: true,
     description: 'Fetch listings created by this user',
+    complexity: paginatedComplexity(),
   })
   async listings(
     @Parent() user: GraphqlUserType,
@@ -198,6 +202,7 @@ export class UserResolver {
     name: 'auctions',
     nullable: true,
     description: 'Fetch auctions created by this user',
+    complexity: paginatedComplexity(),
   })
   async auctions(
     @Parent() user: GraphqlUserType,
@@ -219,6 +224,7 @@ export class UserResolver {
     name: 'purchases',
     nullable: true,
     description: 'Fetch purchase orders for this user',
+    complexity: paginatedComplexity(),
   })
   async purchases(
     @Parent() user: GraphqlUserType,
@@ -242,6 +248,7 @@ export class UserResolver {
     name: 'sales',
     nullable: true,
     description: 'Fetch sale orders for this user',
+    complexity: paginatedComplexity(),
   })
   async sales(
     @Parent() user: GraphqlUserType,

@@ -8,6 +8,7 @@ import {
 import { GraphqlUserType } from '../types/user.types';
 import type { Auction } from '../../modules/auction/entities/auction.entity';
 import type { User } from '../../users/user.entity';
+import { DATALOADER_RELATION_COMPLEXITY } from '../complexity';
 
 @Resolver(() => GraphqlBid)
 export class BidResolver {
@@ -15,6 +16,7 @@ export class BidResolver {
     name: 'auction',
     nullable: true,
     description: 'Resolve bid auction using request-scoped DataLoader',
+    complexity: DATALOADER_RELATION_COMPLEXITY,
   })
   async auction(
     @Parent() bid: GraphqlBid,
@@ -32,6 +34,7 @@ export class BidResolver {
     name: 'bidder',
     nullable: true,
     description: 'Resolve bid bidder using request-scoped DataLoader',
+    complexity: DATALOADER_RELATION_COMPLEXITY,
   })
   async bidder(
     @Parent() bid: GraphqlBid,

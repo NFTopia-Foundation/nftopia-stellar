@@ -11,6 +11,7 @@
     "test": "vitest --run"
   },
   "dependencies": {
+    "@tanstack/react-query": "5.104.5",
     "autoprefixer": "^10.4.27",
     "i18next": "^26.0.6",
     "postcss": "^8.5.8",

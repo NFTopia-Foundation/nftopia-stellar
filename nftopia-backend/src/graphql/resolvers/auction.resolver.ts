@@ -7,15 +7,33 @@ import {
   Query,
   ResolveField,
   Resolver,
+  Subscription,
 } from '@nestjs/graphql';
 import {
   BadRequestException,
+  Inject,
   NotFoundException,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
+import type { PubSub } from 'graphql-subscriptions';
 import { AuctionService } from '../../modules/auction/auction.service';
 import { BidService } from '../../modules/bid/bid.service';
+import { PUB_SUB } from '../pubsub/pubsub.provider';
+import { AUCTION_BID_PLACED_TOPIC } from '../pubsub/topics';
+import type { AuctionBidPlacedPayload } from '../pubsub/auction-bid.publisher';
+
+/**
+ * Scopes `auctionBidPlaced` per auction (#650) — not a global firehose.
+ * Exported standalone (rather than inlined in the decorator) so it has its
+ * own direct test coverage; see docs/graphql-subscriptions.md.
+ */
+export function auctionBidPlacedFilter(
+  payload: AuctionBidPlacedPayload,
+  variables: { auctionId: string },
+): boolean {
+  return payload.auctionBidPlaced.auctionId === variables.auctionId;
+}
 import {
   GraphqlAuction,
   GraphqlBid,
@@ -36,12 +54,18 @@ import {
 } from '../inputs/auction.inputs';
 import { GqlAuthGuard } from '../../common/guards/gql-auth.guard';
 import { AuctionStatus as AuctionStatusEnum } from '../../modules/auction/interfaces/auction.interface';
+import {
+  DATALOADER_LIST_RELATION_COMPLEXITY,
+  DATALOADER_RELATION_COMPLEXITY,
+  paginatedComplexity,
+} from '../complexity';
 
 @Resolver(() => GraphqlAuction)
 export class AuctionResolver {
   constructor(
     private readonly auctionService: AuctionService,
     private readonly bidService: BidService,
+    @Inject(PUB_SUB) private readonly pubSub: PubSub,
   ) {}
 
   // === QUERIES ===
@@ -63,6 +87,7 @@ export class AuctionResolver {
   @Query(() => AuctionConnection, {
     name: 'activeAuctions',
     description: 'Fetch active (non-expired) auctions with pagination',
+    complexity: paginatedComplexity(),
   })
   async activeAuctions(
     @Args('pagination', { type: () => AuctionPaginationInput, nullable: true })
@@ -90,6 +115,7 @@ export class AuctionResolver {
   @Query(() => [GraphqlBid], {
     name: 'auctionBids',
     description: 'Fetch all bids for an auction',
+    complexity: DATALOADER_LIST_RELATION_COMPLEXITY,
   })
   async auctionBids(
     @Args('auctionId', { type: () => ID }) auctionId: string,
@@ -320,11 +346,38 @@ export class AuctionResolver {
     }
   }
 
+  // === SUBSCRIPTIONS ===
+
+  /**
+   * Real-time bid updates for a single auction (#650). Scoped per auction —
+   * not a global firehose — via the `filter` option: every connected
+   * client's subscription receives every publish on the shared topic, but
+   * `filter` drops any payload whose `auctionId` doesn't match the
+   * `auctionId` this particular client subscribed with, before it ever
+   * reaches that client's resolver/response. See
+   * docs/graphql-subscriptions.md for the full contract.
+   */
+  @Subscription(() => GraphqlBid, {
+    name: 'auctionBidPlaced',
+    description: 'Subscribe to new bids placed on a specific auction',
+    filter: auctionBidPlacedFilter,
+  })
+  auctionBidPlaced(
+    // Unused in the body: NestJS needs this parameter declared to build the
+    // `auctionId` schema argument, but the actual per-client filtering
+    // happens in the `filter` option above via `variables`, not here.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    @Args('auctionId', { type: () => ID }) auctionId: string,
+  ) {
+    return this.pubSub.asyncIterableIterator(AUCTION_BID_PLACED_TOPIC);
+  }
+
   // === RESOLVE FIELDS ===
 
   @ResolveField(() => [GraphqlBid], {
     name: 'bids',
     description: 'Resolve auction bids using request-scoped DataLoader',
+    complexity: DATALOADER_LIST_RELATION_COMPLEXITY,
   })
   async bids(
     @Parent() auction: GraphqlAuction,
@@ -338,6 +391,7 @@ export class AuctionResolver {
     name: 'nft',
     nullable: true,
     description: 'Resolve auction NFT using request-scoped DataLoader',
+    complexity: DATALOADER_RELATION_COMPLEXITY,
   })
   async nft(
     @Parent() auction: GraphqlAuction,
@@ -354,6 +408,7 @@ export class AuctionResolver {
     name: 'seller',
     nullable: true,
     description: 'Resolve auction seller using request-scoped DataLoader',
+    complexity: DATALOADER_RELATION_COMPLEXITY,
   })
   async seller(
     @Parent() auction: GraphqlAuction,
@@ -371,6 +426,7 @@ export class AuctionResolver {
     name: 'highestBid',
     nullable: true,
     description: 'Resolve highest bid from auction bids',
+    complexity: DATALOADER_LIST_RELATION_COMPLEXITY,
   })
   async highestBid(
     @Parent() auction: GraphqlAuction,
@@ -398,6 +454,7 @@ export class AuctionResolver {
     name: 'winner',
     nullable: true,
     description: 'Resolve auction winner using request-scoped DataLoader',
+    complexity: DATALOADER_RELATION_COMPLEXITY,
   })
   async winner(
     @Parent() auction: GraphqlAuction,

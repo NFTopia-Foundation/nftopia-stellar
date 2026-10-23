@@ -26,7 +26,9 @@ interface NotificationStore {
   error: string | null;
   preferences: NotificationPreferences;
 
-  fetchNotifications: () => Promise<void>;
+  fetchNotifications: (page?: number, limit?: number) => Promise<void>;
+  hasMore: boolean;
+  page: number;
   fetchUnreadCount: () => Promise<void>;
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
@@ -41,6 +43,8 @@ const initialState: NotificationStore = {
   unreadCount: 0,
   loading: false,
   error: null,
+  hasMore: true,
+  page: 1,
   preferences: defaultPreferences,
 
   fetchNotifications: async () => {},
@@ -59,15 +63,38 @@ export const useNotificationStore = createStore<NotificationStore>({
   actions: (set, get) => ({
     ...initialState,
 
-    fetchNotifications: async () => {
+    fetchNotifications: async (page = 1, limit = 20) => {
       set({ loading: true, error: null });
       try {
-        const notifications = await apiClient.getNotifications();
-        const unreadCount = notifications.filter(n => !n.read).length;
+        const notifications = await apiClient.getNotifications(page, limit);
+        const unreadCount = notifications.filter((n) => !n.read).length;
         await pushNotificationService.updateBadgeCount(unreadCount);
-        set({ notifications, unreadCount, loading: false });
+        const prev = page > 1 ? get().notifications : [];
+        // Deduplicate by id when appending pages
+        const merged =
+          page > 1
+            ? [
+                ...prev,
+                ...notifications.filter(
+                  (n) => !prev.some((p) => p.id === n.id),
+                ),
+              ]
+            : notifications;
+        set({
+          notifications: merged,
+          unreadCount:
+            page > 1
+              ? merged.filter((n) => !n.read).length
+              : unreadCount,
+          loading: false,
+          page,
+          hasMore: notifications.length >= limit,
+        });
       } catch (error: any) {
-        set({ error: error.message, loading: false });
+        set({
+          error: error?.message || 'Failed to load notifications',
+          loading: false,
+        });
       }
     },
 

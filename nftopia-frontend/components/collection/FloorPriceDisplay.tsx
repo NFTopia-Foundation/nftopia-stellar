@@ -2,6 +2,9 @@
 
 import React, { useMemo } from "react";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { useDisplayCurrency } from "@/lib/stores/preferences-store";
+import { convertFromXlm } from "@/lib/currency";
+import type { DisplayCurrency } from "@/lib/stores/types";
 
 export type TrendDirection = "up" | "down" | "neutral";
 
@@ -11,8 +14,14 @@ export interface PricePoint {
 }
 
 export interface FloorPriceDisplayProps {
+  /** Raw floor price, denominated in XLM. */
   floorPrice?: string | number | null;
-  currency?: string;
+  /**
+   * Overrides the global display-currency preference (#660) for this one
+   * instance. Most callers should omit this and let it follow the
+   * preference set in Settings.
+   */
+  currency?: DisplayCurrency;
   trendPercentage?: number | null;
   trendDirection?: TrendDirection;
   historicalPrices?: Array<number | PricePoint>;
@@ -170,7 +179,7 @@ export function Sparkline({
  */
 export function FloorPriceDisplay({
   floorPrice,
-  currency = "XLM",
+  currency,
   trendPercentage,
   trendDirection,
   historicalPrices,
@@ -180,7 +189,9 @@ export function FloorPriceDisplay({
   timeframe = "24h",
   className = "",
 }: FloorPriceDisplayProps) {
-  const formattedPrice = formatFloorPrice(floorPrice);
+  const { currency: preferredCurrency } = useDisplayCurrency();
+  const resolvedCurrency = currency ?? preferredCurrency;
+  const formattedPrice = formatFloorPrice(convertFromXlm(floorPrice, resolvedCurrency));
   const parsedHistorical = useMemo(() => extractPrices(historicalPrices), [historicalPrices]);
 
   // Determine trend either from explicit props or historical data
@@ -251,7 +262,7 @@ export function FloorPriceDisplay({
         className={`inline-flex items-center gap-2 text-xs ${className}`}
       >
         <span className="font-semibold text-white tracking-tight">
-          {formattedPrice} {currency}
+          {formattedPrice} {resolvedCurrency}
         </span>
         {showTrend && (calculatedPercentage !== null || trendDirection) && (
           <span
@@ -299,7 +310,7 @@ export function FloorPriceDisplay({
         <div className="flex items-baseline justify-between gap-2 mt-1">
           <p className="text-xl sm:text-2xl font-bold text-white tracking-tight">
             {formattedPrice}{" "}
-            <span className="text-xs font-normal text-purple-300">{currency}</span>
+            <span className="text-xs font-normal text-purple-300">{resolvedCurrency}</span>
           </p>
 
           {showSparkline && parsedHistorical.length >= 2 && (
@@ -342,7 +353,7 @@ export function FloorPriceDisplay({
             <span className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
               {formattedPrice}
             </span>
-            <span className="text-sm font-semibold text-purple-300">{currency}</span>
+            <span className="text-sm font-semibold text-purple-300">{resolvedCurrency}</span>
           </div>
 
           {showTrend && (calculatedPercentage !== null || trendDirection) && (

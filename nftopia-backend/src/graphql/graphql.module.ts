@@ -24,6 +24,8 @@ import { GraphqlLoggingMiddleware } from './middleware/logging.middleware';
 import { graphqlResolvers, graphqlScalarClasses } from './resolvers';
 import { getLoggerConfig } from '../config/logger.config';
 import { CorrelationIdMiddleware } from '../common/middleware/correlation-id.middleware';
+import { pubSubProvider } from './pubsub/pubsub.provider';
+import { AuctionBidPublisher } from './pubsub/auction-bid.publisher';
 
 const jwtAccessExpiresInSeconds = parseInt(
   process.env.JWT_EXPIRES_IN_SECONDS || '900',
@@ -88,6 +90,8 @@ const jwtAccessExpiresInSeconds = parseInt(
     GraphqlContextFactory,
     GraphqlAuthMiddleware,
     GraphqlLoggingMiddleware,
+    pubSubProvider,
+    AuctionBidPublisher,
     ...graphqlResolvers,
     ...graphqlScalarClasses,
   ],
@@ -95,6 +99,7 @@ const jwtAccessExpiresInSeconds = parseInt(
     GraphQLSchemaBuilderModule,
     GraphqlContextFactory,
     GraphqlLoggingMiddleware,
+    pubSubProvider,
     ...graphqlResolvers,
     ...graphqlScalarClasses,
   ],

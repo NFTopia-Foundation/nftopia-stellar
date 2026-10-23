@@ -19,6 +19,9 @@ pub enum DataKey {
 
     // Per-address data
     Balance(Address),
+    OwnerTokenHead(Address),
+    OwnerTokenPrev(u64),
+    OwnerTokenNext(u64),
     OperatorApproval(Address, Address), // (owner, operator)
 
     // Role-based access control
@@ -34,6 +37,7 @@ pub enum DataKey {
 }
 
 pub const MAX_BATCH_SIZE: u32 = 50;
+pub const MAX_OWNER_TOKENS_PAGE: u32 = 50;
 pub const BATCH_RATE_WINDOW: u64 = 100; // ledger sequences
 pub const MAX_ROYALTY_BPS: u32 = 10_000; // 100%
 

@@ -1,6 +1,8 @@
 import { BidSorobanStatus } from '../../../modules/auction/entities/bid.entity';
 
 export interface BidPlacedEvent {
+  /** The persisted bid's own id — used by the GraphQL auctionBidPlaced subscription. */
+  bidId: string;
   auctionId: string;
   /** The seller who created the auction — used to push "New Bid" notifications. */
   sellerId: string;

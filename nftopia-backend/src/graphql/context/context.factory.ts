@@ -26,7 +26,43 @@ export class GraphqlContextFactory {
 
   async create(req: Request, res: Response): Promise<GraphqlContext> {
     const user = await this.authMiddleware.resolveUser(req);
-    const loaders = createGraphqlLoaders({
+    const loaders = this.createLoaders();
+
+    return {
+      req,
+      res,
+      user,
+      loaders,
+    };
+  }
+
+  /**
+   * Context for a GraphQL-WS subscription connection, which has no
+   * underlying HTTP request/response — only the `connectionParams` the
+   * client sent when opening the socket. Mirrors `create()`'s auth
+   * resolution, reading the token from `connectionParams.authorization`
+   * instead of a request header.
+   */
+  async createForSubscription(
+    connectionParams: Record<string, unknown> | undefined,
+  ): Promise<GraphqlContext> {
+    const rawAuthorization = connectionParams?.authorization;
+    const token =
+      typeof rawAuthorization === 'string'
+        ? rawAuthorization.replace(/^Bearer\s+/i, '').trim()
+        : undefined;
+
+    const user = await this.authMiddleware.resolveUserFromToken(token);
+    const loaders = this.createLoaders();
+
+    return {
+      user,
+      loaders,
+    };
+  }
+
+  private createLoaders() {
+    return createGraphqlLoaders({
       usersService: this.usersService,
       nftService: this.nftService,
       collectionService: this.collectionService,
@@ -35,12 +71,5 @@ export class GraphqlContextFactory {
       bidService: this.bidService,
       orderService: this.orderService,
     });
-
-    return {
-      req,
-      res,
-      user,
-      loaders,
-    };
   }
 }

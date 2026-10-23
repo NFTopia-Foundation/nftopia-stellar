@@ -37,6 +37,7 @@ interface CollectionData {
 
 import { FloorPriceDisplay } from "@/components/collection/FloorPriceDisplay";
 import { useCollectionStats } from "@/hooks/useCollectionStats";
+import { useDisplayCurrency } from "@/lib/stores/preferences-store";
 
 export function CollectionDetailClient({
   collection,
@@ -47,6 +48,8 @@ export function CollectionDetailClient({
 }) {
   const nfts: NFT[] = collection.nfts?.edges?.map((e) => e.node) || [];
   const totalCount = collection.nfts?.totalCount || nfts.length;
+
+  const { format: formatDisplayCurrency } = useDisplayCurrency();
 
   const { historicalPrices: fetchedHistory, trendPercentage: fetchedTrend, trendDirection: fetchedDirection } =
     useCollectionStats(collection.id, collection.floorPrice);
@@ -129,7 +132,7 @@ export function CollectionDetailClient({
               <div className="p-4 rounded-xl bg-[#1E1A45] border border-purple-900/30">
                 <p className="text-xs text-gray-400 mb-1">Volume</p>
                 <p className="text-xl sm:text-2xl font-bold text-white">
-                  {collection.totalVolume ? `${parseFloat(collection.totalVolume).toFixed(2)} XLM` : "0.00 XLM"}
+                  {formatDisplayCurrency(collection.totalVolume || 0)}
                 </p>
               </div>
               <FloorPriceDisplay

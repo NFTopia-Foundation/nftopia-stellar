@@ -1,5 +1,7 @@
 #![cfg(test)]
 
+extern crate std;
+
 use crate::{
     atomic_swap::{AtomicSwapEngine, EscrowManager, SwapState},
     error::{SettlementError, SwapTimeoutError},
@@ -750,6 +752,37 @@ fn test_cleanup_expired_commitments() {
     client.cleanup_expired_commitments();
 }
 
+#[test]
+fn test_initiate_dispute_rejects_oversized_evidence_uri() {
+    let (env, _cid, client, _admin) = new_env();
+    let initiator = Address::generate(&env);
+    let arbitrator = Address::generate(&env);
+    client.register_arbitrator(&arbitrator, &50u64);
+    let reason = Bytes::from_slice(&env, b"purchase issue");
+    let oversized_uri = Bytes::from_slice(&env, &[b'x'; 513]);
+
+    assert_contract_err(
+        client.try_initiate_dispute(&1, &reason, &Some(oversized_uri), &initiator),
+        SettlementError::InvalidAmount,
+    );
+}
+
+#[test]
+fn test_initiate_dispute_accepts_well_formed_evidence_uri() {
+    let (env, _cid, client, _admin) = new_env();
+    let initiator = Address::generate(&env);
+    let arbitrator = Address::generate(&env);
+    client.register_arbitrator(&arbitrator, &50u64);
+    let reason = Bytes::from_slice(&env, b"purchase issue");
+    let evidence_uri = Bytes::from_slice(&env, b"ipfs://bafybeigdyrzt");
+
+    let dispute_id = client.initiate_dispute(&1, &reason, &Some(evidence_uri.clone()), &initiator);
+    assert_eq!(
+        client.get_dispute(&dispute_id).evidence_uri,
+        Some(evidence_uri)
+    );
+}
+
 // ─── Rate Limiter ────────────────────────────────────────────────────────────
 
 #[test]
@@ -891,6 +924,194 @@ fn count_events(env: &Env, topic: Symbol) -> u32 {
     count
 }
 
+fn public_method_names(source: &str) -> std::vec::Vec<&str> {
+    source
+        .lines()
+        .filter_map(|line| {
+            line.trim()
+                .strip_prefix("pub fn ")
+                .and_then(|declaration| declaration.split('(').next())
+        })
+        .collect()
+}
+
+fn method_source<'a>(source: &'a str, name: &str) -> &'a str {
+    let mut remaining = source;
+    while let Some(start) = remaining.find("pub fn ") {
+        let after_prefix = start + "pub fn ".len();
+        let declaration = &remaining[after_prefix..];
+        let name_end = declaration.find('(').unwrap();
+        let method_name = &declaration[..name_end];
+        if method_name == name {
+            let body_start = name_end + declaration[name_end..].find('{').unwrap();
+            let mut depth = 0u32;
+            for (offset, byte) in declaration[body_start..].bytes().enumerate() {
+                match byte {
+                    b'{' => depth += 1,
+                    b'}' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            return &declaration[..=body_start + offset];
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            panic!("Unclosed method body for {name}");
+        }
+        remaining = &declaration[name_end + 1..];
+    }
+    panic!("Missing method {name}");
+}
+
+#[test]
+fn test_initiate_dispute_rejects_unsupported_evidence_uri_scheme() {
+    let (env, _cid, client, _admin) = new_env();
+    let initiator = Address::generate(&env);
+    let reason = Bytes::from_slice(&env, b"purchase issue");
+    let evidence_uri = Bytes::from_slice(&env, b"file://private-evidence");
+
+    assert_contract_err(
+        client.try_initiate_dispute(&1, &reason, &Some(evidence_uri), &initiator),
+        SettlementError::InvalidAmount,
+    );
+}
+#[test]
+fn entrypoint_guard_audit() {
+    const SETTLEMENT_MUTATING: &[&str] = &[
+        "initialize",
+        "add_supported_asset",
+        "remove_supported_asset",
+        "pause_contract",
+        "unpause_contract",
+        "schedule_pause",
+        "cancel_scheduled_pause",
+        "execute_scheduled_pause",
+        "create_sale",
+        "execute_sale",
+        "create_auction",
+        "place_bid",
+        "reveal_bid",
+        "end_auction",
+        "cancel_auction_with_refund",
+        "withdraw_losing_bid",
+        "create_trade",
+        "accept_trade",
+        "execute_trade",
+        "create_bundle",
+        "cancel_transaction",
+        "initiate_dispute",
+        "vote_on_dispute",
+        "execute_dispute_resolution",
+        "force_resolve_dispute",
+        "resolve_dispute_timeout",
+        "submit_oracle_resolution",
+        "register_arbitration_oracle",
+        "register_arbitrator",
+        "update_arbitrator_reputation",
+        "reseed_arbitrator_selection",
+        "add_dispute_admin",
+        "remove_dispute_admin",
+        "update_dispute_config",
+        "emergency_withdraw",
+        "update_fee_config",
+        "withdraw_platform_fees",
+        "update_rate_limit",
+        "cleanup_expired_commitments",
+        "cleanup_expired_swaps",
+        "expire_swap",
+        "reclaim_expired_escrow",
+        "update_swap_timeout_config",
+        "add_allowed_nft_contract",
+        "remove_allowed_nft_contract",
+        "add_allowed_token_contract",
+        "remove_allowed_token_contract",
+        "block_address",
+        "unblock_address",
+        "update_block_reason",
+        "set_native_xlm_sac",
+    ];
+    const SETTLEMENT_READ_ONLY: &[&str] = &[
+        "get_supported_assets",
+        "is_paused",
+        "is_module_paused",
+        "get_pause_state",
+        "get_scheduled_pause_info",
+        "is_timelock_active",
+        "get_timelock_remaining",
+        "get_paused_modules",
+        "dispute_oracle_payload",
+        "get_arbitration_oracle",
+        "get_dispute_admins",
+        "is_dispute_admin",
+        "get_dispute",
+        "get_dispute_config",
+        "get_rate_limit_config",
+        "get_sale",
+        "get_auction",
+        "get_dutch_auction_price",
+        "get_accumulated_fees",
+        "get_user_volume",
+        "get_swap_timeout_config",
+        "get_atomic_swap",
+        "get_swap_time_remaining",
+        "is_nft_allowed",
+        "is_token_allowed",
+        "is_blocked",
+        "get_blocked_addresses",
+        "get_block_record",
+        "get_native_xlm_sac",
+        "version",
+        "get_version",
+    ];
+    const SWAP_MUTATING: &[&str] = &[
+        "set_timeout_config",
+        "initialize_swap",
+        "deposit_to_escrow",
+        "execute_swap",
+        "execute_sale_swap",
+        "cancel_swap",
+        "expire_swap",
+        "cleanup_expired_swaps",
+        "reclaim_expired_escrow",
+        "settle_dispute_escrow",
+        "emergency_withdraw",
+        "release_escrow",
+    ];
+    const SWAP_READ_ONLY: &[&str] = &[
+        "is_terminal",
+        "timeout_config",
+        "validate_timeout_config",
+        "is_expired",
+        "is_expiry_confirmed",
+        "time_remaining",
+        "get_swap_by_transaction",
+        "check_escrow_balance",
+        "get_escrow_holdings",
+    ];
+
+    let settlement = include_str!("settlement_core.rs");
+    let mut classified_settlement = [SETTLEMENT_MUTATING, SETTLEMENT_READ_ONLY].concat();
+    let mut actual_settlement = public_method_names(settlement);
+    classified_settlement.sort_unstable();
+    actual_settlement.sort_unstable();
+    assert_eq!(actual_settlement, classified_settlement);
+
+    for name in SETTLEMENT_MUTATING {
+        assert!(
+            method_source(settlement, name).contains("ReentrancyGuard::execute"),
+            "mutating settlement entrypoint {name} is not guarded"
+        );
+    }
+
+    let swaps = include_str!("atomic_swap.rs");
+    let mut classified_swaps = [SWAP_MUTATING, SWAP_READ_ONLY].concat();
+    let mut actual_swaps = public_method_names(swaps);
+    classified_swaps.sort_unstable();
+    actual_swaps.sort_unstable();
+    assert_eq!(actual_swaps, classified_swaps);
+}
+
 /// A sale with its backing atomic swap, using mocks that accept escrow transfers.
 fn new_swap_env() -> (
     Env,
@@ -1017,6 +1238,62 @@ fn confirm_expiry(env: &Env, expires_at: u64, expires_at_ledger: u32, cfg: &Swap
         .set_timestamp(expires_at + cfg.grace_period_seconds + 1);
     env.ledger()
         .set_sequence_number(expires_at_ledger + cfg.ledger_tolerance_blocks);
+}
+
+#[test]
+fn test_check_escrow_balance_returns_deposited_amount() {
+    let (env, cid, _client, seller, nft, currency, txid) = new_swap_env();
+    fund_swap(&env, &cid, &seller, &nft, &currency, txid);
+
+    let balance = env
+        .as_contract(&cid, || {
+            EscrowManager::check_escrow_balance(&env, txid, &currency)
+        })
+        .unwrap();
+    assert_eq!(balance, SALE_PRICE);
+
+    // check_escrow_balance reports a *fungible* balance; NFT holdings are always
+    // excluded, since their `amount` is a token_id, not a quantity, and
+    // release_escrow's own release loop likewise never touches NFT holdings. If
+    // this counted the NFT's token_id as "available" fungible balance, a caller
+    // could pass release_escrow's `amount > available` guard using balance that
+    // doesn't actually exist as fungible holdings to release.
+    let nft_asset = Asset::Token(TokenAsset {
+        contract: nft.clone(),
+        symbol: Symbol::new(&env, "NFT"),
+    });
+    let nft_balance = env
+        .as_contract(&cid, || {
+            EscrowManager::check_escrow_balance(&env, txid, &nft_asset)
+        })
+        .unwrap();
+    assert_eq!(nft_balance, 0);
+}
+
+#[test]
+fn test_check_escrow_balance_zero_before_deposit() {
+    // new_swap_env() initializes the swap (reserving amounts in each holding) but
+    // never deposits - is_deposited stays false, so nothing is actually escrowed yet.
+    let (env, cid, _client, _seller, _nft, currency, txid) = new_swap_env();
+
+    let balance = env
+        .as_contract(&cid, || {
+            EscrowManager::check_escrow_balance(&env, txid, &currency)
+        })
+        .unwrap();
+    assert_eq!(balance, 0);
+}
+
+#[test]
+fn test_check_escrow_balance_zero_for_unknown_transaction() {
+    let (env, cid, _client, _seller, _nft, currency, _txid) = new_swap_env();
+
+    let balance = env
+        .as_contract(&cid, || {
+            EscrowManager::check_escrow_balance(&env, 999_999, &currency)
+        })
+        .unwrap();
+    assert_eq!(balance, 0);
 }
 
 #[test]
@@ -2476,6 +2753,60 @@ fn test_xlm_payment_failed_error() {
     assert_eq!(err as u32, 304);
     let err2 = SettlementError::NativeAssetBalanceFailed;
     assert_eq!(err2 as u32, 305);
+}
+
+// ---------------------------------------------------------------------------
+// Dispute initiation records the real auction id (issue #553)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_initiate_dispute_from_auction_records_auction_id() {
+    let (env, cid, client, admin) = new_env();
+    let asset = mk_asset(&env);
+    let seller = Address::generate(&env);
+    let nft = env.register(MockNft, ());
+    let creator = Address::generate(&env);
+    reg(&env, &cid, &nft, &creator, &admin, &asset);
+    MockNftClient::new(&env, &nft).set_owner(&seller);
+
+    let auction_id = client.create_auction(
+        &seller,
+        &nft,
+        &1u64,
+        &100_000i128,
+        &80_000i128,
+        &3600u64,
+        &1_000i128,
+        &AuctionType::English,
+        &asset,
+    );
+
+    let arbitrator = Address::generate(&env);
+    client.register_arbitrator(&arbitrator, &100u64);
+
+    let initiator = Address::generate(&env);
+    let reason = Bytes::from_slice(&env, b"item never shipped");
+    let dispute_id = client.initiate_dispute(&auction_id, &reason, &None, &initiator);
+
+    let dispute = client.get_dispute(&dispute_id);
+    assert_eq!(dispute.transaction_id, auction_id);
+    assert_eq!(dispute.auction_id, Some(auction_id));
+}
+
+#[test]
+fn test_initiate_dispute_from_sale_leaves_auction_id_none() {
+    let (env, _cid, client, _seller, _nft, _currency, txid) = new_swap_env();
+
+    let arbitrator = Address::generate(&env);
+    client.register_arbitrator(&arbitrator, &100u64);
+
+    let initiator = Address::generate(&env);
+    let reason = Bytes::from_slice(&env, b"item not as described");
+    let dispute_id = client.initiate_dispute(&txid, &reason, &None, &initiator);
+
+    let dispute = client.get_dispute(&dispute_id);
+    assert_eq!(dispute.transaction_id, txid);
+    assert_eq!(dispute.auction_id, None);
 }
 
 // ---------------------------------------------------------------------------

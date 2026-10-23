@@ -134,6 +134,7 @@
   "creatorProfile": {
     "verified": "Vérifié",
     "followers": "abonnés",
+    "following": "abonnements",
     "nftsCreated": "NFTs",
     "volume": "volume",
     "tabNfts": "NFTs",
@@ -159,6 +160,7 @@
     "edit": "Modifier",
     "view": "Voir",
     "close": "Fermer",
+    "dismiss": "Ignorer",
     "confirm": "Confirmer",
     "back": "Retour",
     "next": "Suivant",
@@ -408,5 +410,18 @@
       "failedToCreate": "Échec de la création de la collection"
     },
     "success": "Collection créée avec succès !"
+  },
+  "pushNotifications": {
+    "promptTitle": "Activer les notifications push",
+    "promptBody": "Soyez informé des nouvelles enchères, ventes et abonnés, même lorsque NFTopia est fermé.",
+    "notNow": "Pas maintenant",
+    "enable": "Activer",
+    "enabling": "Activation...",
+    "subscribeError": "Impossible d'activer les notifications push. Veuillez réessayer.",
+    "settingsTitle": "Notifications push",
+    "settingsDescription": "Soyez informé des enchères, ventes et abonnés même lorsque cet onglet est fermé.",
+    "settingsToggleOn": "Les notifications push sont activées",
+    "settingsToggleOff": "Les notifications push sont désactivées",
+    "unsupported": "Les notifications push ne sont pas prises en charge par ce navigateur."
   }
 }

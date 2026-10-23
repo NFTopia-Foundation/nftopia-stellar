@@ -10,6 +10,7 @@ import { TelemetryDispatcher } from "./reliability/dispatcher";
 import { shouldSampleEvent } from "./reliability/sampling";
 import { TelemetryDebouncer } from "./reliability/debounce";
 import { v4 as uuidv4 } from "uuid";
+import { sendToInternalSink } from "./funnel/internal-sink";
 
 export interface TelemetryClient {
   init(): Promise<void>;
@@ -56,6 +57,7 @@ class TelemetryCore implements TelemetryClient {
         const sanitized = sanitizePayload(payload || {}, { category: this.getCategoryForEvent(eventName), debug: !!getTelemetryConfig().debug });
         const enriched = enrichTelemetryPayload(sanitized);
         this.adapter.track(eventName, enriched);
+        sendToInternalSink(eventName, enriched);
       } catch (e) {
         if (getTelemetryConfig().debug) {
           // eslint-disable-next-line no-console
@@ -91,6 +93,7 @@ class TelemetryCore implements TelemetryClient {
   private dispatchOrEnqueue(eventName: string, payload?: Record<string, unknown>) {
     const sanitized = sanitizePayload(payload || {}, { category: this.getCategoryForEvent(eventName), debug: !!this.reliabilityConfig.debug });
     const enriched = enrichTelemetryPayload(sanitized);
+    sendToInternalSink(eventName, enriched);
     try {
       this.adapter.track(eventName, enriched);
       if (this.reliabilityConfig.debug) {

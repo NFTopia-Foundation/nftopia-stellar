@@ -8,6 +8,7 @@ import type { GraphqlContext } from '../context/context.interface';
 import type { Activity } from '../../modules/social/entities/activity.entity';
 import type { Follow } from '../../modules/social/entities/follow.entity';
 import type { User } from '../../users/user.entity';
+import { paginatedComplexity } from '../complexity';
 
 @Resolver()
 export class SocialResolver {
@@ -50,6 +51,7 @@ export class SocialResolver {
   @Query(() => [GraphqlUserType], {
     name: 'followers',
     description: 'Get followers of a user',
+    complexity: paginatedComplexity(),
   })
   async getFollowers(
     @Args('userId', { type: () => ID }) userId: string,
@@ -67,6 +69,7 @@ export class SocialResolver {
   @Query(() => [GraphqlUserType], {
     name: 'following',
     description: 'Get users that a user is following',
+    complexity: paginatedComplexity(),
   })
   async getFollowing(
     @Args('userId', { type: () => ID }) userId: string,
@@ -85,6 +88,7 @@ export class SocialResolver {
   @Query(() => [GraphqlActivity], {
     name: 'feed',
     description: 'Get feed for current user',
+    complexity: paginatedComplexity(),
   })
   async getFeed(
     @Context() context: GraphqlContext,

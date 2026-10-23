@@ -1,4 +1,5 @@
-import { AuctionResolver } from './auction.resolver';
+import { AuctionResolver, auctionBidPlacedFilter } from './auction.resolver';
+import { AUCTION_BID_PLACED_TOPIC } from '../pubsub/topics';
 
 describe('AuctionResolver', () => {
   it('maps an auction query response', async () => {
@@ -39,6 +40,7 @@ describe('AuctionResolver', () => {
     const resolver = new AuctionResolver(
       auctionService as never,
       bidService as never,
+      { asyncIterableIterator: jest.fn() } as never,
     );
     const result = await resolver.auction('a1');
 
@@ -85,6 +87,7 @@ describe('AuctionResolver', () => {
     const resolver = new AuctionResolver(
       auctionService as never,
       bidService as never,
+      { asyncIterableIterator: jest.fn() } as never,
     );
     const result = await resolver.bids(
       {
@@ -125,5 +128,45 @@ describe('AuctionResolver', () => {
         amount: '1.5000000',
       }),
     ]);
+  });
+
+  describe('auctionBidPlaced subscription (#650)', () => {
+    it('subscribes to the shared auctionBidPlaced topic', () => {
+      const pubSub = {
+        asyncIterableIterator: jest.fn().mockReturnValue('iterator'),
+      };
+      const resolver = new AuctionResolver(
+        {} as never,
+        {} as never,
+        pubSub as never,
+      );
+
+      const result = resolver.auctionBidPlaced('auction-1');
+
+      expect(pubSub.asyncIterableIterator).toHaveBeenCalledWith(
+        AUCTION_BID_PLACED_TOPIC,
+      );
+      expect(result).toBe('iterator');
+    });
+  });
+
+  describe('auctionBidPlacedFilter (#650)', () => {
+    it('delivers a bid-placed payload to a subscriber watching the same auction', () => {
+      const delivered = auctionBidPlacedFilter(
+        { auctionBidPlaced: { auctionId: 'auction-1' } as never },
+        { auctionId: 'auction-1' },
+      );
+
+      expect(delivered).toBe(true);
+    });
+
+    it('does not deliver a bid-placed payload to a subscriber watching a different auction', () => {
+      const delivered = auctionBidPlacedFilter(
+        { auctionBidPlaced: { auctionId: 'auction-1' } as never },
+        { auctionId: 'auction-2' },
+      );
+
+      expect(delivered).toBe(false);
+    });
   });
 });

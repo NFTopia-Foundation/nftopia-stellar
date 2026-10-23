@@ -17,6 +17,18 @@ export class GraphqlAuthMiddleware {
     }
 
     const token = authorizationHeader.slice('Bearer '.length).trim();
+    return this.resolveUserFromToken(token);
+  }
+
+  /**
+   * Same verification `resolveUser` uses, factored out so a GraphQL-WS
+   * subscription connection — which has no HTTP request to read a header
+   * from — can resolve a user from its `connectionParams.authorization`
+   * instead (see GraphqlContextFactory.createForSubscription).
+   */
+  async resolveUserFromToken(
+    token: string | undefined,
+  ): Promise<GraphqlUser | undefined> {
     if (!token) {
       return undefined;
     }

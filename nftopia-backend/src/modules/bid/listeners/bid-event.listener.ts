@@ -16,6 +16,7 @@ import {
   type HighestBidResult,
 } from '../interfaces/bid.interface';
 import { NotificationsService } from '../../notifications/notifications.service';
+import { PushNotificationService } from '../../notifications/push-notification.service';
 
 /**
  * BidEventListener
@@ -23,8 +24,11 @@ import { NotificationsService } from '../../notifications/notifications.service'
  * Listens for `bid.placed` events emitted by BidService and:
  *  1. Refreshes the Redis highest-bid cache with the new bid amount.
  *  2. Pushes a real-time `notification` WebSocket event to the seller.
- *  3. Broadcasts a `bid_update` WebSocket event to all auction subscribers.
- *  4. Logs the on-chain confirmation details for audit / tracing.
+ *  3. Sends a browser push notification to the seller (#661) — reaches
+ *     them even if the tab is closed/backgrounded, unlike the WebSocket
+ *     toast above.
+ *  4. Broadcasts a `bid_update` WebSocket event to all auction subscribers.
+ *  5. Logs the on-chain confirmation details for audit / tracing.
  */
 @Injectable()
 export class BidEventListener {
@@ -38,6 +42,7 @@ export class BidEventListener {
     @Inject(CACHE_MANAGER)
     private readonly cacheManager: Cache,
     private readonly notificationsService: NotificationsService,
+    private readonly pushNotificationService: PushNotificationService,
   ) {}
 
   @OnEvent(BID_PLACED_EVENT, { async: true })
@@ -45,6 +50,7 @@ export class BidEventListener {
     try {
       await this.refreshHighestBidCache(event);
       this.notifySeller(event);
+      await this.notifySellerByPush(event);
       await this.notifySellerByEmail(event);
       this.broadcastBidUpdate(event);
       this.logBidAuditEntry(event);
@@ -120,6 +126,16 @@ export class BidEventListener {
       event.amount,
       seller.username ?? undefined,
     );
+  }
+
+  /** Browser push fallback for a new bid (#661) — reaches the seller even while the tab is closed. */
+  private async notifySellerByPush(event: BidPlacedEvent): Promise<void> {
+    await this.pushNotificationService.sendToUser(event.sellerId, {
+      title: 'New Bid',
+      body: `A bid of ${event.amountXlm} XLM was placed on your auction.`,
+      url: `/marketplace/auction/${event.auctionId}`,
+      tag: `bid-${event.auctionId}`,
+    });
   }
 
   /** Broadcast real-time price update to all auction subscribers. */

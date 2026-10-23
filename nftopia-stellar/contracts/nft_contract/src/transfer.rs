@@ -1,6 +1,7 @@
 use crate::error::ContractError;
 use crate::events;
 use crate::storage::DataKey;
+use crate::token::{add_owner_token, remove_owner_token};
 use soroban_sdk::{Address, Env};
 
 pub fn approve(
@@ -103,9 +104,12 @@ pub fn do_transfer(
         .persistent()
         .remove(&DataKey::TokenApproved(token_id));
 
+    remove_owner_token(env, from, token_id);
+
     env.storage()
         .persistent()
         .set(&DataKey::TokenOwner(token_id), to);
+    add_owner_token(env, to, token_id);
 
     // Update balances
     let from_bal: u64 = env
