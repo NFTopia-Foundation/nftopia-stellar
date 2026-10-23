@@ -1,5 +1,7 @@
 #![cfg(test)]
 
+extern crate std;
+
 use crate::{
     atomic_swap::{AtomicSwapEngine, EscrowManager, SwapState},
     error::{SettlementError, SwapTimeoutError},
@@ -750,6 +752,37 @@ fn test_cleanup_expired_commitments() {
     client.cleanup_expired_commitments();
 }
 
+#[test]
+fn test_initiate_dispute_rejects_oversized_evidence_uri() {
+    let (env, _cid, client, _admin) = new_env();
+    let initiator = Address::generate(&env);
+    let arbitrator = Address::generate(&env);
+    client.register_arbitrator(&arbitrator, &50u64);
+    let reason = Bytes::from_slice(&env, b"purchase issue");
+    let oversized_uri = Bytes::from_slice(&env, &[b'x'; 513]);
+
+    assert_contract_err(
+        client.try_initiate_dispute(&1, &reason, &Some(oversized_uri), &initiator),
+        SettlementError::InvalidAmount,
+    );
+}
+
+#[test]
+fn test_initiate_dispute_accepts_well_formed_evidence_uri() {
+    let (env, _cid, client, _admin) = new_env();
+    let initiator = Address::generate(&env);
+    let arbitrator = Address::generate(&env);
+    client.register_arbitrator(&arbitrator, &50u64);
+    let reason = Bytes::from_slice(&env, b"purchase issue");
+    let evidence_uri = Bytes::from_slice(&env, b"ipfs://bafybeigdyrzt");
+
+    let dispute_id = client.initiate_dispute(&1, &reason, &Some(evidence_uri.clone()), &initiator);
+    assert_eq!(
+        client.get_dispute(&dispute_id).evidence_uri,
+        Some(evidence_uri)
+    );
+}
+
 // ─── Rate Limiter ────────────────────────────────────────────────────────────
 
 #[test]
@@ -889,6 +922,194 @@ fn count_events(env: &Env, topic: Symbol) -> u32 {
         }
     }
     count
+}
+
+fn public_method_names(source: &str) -> std::vec::Vec<&str> {
+    source
+        .lines()
+        .filter_map(|line| {
+            line.trim()
+                .strip_prefix("pub fn ")
+                .and_then(|declaration| declaration.split('(').next())
+        })
+        .collect()
+}
+
+fn method_source<'a>(source: &'a str, name: &str) -> &'a str {
+    let mut remaining = source;
+    while let Some(start) = remaining.find("pub fn ") {
+        let after_prefix = start + "pub fn ".len();
+        let declaration = &remaining[after_prefix..];
+        let name_end = declaration.find('(').unwrap();
+        let method_name = &declaration[..name_end];
+        if method_name == name {
+            let body_start = name_end + declaration[name_end..].find('{').unwrap();
+            let mut depth = 0u32;
+            for (offset, byte) in declaration[body_start..].bytes().enumerate() {
+                match byte {
+                    b'{' => depth += 1,
+                    b'}' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            return &declaration[..=body_start + offset];
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            panic!("Unclosed method body for {name}");
+        }
+        remaining = &declaration[name_end + 1..];
+    }
+    panic!("Missing method {name}");
+}
+
+#[test]
+fn test_initiate_dispute_rejects_unsupported_evidence_uri_scheme() {
+    let (env, _cid, client, _admin) = new_env();
+    let initiator = Address::generate(&env);
+    let reason = Bytes::from_slice(&env, b"purchase issue");
+    let evidence_uri = Bytes::from_slice(&env, b"file://private-evidence");
+
+    assert_contract_err(
+        client.try_initiate_dispute(&1, &reason, &Some(evidence_uri), &initiator),
+        SettlementError::InvalidAmount,
+    );
+}
+#[test]
+fn entrypoint_guard_audit() {
+    const SETTLEMENT_MUTATING: &[&str] = &[
+        "initialize",
+        "add_supported_asset",
+        "remove_supported_asset",
+        "pause_contract",
+        "unpause_contract",
+        "schedule_pause",
+        "cancel_scheduled_pause",
+        "execute_scheduled_pause",
+        "create_sale",
+        "execute_sale",
+        "create_auction",
+        "place_bid",
+        "reveal_bid",
+        "end_auction",
+        "cancel_auction_with_refund",
+        "withdraw_losing_bid",
+        "create_trade",
+        "accept_trade",
+        "execute_trade",
+        "create_bundle",
+        "cancel_transaction",
+        "initiate_dispute",
+        "vote_on_dispute",
+        "execute_dispute_resolution",
+        "force_resolve_dispute",
+        "resolve_dispute_timeout",
+        "submit_oracle_resolution",
+        "register_arbitration_oracle",
+        "register_arbitrator",
+        "update_arbitrator_reputation",
+        "reseed_arbitrator_selection",
+        "add_dispute_admin",
+        "remove_dispute_admin",
+        "update_dispute_config",
+        "emergency_withdraw",
+        "update_fee_config",
+        "withdraw_platform_fees",
+        "update_rate_limit",
+        "cleanup_expired_commitments",
+        "cleanup_expired_swaps",
+        "expire_swap",
+        "reclaim_expired_escrow",
+        "update_swap_timeout_config",
+        "add_allowed_nft_contract",
+        "remove_allowed_nft_contract",
+        "add_allowed_token_contract",
+        "remove_allowed_token_contract",
+        "block_address",
+        "unblock_address",
+        "update_block_reason",
+        "set_native_xlm_sac",
+    ];
+    const SETTLEMENT_READ_ONLY: &[&str] = &[
+        "get_supported_assets",
+        "is_paused",
+        "is_module_paused",
+        "get_pause_state",
+        "get_scheduled_pause_info",
+        "is_timelock_active",
+        "get_timelock_remaining",
+        "get_paused_modules",
+        "dispute_oracle_payload",
+        "get_arbitration_oracle",
+        "get_dispute_admins",
+        "is_dispute_admin",
+        "get_dispute",
+        "get_dispute_config",
+        "get_rate_limit_config",
+        "get_sale",
+        "get_auction",
+        "get_dutch_auction_price",
+        "get_accumulated_fees",
+        "get_user_volume",
+        "get_swap_timeout_config",
+        "get_atomic_swap",
+        "get_swap_time_remaining",
+        "is_nft_allowed",
+        "is_token_allowed",
+        "is_blocked",
+        "get_blocked_addresses",
+        "get_block_record",
+        "get_native_xlm_sac",
+        "version",
+        "get_version",
+    ];
+    const SWAP_MUTATING: &[&str] = &[
+        "set_timeout_config",
+        "initialize_swap",
+        "deposit_to_escrow",
+        "execute_swap",
+        "execute_sale_swap",
+        "cancel_swap",
+        "expire_swap",
+        "cleanup_expired_swaps",
+        "reclaim_expired_escrow",
+        "settle_dispute_escrow",
+        "emergency_withdraw",
+        "release_escrow",
+    ];
+    const SWAP_READ_ONLY: &[&str] = &[
+        "is_terminal",
+        "timeout_config",
+        "validate_timeout_config",
+        "is_expired",
+        "is_expiry_confirmed",
+        "time_remaining",
+        "get_swap_by_transaction",
+        "check_escrow_balance",
+        "get_escrow_holdings",
+    ];
+
+    let settlement = include_str!("settlement_core.rs");
+    let mut classified_settlement = [SETTLEMENT_MUTATING, SETTLEMENT_READ_ONLY].concat();
+    let mut actual_settlement = public_method_names(settlement);
+    classified_settlement.sort_unstable();
+    actual_settlement.sort_unstable();
+    assert_eq!(actual_settlement, classified_settlement);
+
+    for name in SETTLEMENT_MUTATING {
+        assert!(
+            method_source(settlement, name).contains("ReentrancyGuard::execute"),
+            "mutating settlement entrypoint {name} is not guarded"
+        );
+    }
+
+    let swaps = include_str!("atomic_swap.rs");
+    let mut classified_swaps = [SWAP_MUTATING, SWAP_READ_ONLY].concat();
+    let mut actual_swaps = public_method_names(swaps);
+    classified_swaps.sort_unstable();
+    actual_swaps.sort_unstable();
+    assert_eq!(actual_swaps, classified_swaps);
 }
 
 /// A sale with its backing atomic swap, using mocks that accept escrow transfers.

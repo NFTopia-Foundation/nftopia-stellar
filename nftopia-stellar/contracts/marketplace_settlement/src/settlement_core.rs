@@ -33,6 +33,14 @@ use crate::types::Dispute;
 pub struct MarketplaceSettlement;
 
 /// Implementation of the Marketplace Settlement Contract
+/// Entry point classification (kept in sync with `entrypoint_guard_audit`):
+///
+/// State-mutating entrypoints must execute `ReentrancyGuard::execute`:
+/// initialization, supported-asset and pause controls, transaction and dispute
+/// operations, fee/rate-limit controls, expired-state cleanup, allowlist and
+/// blocklist controls, and native-XLM configuration. Read-only entrypoints are
+/// the `get_*`, `is_*`, time/price queries, `dispute_oracle_payload`, `version`,
+/// and `get_version` methods. The audit test below enumerates every method by name.
 #[allow(clippy::too_many_arguments)]
 #[contractimpl]
 impl MarketplaceSettlement {
@@ -60,43 +68,45 @@ impl MarketplaceSettlement {
         fee_config: FeeConfig,
         swap_timeout_config: Option<SwapTimeoutConfig>,
     ) -> Result<(), SettlementError> {
-        let admin_config = AdminConfig {
-            admin: admin.clone(),
-            emergency_withdrawal_enabled: true,
-            max_transaction_duration: 2592000, // 30 days
-            max_auction_duration: 604800,      // 7 days
-            min_bid_increment_bps: 100,        // 1%
-            max_royalty_percentage: 5000,      // 50%
-            dispute_cooling_period: 86400,     // 24 hours
-            arbitration_quorum: 3,
-        };
+        ReentrancyGuard::execute(&env, &admin, "initialize", || {
+            let admin_config = AdminConfig {
+                admin: admin.clone(),
+                emergency_withdrawal_enabled: true,
+                max_transaction_duration: 2592000, // 30 days
+                max_auction_duration: 604800,      // 7 days
+                min_bid_increment_bps: 100,        // 1%
+                max_royalty_percentage: 5000,      // 50%
+                dispute_cooling_period: 86400,     // 24 hours
+                arbitration_quorum: 3,
+            };
 
-        env.storage()
-            .instance()
-            .set(&symbol_short!("admin_cfg"), &admin_config);
+            env.storage()
+                .instance()
+                .set(&symbol_short!("admin_cfg"), &admin_config);
 
-        // Validate and store the caller-supplied fee configuration exactly once.
-        FeeManager::initialize_fee_config(&env, &fee_config, &admin)?;
+            // Validate and store the caller-supplied fee configuration exactly once.
+            FeeManager::initialize_fee_config(&env, &fee_config, &admin)?;
 
-        // Set default auction config
-        let auction_config = crate::auction_engine::AuctionConfig::default();
-        AuctionEngine::update_auction_config(&env, &auction_config, &admin)?;
+            // Set default auction config
+            let auction_config = crate::auction_engine::AuctionConfig::default();
+            AuctionEngine::update_auction_config(&env, &auction_config, &admin)?;
 
-        // Set default dispute config
-        let dispute_config = crate::dispute_resolution::DisputeConfig::default();
-        DisputeResolutionManager::update_dispute_config(&env, &dispute_config, &admin)?;
+            // Set default dispute config
+            let dispute_config = crate::dispute_resolution::DisputeConfig::default();
+            DisputeResolutionManager::update_dispute_config(&env, &dispute_config, &admin)?;
 
-        // Set atomic swap timeout policy
-        let swap_config = swap_timeout_config.unwrap_or_else(SwapTimeoutConfig::defaults);
-        AtomicSwapEngine::set_timeout_config(&env, &swap_config, &admin)?;
+            // Set atomic swap timeout policy
+            let swap_config = swap_timeout_config.unwrap_or_else(SwapTimeoutConfig::defaults);
+            AtomicSwapEngine::set_timeout_config(&env, &swap_config, &admin)?;
 
-        // Initialize with empty supported assets list
-        let empty_assets: Vec<Asset> = Vec::new(&env);
-        env.storage()
-            .persistent()
-            .set(&Self::supported_assets_key(&env), &empty_assets);
+            // Initialize with empty supported assets list
+            let empty_assets: Vec<Asset> = Vec::new(&env);
+            env.storage()
+                .persistent()
+                .set(&Self::supported_assets_key(&env), &empty_assets);
 
-        Ok(())
+            Ok(())
+        })
     }
 
     // === ASSET WHITELIST FUNCTIONS ===
@@ -117,33 +127,35 @@ impl MarketplaceSettlement {
     ) -> Result<(), SettlementError> {
         admin.require_auth();
 
-        // Check admin permissions
-        let admin_config: AdminConfig = env
-            .storage()
-            .instance()
-            .get(&symbol_short!("admin_cfg"))
-            .ok_or(SettlementError::Unauthorized)?;
+        ReentrancyGuard::execute(&env, &admin, "add_supported_asset", || {
+            // Check admin permissions
+            let admin_config: AdminConfig = env
+                .storage()
+                .instance()
+                .get(&symbol_short!("admin_cfg"))
+                .ok_or(SettlementError::Unauthorized)?;
 
-        if admin_config.admin != admin {
-            return Err(SettlementError::Unauthorized);
-        }
-
-        let supported = Self::get_supported_assets(env.clone());
-
-        // Check if asset already exists
-        for i in 0..supported.len() {
-            if asset_utils::assets_equal(&asset, &supported.get(i).unwrap()) {
-                return Err(SettlementError::AlreadyExists);
+            if admin_config.admin != admin {
+                return Err(SettlementError::Unauthorized);
             }
-        }
 
-        let mut new_list = supported;
-        new_list.push_back(asset);
-        env.storage()
-            .persistent()
-            .set(&Self::supported_assets_key(&env), &new_list);
+            let supported = Self::get_supported_assets(env.clone());
 
-        Ok(())
+            // Check if asset already exists
+            for i in 0..supported.len() {
+                if asset_utils::assets_equal(&asset, &supported.get(i).unwrap()) {
+                    return Err(SettlementError::AlreadyExists);
+                }
+            }
+
+            let mut new_list = supported;
+            new_list.push_back(asset);
+            env.storage()
+                .persistent()
+                .set(&Self::supported_assets_key(&env), &new_list);
+
+            Ok(())
+        })
     }
 
     /// Remove a supported asset (admin only)
@@ -154,39 +166,41 @@ impl MarketplaceSettlement {
     ) -> Result<(), SettlementError> {
         admin.require_auth();
 
-        // Check admin permissions
-        let admin_config: AdminConfig = env
-            .storage()
-            .instance()
-            .get(&symbol_short!("admin_cfg"))
-            .ok_or(SettlementError::Unauthorized)?;
+        ReentrancyGuard::execute(&env, &admin, "remove_supported_asset", || {
+            // Check admin permissions
+            let admin_config: AdminConfig = env
+                .storage()
+                .instance()
+                .get(&symbol_short!("admin_cfg"))
+                .ok_or(SettlementError::Unauthorized)?;
 
-        if admin_config.admin != admin {
-            return Err(SettlementError::Unauthorized);
-        }
-
-        let supported = Self::get_supported_assets(env.clone());
-
-        let mut found = false;
-        let mut new_list: Vec<Asset> = Vec::new(&env);
-        for i in 0..supported.len() {
-            let existing = supported.get(i).unwrap();
-            if asset_utils::assets_equal(&asset, &existing) {
-                found = true;
-            } else {
-                new_list.push_back(existing);
+            if admin_config.admin != admin {
+                return Err(SettlementError::Unauthorized);
             }
-        }
 
-        if !found {
-            return Err(SettlementError::NotFound);
-        }
+            let supported = Self::get_supported_assets(env.clone());
 
-        env.storage()
-            .persistent()
-            .set(&Self::supported_assets_key(&env), &new_list);
+            let mut found = false;
+            let mut new_list: Vec<Asset> = Vec::new(&env);
+            for i in 0..supported.len() {
+                let existing = supported.get(i).unwrap();
+                if asset_utils::assets_equal(&asset, &existing) {
+                    found = true;
+                } else {
+                    new_list.push_back(existing);
+                }
+            }
 
-        Ok(())
+            if !found {
+                return Err(SettlementError::NotFound);
+            }
+
+            env.storage()
+                .persistent()
+                .set(&Self::supported_assets_key(&env), &new_list);
+
+            Ok(())
+        })
     }
 
     // === PAUSE FUNCTIONS ===
@@ -199,15 +213,17 @@ impl MarketplaceSettlement {
         modules: Option<Vec<Symbol>>,
     ) -> Result<(), SettlementError> {
         admin.require_auth();
-        let admin_config: AdminConfig = env
-            .storage()
-            .instance()
-            .get(&symbol_short!("admin_cfg"))
-            .ok_or(SettlementError::Unauthorized)?;
-        if admin_config.admin != admin {
-            return Err(SettlementError::Unauthorized);
-        }
-        PauseManager::pause(&env, &admin, reason, modules)
+        ReentrancyGuard::execute(&env, &admin, "pause_contract", || {
+            let admin_config: AdminConfig = env
+                .storage()
+                .instance()
+                .get(&symbol_short!("admin_cfg"))
+                .ok_or(SettlementError::Unauthorized)?;
+            if admin_config.admin != admin {
+                return Err(SettlementError::Unauthorized);
+            }
+            PauseManager::pause(&env, &admin, reason, modules)
+        })
     }
 
     /// Unpause the contract (admin only)
@@ -217,15 +233,17 @@ impl MarketplaceSettlement {
         reason: Option<Bytes>,
     ) -> Result<(), SettlementError> {
         admin.require_auth();
-        let admin_config: AdminConfig = env
-            .storage()
-            .instance()
-            .get(&symbol_short!("admin_cfg"))
-            .ok_or(SettlementError::Unauthorized)?;
-        if admin_config.admin != admin {
-            return Err(SettlementError::Unauthorized);
-        }
-        PauseManager::unpause(&env, &admin, reason)
+        ReentrancyGuard::execute(&env, &admin, "unpause_contract", || {
+            let admin_config: AdminConfig = env
+                .storage()
+                .instance()
+                .get(&symbol_short!("admin_cfg"))
+                .ok_or(SettlementError::Unauthorized)?;
+            if admin_config.admin != admin {
+                return Err(SettlementError::Unauthorized);
+            }
+            PauseManager::unpause(&env, &admin, reason)
+        })
     }
 
     /// Schedule a pause with timelock (admin only)
@@ -237,43 +255,49 @@ impl MarketplaceSettlement {
         reason: Bytes,
     ) -> Result<(), SettlementError> {
         admin.require_auth();
-        let admin_config: AdminConfig = env
-            .storage()
-            .instance()
-            .get(&symbol_short!("admin_cfg"))
-            .ok_or(SettlementError::Unauthorized)?;
-        if admin_config.admin != admin {
-            return Err(SettlementError::Unauthorized);
-        }
-        PauseManager::schedule_pause(&env, &admin, delay_seconds, modules, reason)
+        ReentrancyGuard::execute(&env, &admin, "schedule_pause", || {
+            let admin_config: AdminConfig = env
+                .storage()
+                .instance()
+                .get(&symbol_short!("admin_cfg"))
+                .ok_or(SettlementError::Unauthorized)?;
+            if admin_config.admin != admin {
+                return Err(SettlementError::Unauthorized);
+            }
+            PauseManager::schedule_pause(&env, &admin, delay_seconds, modules, reason)
+        })
     }
 
     /// Cancel scheduled pause (admin only)
     pub fn cancel_scheduled_pause(env: Env, admin: Address) -> Result<(), SettlementError> {
         admin.require_auth();
-        let admin_config: AdminConfig = env
-            .storage()
-            .instance()
-            .get(&symbol_short!("admin_cfg"))
-            .ok_or(SettlementError::Unauthorized)?;
-        if admin_config.admin != admin {
-            return Err(SettlementError::Unauthorized);
-        }
-        PauseManager::cancel_scheduled_pause(&env, &admin)
+        ReentrancyGuard::execute(&env, &admin, "cancel_scheduled_pause", || {
+            let admin_config: AdminConfig = env
+                .storage()
+                .instance()
+                .get(&symbol_short!("admin_cfg"))
+                .ok_or(SettlementError::Unauthorized)?;
+            if admin_config.admin != admin {
+                return Err(SettlementError::Unauthorized);
+            }
+            PauseManager::cancel_scheduled_pause(&env, &admin)
+        })
     }
 
     /// Execute scheduled pause (admin only)
     pub fn execute_scheduled_pause(env: Env, admin: Address) -> Result<(), SettlementError> {
         admin.require_auth();
-        let admin_config: AdminConfig = env
-            .storage()
-            .instance()
-            .get(&symbol_short!("admin_cfg"))
-            .ok_or(SettlementError::Unauthorized)?;
-        if admin_config.admin != admin {
-            return Err(SettlementError::Unauthorized);
-        }
-        PauseManager::execute_scheduled_pause(&env, &admin)
+        ReentrancyGuard::execute(&env, &admin, "execute_scheduled_pause", || {
+            let admin_config: AdminConfig = env
+                .storage()
+                .instance()
+                .get(&symbol_short!("admin_cfg"))
+                .ok_or(SettlementError::Unauthorized)?;
+            if admin_config.admin != admin {
+                return Err(SettlementError::Unauthorized);
+            }
+            PauseManager::execute_scheduled_pause(&env, &admin)
+        })
     }
 
     /// Check if contract is paused (view function)
@@ -1077,7 +1101,9 @@ impl MarketplaceSettlement {
     ) -> Result<(), SettlementError> {
         arbitrator.require_auth();
 
-        DisputeResolutionManager::register_arbitrator(&env, &arbitrator, initial_reputation)
+        ReentrancyGuard::execute(&env, &arbitrator, "register_arbitrator", || {
+            DisputeResolutionManager::register_arbitrator(&env, &arbitrator, initial_reputation)
+        })
     }
 
     /// Adjust an arbitrator's reputation (dispute admin only)
@@ -1253,24 +1279,26 @@ impl MarketplaceSettlement {
         window_seconds: u64,
         admin: Address,
     ) -> Result<(), SettlementError> {
-        // Check admin permissions
-        let admin_config: AdminConfig = env
-            .storage()
-            .instance()
-            .get(&symbol_short!("admin_cfg"))
-            .ok_or(SettlementError::Unauthorized)?;
+        ReentrancyGuard::execute(&env, &admin, "update_rate_limit", || {
+            // Check admin permissions
+            let admin_config: AdminConfig = env
+                .storage()
+                .instance()
+                .get(&symbol_short!("admin_cfg"))
+                .ok_or(SettlementError::Unauthorized)?;
 
-        if admin_config.admin != admin {
-            return Err(SettlementError::Unauthorized);
-        }
+            if admin_config.admin != admin {
+                return Err(SettlementError::Unauthorized);
+            }
 
-        crate::security::rate_limiter::RateLimiter::set_config(
-            &env,
-            &function,
-            limit,
-            window_seconds,
-        );
-        Ok(())
+            crate::security::rate_limiter::RateLimiter::set_config(
+                &env,
+                &function,
+                limit,
+                window_seconds,
+            );
+            Ok(())
+        })
     }
 
     /// Get rate limit configuration for a specific function
@@ -1308,7 +1336,10 @@ impl MarketplaceSettlement {
 
     /// Cleanup expired commitments
     pub fn cleanup_expired_commitments(env: Env) -> Result<(), SettlementError> {
-        AuctionEngine::cleanup_expired_commitments(&env)
+        let caller = env.current_contract_address();
+        ReentrancyGuard::execute(&env, &caller, "cleanup_expired_commitments", || {
+            AuctionEngine::cleanup_expired_commitments(&env)
+        })
     }
 
     /// Sweep expired atomic swaps, marking them failed and refunding escrow
@@ -1416,16 +1447,18 @@ impl MarketplaceSettlement {
         contract: Address,
     ) -> Result<(), SettlementError> {
         admin.require_auth();
-        let admin_config: AdminConfig = env
-            .storage()
-            .instance()
-            .get(&symbol_short!("admin_cfg"))
-            .ok_or(SettlementError::Unauthorized)?;
-        if admin_config.admin != admin {
-            return Err(SettlementError::Unauthorized);
-        }
-        AllowlistStore::set_nft_allowed(&env, &contract, true);
-        Ok(())
+        ReentrancyGuard::execute(&env, &admin, "add_allowed_nft_contract", || {
+            let admin_config: AdminConfig = env
+                .storage()
+                .instance()
+                .get(&symbol_short!("admin_cfg"))
+                .ok_or(SettlementError::Unauthorized)?;
+            if admin_config.admin != admin {
+                return Err(SettlementError::Unauthorized);
+            }
+            AllowlistStore::set_nft_allowed(&env, &contract, true);
+            Ok(())
+        })
     }
 
     /// Remove allowed NFT contract (admin only)
@@ -1435,16 +1468,18 @@ impl MarketplaceSettlement {
         contract: Address,
     ) -> Result<(), SettlementError> {
         admin.require_auth();
-        let admin_config: AdminConfig = env
-            .storage()
-            .instance()
-            .get(&symbol_short!("admin_cfg"))
-            .ok_or(SettlementError::Unauthorized)?;
-        if admin_config.admin != admin {
-            return Err(SettlementError::Unauthorized);
-        }
-        AllowlistStore::set_nft_allowed(&env, &contract, false);
-        Ok(())
+        ReentrancyGuard::execute(&env, &admin, "remove_allowed_nft_contract", || {
+            let admin_config: AdminConfig = env
+                .storage()
+                .instance()
+                .get(&symbol_short!("admin_cfg"))
+                .ok_or(SettlementError::Unauthorized)?;
+            if admin_config.admin != admin {
+                return Err(SettlementError::Unauthorized);
+            }
+            AllowlistStore::set_nft_allowed(&env, &contract, false);
+            Ok(())
+        })
     }
 
     /// Add allowed token contract (admin only)
@@ -1454,16 +1489,18 @@ impl MarketplaceSettlement {
         contract: Address,
     ) -> Result<(), SettlementError> {
         admin.require_auth();
-        let admin_config: AdminConfig = env
-            .storage()
-            .instance()
-            .get(&symbol_short!("admin_cfg"))
-            .ok_or(SettlementError::Unauthorized)?;
-        if admin_config.admin != admin {
-            return Err(SettlementError::Unauthorized);
-        }
-        AllowlistStore::set_token_allowed(&env, &contract, true);
-        Ok(())
+        ReentrancyGuard::execute(&env, &admin, "add_allowed_token_contract", || {
+            let admin_config: AdminConfig = env
+                .storage()
+                .instance()
+                .get(&symbol_short!("admin_cfg"))
+                .ok_or(SettlementError::Unauthorized)?;
+            if admin_config.admin != admin {
+                return Err(SettlementError::Unauthorized);
+            }
+            AllowlistStore::set_token_allowed(&env, &contract, true);
+            Ok(())
+        })
     }
 
     /// Remove allowed token contract (admin only)
@@ -1473,16 +1510,18 @@ impl MarketplaceSettlement {
         contract: Address,
     ) -> Result<(), SettlementError> {
         admin.require_auth();
-        let admin_config: AdminConfig = env
-            .storage()
-            .instance()
-            .get(&symbol_short!("admin_cfg"))
-            .ok_or(SettlementError::Unauthorized)?;
-        if admin_config.admin != admin {
-            return Err(SettlementError::Unauthorized);
-        }
-        AllowlistStore::set_token_allowed(&env, &contract, false);
-        Ok(())
+        ReentrancyGuard::execute(&env, &admin, "remove_allowed_token_contract", || {
+            let admin_config: AdminConfig = env
+                .storage()
+                .instance()
+                .get(&symbol_short!("admin_cfg"))
+                .ok_or(SettlementError::Unauthorized)?;
+            if admin_config.admin != admin {
+                return Err(SettlementError::Unauthorized);
+            }
+            AllowlistStore::set_token_allowed(&env, &contract, false);
+            Ok(())
+        })
     }
 
     /// Read whether `contract` is allowlisted for NFT settlement (view function).
@@ -1508,46 +1547,48 @@ impl MarketplaceSettlement {
         expires_at: Option<u64>,
     ) -> Result<(), SettlementError> {
         admin.require_auth();
-        // Check admin permissions
-        let admin_config: AdminConfig = env
-            .storage()
-            .instance()
-            .get(&symbol_short!("admin_cfg"))
-            .ok_or(SettlementError::Unauthorized)?;
+        ReentrancyGuard::execute(&env, &admin, "block_address", || {
+            // Check admin permissions
+            let admin_config: AdminConfig = env
+                .storage()
+                .instance()
+                .get(&symbol_short!("admin_cfg"))
+                .ok_or(SettlementError::Unauthorized)?;
 
-        if admin_config.admin != admin {
-            return Err(SettlementError::Unauthorized);
-        }
+            if admin_config.admin != admin {
+                return Err(SettlementError::Unauthorized);
+            }
 
-        let block_reason = match reason {
-            0 => crate::storage::blocklist_store::BlockReason::Scam,
-            1 => crate::storage::blocklist_store::BlockReason::Sanctioned,
-            2 => crate::storage::blocklist_store::BlockReason::Suspicious,
-            3 => crate::storage::blocklist_store::BlockReason::Temporary,
-            4 => crate::storage::blocklist_store::BlockReason::AdminOverride,
-            _ => return Err(SettlementError::InvalidAmount),
-        };
+            let block_reason = match reason {
+                0 => crate::storage::blocklist_store::BlockReason::Scam,
+                1 => crate::storage::blocklist_store::BlockReason::Sanctioned,
+                2 => crate::storage::blocklist_store::BlockReason::Suspicious,
+                3 => crate::storage::blocklist_store::BlockReason::Temporary,
+                4 => crate::storage::blocklist_store::BlockReason::AdminOverride,
+                _ => return Err(SettlementError::InvalidAmount),
+            };
 
-        crate::storage::blocklist_store::BlocklistStore::block_address(
-            &env,
-            &admin,
-            &address,
-            block_reason.clone(),
-            expires_at,
-        )?;
-
-        emit_address_blocked(
-            &env,
-            AddressBlockedEvent {
-                blocked_address: address.clone(),
-                blocked_by: admin,
-                reason,
+            crate::storage::blocklist_store::BlocklistStore::block_address(
+                &env,
+                &admin,
+                &address,
+                block_reason.clone(),
                 expires_at,
-                timestamp: env.ledger().timestamp(),
-            },
-        );
+            )?;
 
-        Ok(())
+            emit_address_blocked(
+                &env,
+                AddressBlockedEvent {
+                    blocked_address: address.clone(),
+                    blocked_by: admin.clone(),
+                    reason,
+                    expires_at,
+                    timestamp: env.ledger().timestamp(),
+                },
+            );
+
+            Ok(())
+        })
     }
 
     /// Unblock an address (admin only)
@@ -1557,29 +1598,31 @@ impl MarketplaceSettlement {
         address: Address,
     ) -> Result<(), SettlementError> {
         admin.require_auth();
-        // Check admin permissions
-        let admin_config: AdminConfig = env
-            .storage()
-            .instance()
-            .get(&symbol_short!("admin_cfg"))
-            .ok_or(SettlementError::Unauthorized)?;
+        ReentrancyGuard::execute(&env, &admin, "unblock_address", || {
+            // Check admin permissions
+            let admin_config: AdminConfig = env
+                .storage()
+                .instance()
+                .get(&symbol_short!("admin_cfg"))
+                .ok_or(SettlementError::Unauthorized)?;
 
-        if admin_config.admin != admin {
-            return Err(SettlementError::Unauthorized);
-        }
+            if admin_config.admin != admin {
+                return Err(SettlementError::Unauthorized);
+            }
 
-        crate::storage::blocklist_store::BlocklistStore::unblock_address(&env, &address);
+            crate::storage::blocklist_store::BlocklistStore::unblock_address(&env, &address);
 
-        emit_address_unblocked(
-            &env,
-            AddressUnblockedEvent {
-                unblocked_address: address.clone(),
-                unblocked_by: admin,
-                timestamp: env.ledger().timestamp(),
-            },
-        );
+            emit_address_unblocked(
+                &env,
+                AddressUnblockedEvent {
+                    unblocked_address: address.clone(),
+                    unblocked_by: admin.clone(),
+                    timestamp: env.ledger().timestamp(),
+                },
+            );
 
-        Ok(())
+            Ok(())
+        })
     }
 
     /// Update block reason for an address (admin only)
@@ -1591,35 +1634,37 @@ impl MarketplaceSettlement {
         expires_at: Option<u64>,
     ) -> Result<(), SettlementError> {
         admin.require_auth();
-        // Check admin permissions
-        let admin_config: AdminConfig = env
-            .storage()
-            .instance()
-            .get(&symbol_short!("admin_cfg"))
-            .ok_or(SettlementError::Unauthorized)?;
+        ReentrancyGuard::execute(&env, &admin, "update_block_reason", || {
+            // Check admin permissions
+            let admin_config: AdminConfig = env
+                .storage()
+                .instance()
+                .get(&symbol_short!("admin_cfg"))
+                .ok_or(SettlementError::Unauthorized)?;
 
-        if admin_config.admin != admin {
-            return Err(SettlementError::Unauthorized);
-        }
+            if admin_config.admin != admin {
+                return Err(SettlementError::Unauthorized);
+            }
 
-        let block_reason = match reason {
-            0 => crate::storage::blocklist_store::BlockReason::Scam,
-            1 => crate::storage::blocklist_store::BlockReason::Sanctioned,
-            2 => crate::storage::blocklist_store::BlockReason::Suspicious,
-            3 => crate::storage::blocklist_store::BlockReason::Temporary,
-            4 => crate::storage::blocklist_store::BlockReason::AdminOverride,
-            _ => return Err(SettlementError::InvalidAmount),
-        };
+            let block_reason = match reason {
+                0 => crate::storage::blocklist_store::BlockReason::Scam,
+                1 => crate::storage::blocklist_store::BlockReason::Sanctioned,
+                2 => crate::storage::blocklist_store::BlockReason::Suspicious,
+                3 => crate::storage::blocklist_store::BlockReason::Temporary,
+                4 => crate::storage::blocklist_store::BlockReason::AdminOverride,
+                _ => return Err(SettlementError::InvalidAmount),
+            };
 
-        crate::storage::blocklist_store::BlocklistStore::update_block_reason(
-            &env,
-            &admin,
-            &address,
-            block_reason,
-            expires_at,
-        )?;
+            crate::storage::blocklist_store::BlocklistStore::update_block_reason(
+                &env,
+                &admin,
+                &address,
+                block_reason,
+                expires_at,
+            )?;
 
-        Ok(())
+            Ok(())
+        })
     }
 
     /// Check if an address is blocked (view function)
@@ -1661,25 +1706,27 @@ impl MarketplaceSettlement {
         native_xlm_sac: Option<Address>,
     ) -> Result<(), SettlementError> {
         admin.require_auth();
-        let admin_config: AdminConfig = env
-            .storage()
-            .instance()
-            .get(&symbol_short!("admin_cfg"))
-            .ok_or(SettlementError::Unauthorized)?;
-
-        if admin_config.admin != admin {
-            return Err(SettlementError::Unauthorized);
-        }
-
-        if let Some(address) = native_xlm_sac {
-            env.storage()
+        ReentrancyGuard::execute(&env, &admin, "set_native_xlm_sac", || {
+            let admin_config: AdminConfig = env
+                .storage()
                 .instance()
-                .set(&symbol_short!("xlm_sac"), &address);
-        } else {
-            env.storage().instance().remove(&symbol_short!("xlm_sac"));
-        }
+                .get(&symbol_short!("admin_cfg"))
+                .ok_or(SettlementError::Unauthorized)?;
 
-        Ok(())
+            if admin_config.admin != admin {
+                return Err(SettlementError::Unauthorized);
+            }
+
+            if let Some(address) = native_xlm_sac {
+                env.storage()
+                    .instance()
+                    .set(&symbol_short!("xlm_sac"), &address);
+            } else {
+                env.storage().instance().remove(&symbol_short!("xlm_sac"));
+            }
+
+            Ok(())
+        })
     }
 
     /// Get the configured native XLM SAC address (view function).

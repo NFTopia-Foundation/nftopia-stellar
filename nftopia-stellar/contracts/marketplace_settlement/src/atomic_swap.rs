@@ -103,6 +103,15 @@ pub struct EscrowRelease {
 /// Atomic swap engine for secure NFT and token transfers
 pub struct AtomicSwapEngine;
 
+/// Public helper classification (these are not `#[contractimpl]` entrypoints):
+/// mutating helpers are `set_timeout_config`, `initialize_swap`, `deposit_to_escrow`,
+/// `execute_swap`, `execute_sale_swap`, `cancel_swap`, `expire_swap`,
+/// `cleanup_expired_swaps`, `reclaim_expired_escrow`, `settle_dispute_escrow`, and
+/// `emergency_withdraw`. `EscrowManager::release_escrow` also mutates external token
+/// state. These helpers must only be called from guarded settlement entrypoints.
+/// Read-only helpers are `is_terminal`, `timeout_config`, `validate_timeout_config`,
+/// `is_expired`, `is_expiry_confirmed`, `time_remaining`, `get_swap_by_transaction`,
+/// `check_escrow_balance`, and `get_escrow_holdings`.
 impl AtomicSwapEngine {
     // ── Timeout configuration ────────────────────────────────────────────────
 

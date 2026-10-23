@@ -592,6 +592,29 @@ fn test_burn_by_owner_succeeds() {
 }
 
 #[test]
+fn test_burn_rejected_while_paused() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+    let owner = Address::generate(&env);
+    let token_id = client.mint(
+        &admin,
+        &owner,
+        &String::from_str(&env, "ipfs://hash"),
+        &Vec::new(&env),
+        &None,
+    );
+
+    client.set_pause(&admin, &true);
+    match client.try_burn(&owner, &token_id) {
+        Err(Ok(error)) => assert_eq!(error, crate::error::ContractError::ContractPaused),
+        other => panic!("Expected ContractPaused, got: {:?}", other),
+    }
+    assert_eq!(client.total_supply(), 1);
+    assert_eq!(client.owner_of(&token_id), owner);
+}
+
+#[test]
 fn test_burn_by_burner_role_succeeds() {
     let env = Env::default();
     env.mock_all_auths();
