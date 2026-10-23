@@ -273,18 +273,25 @@ impl AtomicSwapEngine {
         // Refuse to take new funds into a swap that can no longer settle.
         Self::ensure_not_expired(env, &swap, &config)?;
 
-        // Validate depositor
-        let is_seller_deposit = swap
+        // Validate the exact reserved holding and prevent duplicate deposits.
+        let seller_holding = swap
             .seller_escrow
             .iter()
-            .any(|h| h.holder == *depositor && h.asset == *asset);
-        let is_buyer_deposit = swap
+            .find(|h| h.holder == *depositor && asset_utils::assets_equal(&h.asset, asset));
+        let buyer_holding = swap
             .buyer_escrow
             .iter()
-            .any(|h| h.holder == *depositor && h.asset == *asset);
+            .find(|h| h.holder == *depositor && asset_utils::assets_equal(&h.asset, asset));
 
-        if !is_seller_deposit && !is_buyer_deposit {
+        let expected_holding = seller_holding.or(buyer_holding);
+        let Some(expected_holding) = expected_holding else {
             return Err(SettlementError::Unauthorized);
+        };
+        if expected_holding.is_deposited || expected_holding.released_at.is_some() {
+            return Err(SettlementError::InvalidState);
+        }
+        if amount <= 0 || expected_holding.amount != amount || expected_holding.is_nft != is_nft {
+            return Err(SettlementError::InvalidAmount);
         }
 
         // Perform the actual deposit (transfer to escrow)
@@ -1153,14 +1160,17 @@ impl AtomicSwapEngine {
 pub struct EscrowManager;
 
 impl EscrowManager {
-    /// Check escrow balance for a transaction
+    /// Return the remaining deposited fungible balance held for a transaction.
     ///
     /// Sums `asset` across both the seller's and buyer's escrow holdings for this
     /// transaction. A holding only counts once `is_deposited` is true and
     /// `released_at` is still `None`: `initialize_swap` pre-populates holdings with
     /// their eventual amount before any transfer happens (see `EscrowHolding`'s own
     /// doc comment on `is_deposited`), so without that gate this would report funds
-    /// that were only ever reserved, not actually escrowed.
+    /// that were only ever reserved, not actually escrowed. NFT holdings are always
+    /// excluded: their `amount` is a `token_id`, not a fungible quantity, and an NFT
+    /// holding's asset is a `Token` keyed on the NFT contract's address, so it can
+    /// otherwise look like a fungible holding for that same asset.
     ///
     /// A transaction with no recorded swap at all has nothing escrowed, so this
     /// returns `Ok(0)` rather than an error — same as an existing swap whose
@@ -1176,28 +1186,74 @@ impl EscrowManager {
             Err(err) => return Err(err),
         };
 
-        let held = |holdings: &Vec<EscrowHolding>| -> i128 {
-            holdings
-                .iter()
-                .filter(|holding| {
-                    holding.asset == *asset && holding.is_deposited && holding.released_at.is_none()
-                })
-                .map(|holding| holding.amount)
-                .sum()
-        };
+        let mut balance = 0i128;
+        for holding in swap.seller_escrow.iter().chain(swap.buyer_escrow.iter()) {
+            if holding.is_deposited
+                && holding.released_at.is_none()
+                && !holding.is_nft
+                && asset_utils::assets_equal(&holding.asset, asset)
+            {
+                balance = balance
+                    .checked_add(holding.amount)
+                    .ok_or(SettlementError::Overflow)?;
+            }
+        }
 
-        Ok(held(&swap.seller_escrow) + held(&swap.buyer_escrow))
+        Ok(balance)
     }
 
-    /// Release escrow to specific address
+    /// Release part or all of the remaining deposited fungible balance once.
     pub fn release_escrow(
         env: &Env,
-        _transaction_id: u64,
+        transaction_id: u64,
         to: &Address,
         asset: &Asset,
         amount: i128,
     ) -> Result<(), SettlementError> {
-        asset_utils::transfer_tokens(asset, &env.current_contract_address(), to, amount, env)
+        let contract = env.current_contract_address();
+        ReentrancyGuard::execute(env, &contract, "release_escrow", || {
+            if amount <= 0 {
+                return Err(SettlementError::InvalidAmount);
+            }
+
+            let mut swap = AtomicSwapEngine::get_swap_by_transaction(env, transaction_id)?;
+            let available = Self::check_escrow_balance(env, transaction_id, asset)?;
+            if amount > available {
+                return Err(SettlementError::InsufficientFunds);
+            }
+
+            asset_utils::transfer_tokens(asset, &env.current_contract_address(), to, amount, env)?;
+
+            let mut remaining = amount;
+            let timestamp = env.ledger().timestamp().max(1);
+            for holdings in [&mut swap.seller_escrow, &mut swap.buyer_escrow] {
+                for index in 0..holdings.len() {
+                    if remaining == 0 {
+                        break;
+                    }
+                    let Some(mut holding) = holdings.get(index) else {
+                        continue;
+                    };
+                    if !holding.is_deposited
+                        || holding.released_at.is_some()
+                        || holding.is_nft
+                        || !asset_utils::assets_equal(&holding.asset, asset)
+                    {
+                        continue;
+                    }
+
+                    let released = holding.amount.min(remaining);
+                    holding.amount -= released;
+                    remaining -= released;
+                    if holding.amount == 0 {
+                        holding.released_at = Some(timestamp);
+                    }
+                    holdings.set(index, holding);
+                }
+            }
+
+            AtomicSwapEngine::store_swap(env, &swap)
+        })
     }
 
     /// Get escrow holdings for a transaction

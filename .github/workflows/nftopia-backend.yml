@@ -81,6 +81,21 @@ jobs:
         run: npm ci
 
       # ----------------------------------
+      # Install the local nft-contract-client bindings' own deps
+      #
+      # @nftopia/nft-contract-client is a `file:` dependency, so npm only
+      # symlinks the package itself here — it never installs that package's
+      # own dependencies into nftopia-backend/node_modules. Node/TypeScript
+      # resolve a symlinked package's imports from its real path, so
+      # @stellar/stellar-sdk (imported by the bindings' generated .d.ts
+      # files) has to be installed inside the bindings package itself, or
+      # type-aware lint rules see those imports as unresolved.
+      # ----------------------------------
+      - name: Install nft-contract-client bindings dependencies
+        working-directory: nftopia-stellar/bindings/nft-contract-client
+        run: npm ci
+
+      # ----------------------------------
       # TypeScript Strict Type Check
       # ----------------------------------
       - name: Type check
