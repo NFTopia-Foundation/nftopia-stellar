@@ -10,10 +10,10 @@ describe('moderation.tools', () => {
   const OTHER_ID = '00000000-0000-4000-8000-000000000000';
 
   const contentFlagService = {
-    createFlag: jest.fn(),
+    createFlagIfAboveThreshold: jest.fn(),
   };
 
-  const defaultExpectedEntity: ModerationToolsDeps['expectedEntity'] = {
+  const defaultExpectedEntity: ModerationToolsDeps ['expectedEntity'] = {
     entityType: 'listing',
     entityId: LISTING_ID,
   };
@@ -51,7 +51,11 @@ describe('moderation.tools', () => {
         entityType: 'listing',
         entityId: LISTING_ID,
       };
-      contentFlagService.createFlag.mockResolvedValue(savedFlag);
+      contentFlagService.createFlagIfAboveThreshold.mockResolvedValue({
+        flagged: true,
+        flag: savedFlag,
+        threshold: 0.7,
+      });
 
       const input = {
         entityType: 'listing' as const,
@@ -63,10 +67,40 @@ describe('moderation.tools', () => {
 
       const result = await getTool('flag_content').run(input);
 
-      expect(contentFlagService.createFlag).toHaveBeenCalledWith(input);
+      expect(contentFlagService.createFlagIfAboveThreshold).toHaveBeenCalledWith(
+        input,
+      );
       expect(JSON.parse(result as string)).toEqual({
+        flagged: true,
         id: 'flag-1',
         status: 'pending',
+        entityType: 'listing',
+        entityId: LISTING_ID,
+        threshold: 0.7,
+      });
+    });
+
+    it('reports auto-cleared when confidence is below the threshold', async () => {
+      contentFlagService.createFlagIfAboveThreshold.mockResolvedValue({
+        flagged: false,
+        threshold: 0.7,
+      });
+
+      const input = {
+        entityType: 'listing' as const,
+        entityId: LISTING_ID,
+        reason: 'Low confidence signal',
+        severity: 'low' as const,
+        confidence: 0.3,
+      };
+
+      const result = await getTool('flag_content').run(input);
+
+      expect(JSON.parse(result as string)).toEqual({
+        flagged: false,
+        autoCleared: true,
+        confidence: 0.3,
+        threshold: 0.7,
         entityType: 'listing',
         entityId: LISTING_ID,
       });
@@ -85,7 +119,7 @@ describe('moderation.tools', () => {
           confidence: 0.5,
         }),
       ).rejects.toThrow(/does not match/);
-      expect(contentFlagService.createFlag).not.toHaveBeenCalled();
+      expect(contentFlagService.createFlagIfAboveThreshold).not.toHaveBeenCalled();
     });
 
     it('rejects a flag for a different entityType than the one under review', async () => {
@@ -101,7 +135,7 @@ describe('moderation.tools', () => {
           confidence: 0.5,
         }),
       ).rejects.toThrow(/does not match/);
-      expect(contentFlagService.createFlag).not.toHaveBeenCalled();
+      expect(contentFlagService.createFlagIfAboveThreshold).not.toHaveBeenCalled();
     });
 
     it('validates entityId as a uuid', () => {
@@ -144,7 +178,9 @@ describe('moderation.tools', () => {
     });
 
     it('propagates a failure from ContentFlagService rather than swallowing it', async () => {
-      contentFlagService.createFlag.mockRejectedValue(new Error('db down'));
+      contentFlagService.createFlagIfAboveThreshold.mockRejectedValue(
+        new Error('db down'),
+      );
 
       await expect(
         getTool('flag_content', {
@@ -167,7 +203,11 @@ describe('moderation.tools', () => {
         entityType: 'nft',
         entityId: OTHER_ID,
       };
-      contentFlagService.createFlag.mockResolvedValue(savedFlag);
+      contentFlagService.createFlagIfAboveThreshold.mockResolvedValue({
+        flagged: true,
+        flag: savedFlag,
+        threshold: 0.7,
+      });
       const toolLogger = jest.fn();
 
       const tools = buildModerationTools({
@@ -191,13 +231,15 @@ describe('moderation.tools', () => {
       expect(toolLogger).toHaveBeenCalledWith(
         'flag_content',
         input,
-        expect.any(String),
+        expect.any(string),
         expect.any(Number),
       );
     });
 
     it('produces a log entry even if the tool invocation fails', async () => {
-      contentFlagService.createFlag.mockRejectedValue(new Error('db down'));
+      contentFlagService.createFlagIfAboveThreshold.mockRejectedValue(
+        new Error('db down'),
+      );
       const toolLogger = jest.fn();
 
       const tools = buildModerationTools({

@@ -5,6 +5,7 @@ import {
   AI_AGENT_SYSTEM_ACTOR_ID,
 } from './entities/content-flag.entity';
 import { AuditAction } from '../../common/audit/audit.service';
+import { ModerationConfigService } from './moderation.config';
 
 describe('ContentFlagService', () => {
   let service: ContentFlagService;
@@ -29,6 +30,11 @@ describe('ContentFlagService', () => {
     logAdminAction: jest.fn(),
   };
 
+  const moderationConfig = {
+    getConfidenceThreshold: jest.fn().mockReturnValue(0.7),
+    meetsThreshold: jest.fn(),
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
     qb.andWhere.mockReturnValue(qb);
@@ -38,10 +44,12 @@ describe('ContentFlagService', () => {
     qb.getCount.mockResolvedValue(0);
     qb.getMany.mockResolvedValue([]);
     contentFlagRepo.createQueryBuilder.mockReturnValue(qb);
+    moderationConfig.getConfidenceThreshold.mockReturnValue(0.7);
 
     service = new ContentFlagService(
       contentFlagRepo as never,
       auditService as never,
+      moderationConfig as unknown as ModerationConfigService,
     );
   });
 
@@ -131,6 +139,72 @@ describe('ContentFlagService', () => {
     });
   });
 
+  describe('createFlagIfAboveThreshold', () => {
+    const baseInput = {
+      entityType: 'listing' as const,
+      entityId: 'listing-1',
+      reason: 'Scam indicators',
+      severity: 'high' as const,
+    };
+
+    it('creates a reviewable flag when confidence meets the threshold', async () => {
+      moderationConfig.getConfidenceThreshold.mockReturnValue(0.7);
+      const input = { ...baseInput, confidence: 0.85 };
+      contentFlagRepo.create.mockReturnValue(input);
+      contentFlagRepo.save.mockResolvedValue({ id: 'flag-1', ...input });
+
+      const result = await service.createFlagIfAboveThreshold(input);
+
+      expect(result.flagged).toBe(true);
+      expect(result.threshold).toBe(0.7);
+      expect(contentFlagRepo.save).toHaveBeenCalled();
+    });
+
+    it('creates a flag at exactly the threshold boundary', async () => {
+      moderationConfig.getConfidenceThreshold.mockReturnValue(0.7);
+      const input = { ...baseInput, confidence: 0.7 };
+      contentFlagRepo.create.mockReturnValue(input);
+      contentFlagRepo.save.mockResolvedValue({ id: 'flag-1', ...input });
+
+      const result = await service.createFlagIfAboveThreshold(input);
+
+      expect(result.flagged).toBe(true);
+      expect(contentFlagRepo.save).toHaveBeenCalled();
+    });
+
+    it('auto-clears and writes nothing when confidence is below the threshold', async () => {
+      moderationConfig.getConfidenceThreshold.mockReturnValue(0.7);
+      const input = { ...baseInput, confidence: 0.3 };
+
+      const result = await service.createFlagIfAboveThreshold(input);
+
+      expect(result.flagged).toBe(false);
+      expect(result.threshold).toBe(0.7);
+      expect(contentFlagRepo.create).not.toHaveBeenCalled();
+      expect(contentFlagRepo.save).not.toHaveBeenCalled();
+      expect(auditService.logAdminAction).not.toHaveBeenCalled();
+    });
+
+    it('respects a lowered configured threshold without a code change', async () => {
+      moderationConfig.getConfidenceThreshold.mockReturnValue(0.2);
+      const input = { ...baseInput, confidence: 0.3 };
+      contentFlagRepo.create.mockReturnValue(input);
+      contentFlagRepo.save.mockResolvedValue({ id: 'flag-1', ...input });
+
+      const result = await service.createFlagIfAboveThreshold(input);
+
+      expect(result.flagged).toBe(true);
+      expect(contentFlagRepo.save).toHaveBeenCalled();
+    });
+  });
+
+  describe('getConfidenceThreshold', () => {
+    it('delegates to ModerationConfigService', () => {
+      moderationConfig.getConfidenceThreshold.mockReturnValue(0.42);
+      expect(service.getConfidenceThreshold()).toBe(0.42);
+    });
+  });
+
   describe('listFlags', () => {
     it('defaults to no status filter and pagination of 50/0', async () => {
       await service.listFlags({});
@@ -192,7 +266,7 @@ describe('ContentFlagService', () => {
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
-    it('transitions a pending flag to reviewed and records reviewedBy/reviewedAt', async () => {
+    it('transitions a pending flag to reviewed and records reviewedBy.reviewedAt', async () => {
       const flag = { id: 'flag-1', status: 'pending' };
       contentFlagRepo.findOne.mockResolvedValue(flag);
       contentFlagRepo.save.mockImplementation((f) => Promise.resolve(f));

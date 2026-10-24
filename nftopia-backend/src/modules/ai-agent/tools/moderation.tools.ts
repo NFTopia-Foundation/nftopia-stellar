@@ -2,12 +2,20 @@ import { betaZodTool } from '@anthropic-ai/sdk/helpers/beta/zod';
 import { z } from 'zod';
 import type { ContentFlagService } from '../content-flag.service';
 import type { ContentFlagEntityType } from '../entities/content-flag.entity';
+import type { ToolLogger } from './tool-set.types';
 
 /**
  * The exact tool names this builder is allowed to return — see
  * marketplace.tools.ts for why this list exists and how it's enforced.
  */
 export const MODERATION_TOOL_NAMES = ['flag_content'] as const;
+
+/**
+ * Default moderation confidence threshold. Results at or above this value
+ * create a reviewable flag; results below are auto-cleared. Overridable via
+ * ConfigService (MODERATION_CONFIDENCE_THRESHOLD).
+ */
+export const DEFAULT_MODERATION_CONFIDENCE_THRESHOLD = 0.7;
 
 export interface ModerationToolsDeps {
   contentFlagService: ContentFlagService;
@@ -19,7 +27,13 @@ export interface ModerationToolsDeps {
    * input" pattern as creator-copilot.tools.ts's expectedNftId (#528).
    */
   expectedEntity: { entityType: ContentFlagEntityType; entityId: string };
-  toolLogger?: import('./tool-set.types').ToolLogger;
+  toolLogger?: ToolLogger;
+}
+
+export interface ModerationFlagResult {
+  flagged: boolean;
+  flag?: { id: string; status: string; entityType: ContentFlagEntityType; entityId: string };
+  threshold: number;
 }
 
 /**
@@ -72,7 +86,7 @@ export function buildModerationTools(deps: ModerationToolsDeps) {
   const flagContent = createTool({
     name: 'flag_content',
     description:
-      'Flag a listing, NFT, or collection for human moderation review — e.g. prohibited imagery, scam indicators, or IP infringement. This does NOT hide or remove the content; it only queues it in content_flags for a human moderator to act on via the admin flags queue.',
+      'Flag a listing, NFT, or collection for human moderation review — e.g. prohibited imagery, scam indicators, or IT infringement. This does NOT hide or remove the content; it only queues it in content_flags for a human moderator to act on via the admin flags queue. Results below the configured confidence threshold are auto-cleared and not queued.',
     inputSchema: z.object({
       entityType: z.enum(['listing', 'nft', 'collection']),
       entityId: z.string().uuid(),
@@ -103,12 +117,24 @@ export function buildModerationTools(deps: ModerationToolsDeps) {
         );
       }
 
-      const flag = await contentFlagService.createFlag(input);
+      const result = await contentFlagService.createFlagIfAboveThreshold(input);
+      if (!result.flagged || !result.flag) {
+        return JSON.stringify({
+          flagged: false,
+          autoCleared: true,
+          confidence: input.confidence,
+          threshold: result.threshold,
+          entityType: input.entityType,
+          entityId: input.entityId,
+        });
+      }
       return JSON.stringify({
-        id: flag.id,
-        status: flag.status,
-        entityType: flag.entityType,
-        entityId: flag.entityId,
+        flagged: true,
+        id: result.flag.id,
+        status: result.flag.status,
+        entityType: result.flag.entityType,
+        entityId: result.flag.entityId,
+        threshold: result.threshold,
       });
     },
   });

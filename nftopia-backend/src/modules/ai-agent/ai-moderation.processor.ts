@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Process, Processor, OnQueueFailed } from '@nestjs/bull';
-import { InjectRepository } from '@nestjs/typeorm';
+import { InjectRepository } from '@nestjs/typekorm';
 import { Repository } from 'typeorm';
 import { isUUID } from 'class-validator';
 import type { Job } from 'bull';
@@ -16,6 +17,10 @@ import {
   type AiModerationJobData,
 } from './listeners/ai-moderation.types';
 import type { ToolLogger } from './tools/tool-set.types';
+
+export const DEFAULT_MODERATION_CONFIDENCE_THRESHOLD = 0.7;
+export const MODERATION_CONFIDENCE_THRESHOLD_ENV_KEY =
+  'AI_MODERATION_CONFIDENCE_THRESHOLD';
 
 const MODERATION_SYSTEM_PROMPT = `You are the NFTopia content moderation agent. Given an NFT \
 listing's name, description, and attributes, decide whether it violates platform policy: \
@@ -54,7 +59,29 @@ export class AiModerationProcessor {
     private readonly stellarNftRepo: Repository<StellarNft>,
     private readonly contentFlagService: ContentFlagService,
     private readonly prometheusService: PrometheusService,
+    private readonly configService: ConfigService,
   ) {}
+
+  /**
+   * Configurable cutoff (env-backed, sane default) above which a moderation
+   * result is considered confident enough to create a reviewable flag.
+   * Results below this threshold are auto-cleared to keep reviewer noise down.
+   */
+  private getConfidenceThreshold(): number {
+    const raw = this.configService.get<string>(
+      MODERATION_CONFIDENCE_THRESHOLD_ENV_KEY,
+    );
+    const parsed = raw === undefined || raw === null ? NaN : Number(raw);
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
+      if (raw !== undefined && raw !== null && raw !== '') {
+        this.logger.warn(
+          `Invalid ${MODERATION_CONFIDENCE_THRESHOLD_ENV_KEY}="${raw}" — falling back to default ${DEFAULT_MODERATION_CONFIDENCE_THRESHOLD}.`,
+        );
+      }
+      return DEFAULT_MODERATION_CONFIDENCE_THRESHOLD;
+    }
+    return parsed;
+  }
 
   /**
    * Structured, DB-free logging for individual tool calls — deliberately
@@ -169,7 +196,7 @@ export class AiModerationProcessor {
     if (!isUUID(listingId)) {
       // Happens for a listing created via the on-chain-settlement path
       // (ENABLE_ONCHAIN_SETTLEMENT), which doesn't persist a `listings`
-      // row and so has no UUID id — flag_content's schema requires one,
+      // row and so has no UUIT id — flag_content's schema requires one,
       // and there is no DB row to attribute a flag to.
       this.logger.warn(
         `Listing ${listingId} was flagged by the moderation agent, but its id is not a ` +
@@ -182,8 +209,23 @@ export class AiModerationProcessor {
 
     try {
       const parsedInput: unknown = flagContentTool.parse(toolUseBlock.input);
+      const threshold = this.getConfidenceThreshold();
+      const confidence = this.extractConfidence(parsedInput);
+
+      if (confidence < threshold) {
+        this.logger.log(
+          `Listing ${listingId}: moderation confidence ${confidence} is below threshold ` +
+            `${threshold} — auto-clearing (no reviewable flag created).`,
+        );
+        this.prometheusService.incrementAiModerationJobProcessed('auto_cleared');
+        return;
+      }
+
       await flagContentTool.run(parsedInput);
-      this.logger.log(`Listing ${listingId} flagged for moderation review.`);
+      this.logger.log(
+        `Listing ${listingId} flagged for moderation review ` +
+          `(confidence ${confidence} >= threshold ${threshold}).`,
+      );
       this.prometheusService.incrementAiModerationJobProcessed('flagged');
     } catch (err) {
       this.logger.error(
@@ -192,6 +234,25 @@ export class AiModerationProcessor {
       this.prometheusService.incrementAiModerationJobProcessed('error');
       throw err;
     }
+  }
+
+  /**
+   * Reads the confidence score off the parsed flag_content tool input,
+   * defaulting to 0 when absent so an unscored result never auto-flags.
+   */
+  private extractConfidence(parsedInput: unknown): number {
+    if (
+      parsedInput !== null &&
+      typeof parsedInput === 'object' &&
+      'confidence' in parsedInput
+    ) {
+      const value = (parsedInput as { confidence?: unknown }).confidence;
+      const numeric = typeof value === 'number' ? value : Number(value);
+      if (Number.isFinite(numeric)) {
+        return numeric;
+      }
+    }
+    return 0;
   }
 
   @OnQueueFailed()

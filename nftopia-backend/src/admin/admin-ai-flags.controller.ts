@@ -1,3 +1,4 @@
+import { ConfigService } from '@nestjs/config';
 import {
   Body,
   Controller,
@@ -18,6 +19,8 @@ import { RequestUser } from '../common/audit/audit.decorator';
 import { ListContentFlagsQueryDto } from './dto/list-content-flags-query.dto';
 import { ResolveContentFlagDto } from './dto/resolve-content-flag.dto';
 
+const DEFAULT_MODERATION_CONFIDENCE_THRESHOLD = 0.7;
+
 interface AuthUser {
   userId: string;
   username?: string;
@@ -31,7 +34,10 @@ interface AuthUser {
 @Controller('admin/ai/flags')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class AdminAiFlagsController {
-  constructor(private readonly contentFlagService: ContentFlagService) {}
+  constructor(
+    private readonly contentFlagService: ContentFlagService,
+    private readonly configService: ConfigService,
+  ) {}
 
   @Get()
   @Roles(UserRole.ADMIN, UserRole.MODERATOR)
@@ -42,6 +48,22 @@ export class AdminAiFlagsController {
       limit: query.limit,
       offset: query.offset,
     });
+  }
+
+  /**
+   * Exposes the currently-configured moderation confidence threshold so admins
+   * can see where the auto-flag / auto-clear boundary sits without reading env
+   * config directly.
+   */
+  @Get('config')
+  @Roles(UserRole.ADMIN, UserRole.MODERATOR)
+  getConfig() {
+    return {
+      confidenceThreshold: this.configService.get<number>(
+        'MODERATION_CONFIDENCE_THRESHOLD',
+        DEFAULT_MODERATION_CONFIDENCE_THRESHOLD,
+      ),
+    };
   }
 
   @Patch(':id')
