@@ -12,7 +12,7 @@ import { AuctionStatus } from '../interfaces/auction.interface';
 
 @Entity('auctions')
 export class Auction {
-  @PrimaryGeneratedColumn('.uuid')
+  @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column()
@@ -25,7 +25,7 @@ export class Auction {
   sellerId?: string | null;
 
   @ManyToOne(() => User, { eager: true, nullable: true })
-  @JoinColumn({ type: 'sellerId' })
+  @JoinColumn({ name: 'sellerId' })
   seller?: User | null;
 
   @Column({ type: 'decimal', precision: 20, scale: 7 })

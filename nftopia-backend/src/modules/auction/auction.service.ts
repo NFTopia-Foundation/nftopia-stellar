@@ -5,7 +5,7 @@ import {
   ForbiddenException,
   Logger,
 } from '@nestjs/common';
-import { InjectRepository } from '@typeorm/typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, In, Repository } from 'typeorm';
 import { Auction } from './entities/auction.entity';
 import { Bid } from './entities/bid.entity';
@@ -13,7 +13,6 @@ import { CreateAuctionDto } from './dto/create-auction.dto';
 import { PlaceBidDto } from './dto/place-bid.dto';
 import { AuctionQueryDto } from './dto/auction-query.dto';
 import { AuctionStatus } from './interfaces/auction.interface';
-import { Cron, CronExpression } from '@nestjs/schedule';
 import { StellarNft } from '../../nft/entities/stellar-nft.entity';
 import { User } from '../../users/user.entity';
 import { ConfigService } from '@nestjs/config';
@@ -107,8 +106,7 @@ export class AuctionService {
       startTime: startTime ? new Date(startTime) : now,
       endTime: new Date(endTime),
       status: AuctionStatus.ACTIVE,
-      minBidIncrement:
-        createDto.minBidIncrement ?? null,
+      minBidIncrement: createDto.minBidIncrement ?? null,
       minBidIncrementPercent: createDto.minBidIncrementPercent ?? null,
     });
 
@@ -198,7 +196,7 @@ export class AuctionService {
       .where(
         new Brackets((where) => {
           parsed.forEach(({ contractId, tokenId }, index) => {
-            where.orOrWhere(
+            where.orWhere(
               `(a.nftContractId = :contractId${index} AND a.nftTokenId = :tokenId${index})`,
               {
                 [`contractId${index}`]: contractId,
@@ -299,7 +297,7 @@ export class AuctionService {
     return this.getDefaultMinBidIncrement();
   }
 
-  async cancelAmction(auctionId: string, callerId: string) {
+  async cancelAuction(auctionId: string, callerId: string) {
     const auction = await this.findOne(auctionId);
     if (auction.sellerId !== callerId)
       throw new ForbiddenException('Only seller can cancel');
@@ -370,63 +368,10 @@ export class AuctionService {
     auction.currentPrice = highest.amount;
     auction.status =
       transaction.state === TransactionState.COMPLETED
-        ? AuctionStatus.SETTLE
+        ? AuctionStatus.SETTLED
         : AuctionStatus.COMPLETED;
     await this.auctionRepo.save(auction);
 
-    await this.notifyAuctionWon(
-      auction,
-      highest.bidderId,
-      Number(highest.amount),
-    );
-
-    return {
-      settled: transaction.state === TransactionState.COMPLETED,
-      winner: highest.bidderId,
-      amount: highest.amount,
-      transactionId: transaction.id,
-      transactionState: transaction.state,
-    };
-  }
-
-  @Cron(CronExpression.EVERY_MINUTE)
-  async handleExpiredAuctions() {
-    this.logger.debug('Checking for expired auctions to settle');
-    const now = new Date();
-    const expired = await this.auctionRepo
-      .createQueryBuilder('a')
-      .where('a.status = :status', { status: AuctionStatus.ACTIVE })
-      .andWhere('a.endTime <= :now', { now })
-      .getMany();
-    for (const a of expired) {
-      try {
-        await this.settleAuction(a.id);
-      } catch (e) {
-        this.logger.error(
-          `Failed to settle auction ${a.id}: ${(e as Error).message}`,
-        );
-      }
-    }
-  }
-
-  /**
-   * Notify the winning bidder that they won — real-time
-   */
-  private async notifyAuctionWon(
-    auction: Auction,
-    winnerId: string,
-    amount: number,
-  ) {
-    try {
-      await this.notificationsService.notifyAuctionWon(
-        winnerId,
-        auction.id,
-        amount,
-      );
-    } catch (e) {
-      this.logger.error(
-        `Failed to notify winner for auction ${auction.id}: ${(e as Error).message}`,
-      );
-    }
+    await this.notifyAuctionWon(auction, highest.bidderId, Number(highest.amount));
   }
 }
