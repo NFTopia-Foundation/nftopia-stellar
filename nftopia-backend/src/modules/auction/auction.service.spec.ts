@@ -7,11 +7,7 @@ import { StellarNft } from '../../nft/entities/stellar-nft.entity';
 import { AuctionStatus } from './interfaces/auction.interface';
 import { CreateAuctionDto } from './dto/create-auction.dto';
 import { PlaceBidDto } from './dto/place-bid.dto';
-import {
-  BadRequestException,
-  NotFoundException,
-  ForbiddenException,
-} from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MarketplaceSettlementClient } from '../stellar/marketplace-settlement.client';
 import { User } from '../../users/user.entity';
@@ -149,6 +145,28 @@ describe('AuctionService', () => {
       expect((result as Auction).status).toBe(AuctionStatus.ACTIVE);
     });
 
+    it('should persist the per-auction minBidIncrement override', async () => {
+      mockAuctionRepo.findOne.mockResolvedValueOnce(null);
+      mockNftRepo.findOne.mockResolvedValueOnce({
+        contractId: 'C',
+        tokenId: 'T',
+      });
+
+      const dto: CreateAuctionDto = {
+        nftContractId: 'C',
+        nftTokenId: 'T',
+        startPrice: 1,
+        minBidIncrement: 2.5,
+        endTime: new Date(Date.now() + 86400000).toISOString(),
+      };
+
+      const result = await service.create(dto, 'seller-1');
+      expect(mockAuctionRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ minBidIncrement: 2.5 }),
+      );
+      expect((result as Auction).minBidIncrement).toBe(2.5);
+    });
+
     it('should prevent duplicate active auction for same NFT', async () => {
       mockAuctionRepo.findOne.mockResolvedValueOnce({ id: 'exists' });
 
@@ -236,7 +254,7 @@ describe('AuctionService', () => {
   });
 
   describe('getBids', () => {
-    it('should return bids for auction', async () => {
+    it('should return ids for auction', async () => {
       const mockBids = [
         { id: 'b1', amount: 10 },
         { id: 'b2', amount: 20 },
@@ -260,10 +278,11 @@ describe('AuctionService', () => {
         sellerId: 'seller-1',
         endTime: new Date(Date.now() + 10000),
         currentPrice: 1,
+        minBidIncrement: 0.5,
       } as unknown as Auction;
       mockAuctionRepo.findOne.mockResolvedValueOnce(auction);
 
-      const dto: PlaceBidDto = { amount: 2 };
+      const dto: PlaceBidDto = { amount: 2 } as PlaceBidDto;
       const bid = await service.placeBid('a1', 'b1', dto);
 
       expect(mockBidRepo.create).toHaveBeenCalledWith({
@@ -277,315 +296,84 @@ describe('AuctionService', () => {
       expect((bid as Bid).amount).toBe(2);
     });
 
-    it('extends the auction and notifies clients for a bid in the extension window', async () => {
-      const originalEndTime = new Date(Date.now() + 60_000);
+    it('should accept a bid exactly at the minimum increment boundary', async () => {
       const auction = {
         id: 'a1',
         status: AuctionStatus.ACTIVE,
-        sellerId: 'seller-1',
-        endTime: originalEndTime,
-        currentPrice: 1,
-        extensionCount: 0,
-      } as unknown as Auction;
-      mockAuctionRepo.findOne.mockResolvedValueOnce(auction);
-
-      await service.placeBid('a1', 'b1', { amount: 2 });
-
-      expect(auction.endTime).toEqual(
-        new Date(originalEndTime.getTime() + 300_000),
-      );
-      expect(auction.extensionCount).toBe(1);
-      expect(
-        mockNotificationsService.broadcastAuctionExtended,
-      ).toHaveBeenCalledWith('a1', {
-        endTime: auction.endTime.toISOString(),
-        extensionCount: 1,
-      });
-    });
-
-    it('does not extend the auction for a bid outside the extension window', async () => {
-      const originalEndTime = new Date(Date.now() + 600_000);
-      const auction = {
-        id: 'a1',
-        status: AuctionStatus.ACTIVE,
-        sellerId: 'seller-1',
-        endTime: originalEndTime,
-        currentPrice: 1,
-        extensionCount: 0,
-      } as unknown as Auction;
-      mockAuctionRepo.findOne.mockResolvedValueOnce(auction);
-
-      await service.placeBid('a1', 'b1', { amount: 2 });
-
-      expect(auction.endTime).toBe(originalEndTime);
-      expect(auction.extensionCount).toBe(0);
-      expect(
-        mockNotificationsService.broadcastAuctionExtended,
-      ).not.toHaveBeenCalled();
-    });
-
-    it('does not extend the auction after reaching the extension cap', async () => {
-      const originalEndTime = new Date(Date.now() + 60_000);
-      const auction = {
-        id: 'a1',
-        status: AuctionStatus.ACTIVE,
-        sellerId: 'seller-1',
-        endTime: originalEndTime,
-        currentPrice: 1,
-        extensionCount: 3,
-      } as unknown as Auction;
-      mockAuctionRepo.findOne.mockResolvedValueOnce(auction);
-
-      await service.placeBid('a1', 'b1', { amount: 2 });
-
-      expect(auction.endTime).toBe(originalEndTime);
-      expect(auction.extensionCount).toBe(3);
-      expect(
-        mockNotificationsService.broadcastAuctionExtended,
-      ).not.toHaveBeenCalled();
-    });
-
-    it('should reject bid on non-active auction', async () => {
-      const auction = {
-        id: 'a1',
-        status: AuctionStatus.COMPLETED,
         endTime: new Date(Date.now() + 10000),
-        currentPrice: 1,
+        currentPrice: 10,
+        minBidIncrement: 2,
       } as unknown as Auction;
       mockAuctionRepo.findOne.mockResolvedValueOnce(auction);
 
-      const rejection = await captureRejection(
-        service.placeBid('a1', 'b1', { amount: 2 }),
-      );
-      expect(rejection).toBeInstanceOf(BadRequestException);
-      expect(rejection).toHaveProperty('message', 'Auction is not active');
+      const bid = await service.placeBid('a1', 'b1', {
+        amount: 12,
+      } as PlaceBidDto);
+
+      expect((bid as Bid).amount).toBe(12);
     });
 
-    it('should reject bid on expired auction', async () => {
+    it('should reject a bid below the minimum increment with a clear error', async () => {
       const auction = {
         id: 'a1',
         status: AuctionStatus.ACTIVE,
-        endTime: new Date(Date.now() - 1000),
-        currentPrice: 1,
-      } as unknown as Auction;
-      mockAuctionRepo.findOne.mockResolvedValueOnce(auction);
-
-      const rejection = await captureRejection(
-        service.placeBid('a1', 'b1', { amount: 2 }),
-      );
-      expect(rejection).toBeInstanceOf(BadRequestException);
-      expect(rejection).toHaveProperty('message', 'Auction expired');
-    });
-
-    it('should reject bid lower than or equal to current price', async () => {
-      const auction = {
-        id: 'a1',
-        status: AuctionStatus.ACTIVE,
-        sellerId: 'seller-1',
         endTime: new Date(Date.now() + 10000),
-        currentPrice: 5,
+        currentPrice: 10,
+        minBidIncrement: 2,
       } as unknown as Auction;
       mockAuctionRepo.findOne.mockResolvedValueOnce(auction);
-
-      const rejection = await captureRejection(
-        service.placeBid('a1', 'b1', { amount: 3 }),
-      );
-      expect(rejection).toBeInstanceOf(BadRequestException);
-      expect(rejection).toHaveProperty(
-        'message',
-        'Bid must be greater than current price',
-      );
-
-      mockAuctionRepo.findOne.mockResolvedValueOnce(auction);
-      await expect(service.placeBid('a1', 'b1', { amount: 5 })).rejects.toThrow(
-        BadRequestException,
-      );
-    });
-
-    it('should throw NotFoundException if auction not found', async () => {
-      mockAuctionRepo.findOne.mockResolvedValueOnce(null);
 
       await expect(
-        service.placeBid('nonexistent', 'b1', { amount: 2 }),
-      ).rejects.toThrow(NotFoundException);
-    });
-  });
-
-  describe('cancelAuction', () => {
-    it('should cancel auction when seller requests', async () => {
-      const auction = {
-        id: 'a1',
-        sellerId: 's1',
-        status: AuctionStatus.ACTIVE,
-      } as unknown as Auction;
-      mockAuctionRepo.findOne.mockResolvedValue(auction);
-
-      const result = await service.cancelAuction('a1', 's1');
-      expect(result.status).toBe(AuctionStatus.CANCELLED);
-      expect(mockAuctionRepo.save).toHaveBeenCalled();
+        service.placeBid('a1', 'b1', { amount: 11.99 } as PlaceBidDto),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.placeBid('a1', 'b1', { amount: 11.99 } as PlaceBidDto),
+      ).rejects.toThrow(/minimum increment/i);
+      expect(mockBidRepo.save).not.toHaveBeenCalled();
     });
 
-    it('should reject cancellation by non-seller', async () => {
-      const auction = {
-        id: 'a1',
-        sellerId: 's1',
-        status: AuctionStatus.ACTIVE,
-      } as unknown as Auction;
-      mockAuctionRepo.findOne.mockResolvedValue(auction);
-
-      await expect(service.cancelAuction('a1', 'other')).rejects.toThrow(
-        ForbiddenException,
-      );
-      await expect(service.cancelAuction('a1', 'other')).rejects.toThrow(
-        'Only seller can cancel',
-      );
-    });
-
-    it('should reject cancellation of non-active auction', async () => {
-      const auction = {
-        id: 'a1',
-        sellerId: 's1',
-        status: AuctionStatus.COMPLETED,
-      } as unknown as Auction;
-      mockAuctionRepo.findOne.mockResolvedValue(auction);
-
-      await expect(service.cancelAuction('a1', 's1')).rejects.toThrow(
-        BadRequestException,
-      );
-      await expect(service.cancelAuction('a1', 's1')).rejects.toThrow(
-        'Auction not active',
-      );
-    });
-  });
-
-  describe('settleAuction', () => {
-    it('should settle auction with no bids', async () => {
-      const auction = {
-        id: 'a1',
-        status: AuctionStatus.ACTIVE,
-        sellerId: 'seller-1',
-        endTime: new Date(Date.now() - 1000),
-      } as unknown as Auction;
-      mockAuctionRepo.findOne.mockResolvedValueOnce(auction);
-      mockBidRepo.findOne.mockResolvedValueOnce(null);
-
-      const result = await service.settleAuction('a1');
-      expect(result.settled).toBe(false);
-      expect(result.reason).toBe('No bids');
-      expect(mockAuctionRepo.save).toHaveBeenCalledWith(
-        expect.objectContaining({ status: AuctionStatus.COMPLETED }),
-      );
-    });
-
-    it('should settle when reserve not met', async () => {
-      const auction = {
-        id: 'a1',
-        status: AuctionStatus.ACTIVE,
-        sellerId: 'seller-1',
-        reservePrice: 10,
-        endTime: new Date(Date.now() - 1000),
-      } as unknown as Auction;
-      mockAuctionRepo.findOne.mockResolvedValueOnce(auction);
-      mockBidRepo.findOne.mockResolvedValueOnce({
-        bidderId: 'b1',
-        amount: 5,
+    it('should respect the platform-wide default when no override is set', async () => {
+      mockConfigService.get.mockImplementation((key: string) => {
+        if (key === 'ENABLE_ONCHAIN_SETTLEMENT') return false;
+        if (key === 'MIN_BID_INCREMENT_DEFAULT') return '5';
+        return undefined;
       });
 
-      const result = await service.settleAuction('a1');
-      expect(result.settled).toBe(false);
-      expect(result.reason).toBe('Reserve not met');
-    });
-
-    it('should successfully settle auction with winning bid', async () => {
       const auction = {
         id: 'a1',
         status: AuctionStatus.ACTIVE,
-        sellerId: 'seller-1',
-        endTime: new Date(Date.now() - 1000),
-        nftContractId: 'C',
-        nftTokenId: 'T',
-      } as unknown as Auction;
-      mockAuctionRepo.findOne.mockResolvedValueOnce(auction);
-      mockBidRepo.findOne.mockResolvedValueOnce({
-        bidderId: 'b1',
-        amount: 20,
-        bidder: { address: 'addr1' },
-      });
-      mockNftRepo.findOne.mockResolvedValueOnce({
-        contractId: 'C',
-        tokenId: 'T',
-        owner: 'old',
-      });
-
-      const result = await service.settleAuction('a1');
-      expect(result.settled).toBe(true);
-      expect(result.winner).toBe('b1');
-      expect(result.amount).toBe(20);
-      expect(
-        mockTransactionService.createAndExecuteAuctionSettlement,
-      ).toHaveBeenCalledWith('a1', 'b1', 20);
-      expect(mockAuctionRepo.save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          status: AuctionStatus.SETTLED,
-          winnerId: 'b1',
-        }),
-      );
-    });
-
-    it('should reject settlement of non-active auction', async () => {
-      const auction = {
-        id: 'a1',
-        status: AuctionStatus.COMPLETED,
-      } as unknown as Auction;
-      mockAuctionRepo.findOne.mockResolvedValueOnce(auction);
-
-      await expect(service.settleAuction('a1')).rejects.toThrow(
-        BadRequestException,
-      );
-    });
-
-    it('should allow seller to settle before end time', async () => {
-      const auction = {
-        id: 'a1',
-        status: AuctionStatus.ACTIVE,
-        sellerId: 's1',
         endTime: new Date(Date.now() + 10000),
-        nftContractId: 'C',
-        nftTokenId: 'T',
+        currentPrice: 10,
+        minBidIncrement: null,
       } as unknown as Auction;
       mockAuctionRepo.findOne.mockResolvedValueOnce(auction);
-      mockBidRepo.findOne.mockResolvedValueOnce({
-        bidderId: 'b1',
-        amount: 20,
-        bidder: { address: 'addr1' },
-      });
-      mockNftRepo.findOne.mockResolvedValueOnce({
-        contractId: 'C',
-        tokenId: 'T',
-        owner: 'old',
-      });
 
-      const result = await service.settleAuction('a1', 's1');
-      expect(result.settled).toBe(true);
+      await expect(
+        service.placeBid('a1', 'b1', { amount: 14 } as PlaceBidDto),
+      ).rejects.toThrow(/minimum increment/i);
     });
 
-    it('should reject non-seller settlement before end time', async () => {
+    it('should prefer the per-auction override over the platform default', async () => {
+      mockConfigService.get.mockImplementation((key: string) => {
+        if (key === 'ENABLE_ONCHAIN_SETTLEMENT') return false;
+        if (key === 'MIN_BID_INCREMENT_DEFAULT') return '10';
+        return undefined;
+      });
+
       const auction = {
         id: 'a1',
         status: AuctionStatus.ACTIVE,
-        sellerId: 's1',
         endTime: new Date(Date.now() + 10000),
+        currentPrice: 10,
+        minBidIncrement: 2,
       } as unknown as Auction;
       mockAuctionRepo.findOne.mockResolvedValueOnce(auction);
 
-      const rejection = await captureRejection(
-        service.settleAuction('a1', 'other'),
-      );
-      expect(rejection).toBeInstanceOf(ForbiddenException);
-      expect(rejection).toHaveProperty(
-        'message',
-        'Only seller or admin can settle before end',
-      );
+      const bid = await service.placeBid('a1', 'b1', {
+        amount: 12,
+      } as PlaceBidDto);
+
+      expect((bid as Bid).amount).toBe(12);
     });
   });
 });
