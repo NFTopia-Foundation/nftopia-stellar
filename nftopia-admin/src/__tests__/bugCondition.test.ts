@@ -4,7 +4,7 @@
  * Property 1: Bug Condition — No Starknet Strings in i18n and Rendered Output
  * Validates: Requirements 1.1, 1.2, 1.3, 1.4, 1.5
  *
- * CRITICAL: This test is EXPECTED TO FAIL on unfixed code.
+ * CRITICAL: This test is EXPECTED TO CURRENTLY FAIL on unfixed code.
  * Failure confirms the bug exists. DO NOT fix the code to make this pass.
  */
 
@@ -37,10 +37,6 @@ describe('Bug Condition Exploration — Property 1: No Starknet strings', () => 
 
     it('should have no leaf values containing "starknet" (case-insensitive)', () => {
       const violations = enLeaves.filter(({ value }) => isBugCondition(value))
-      if (violations.length > 0) {
-        const details = violations.map(({ path, value }) => `  en.json ${path} = "${value}"`).join('\n')
-        throw new Error(`Bug condition found in en.json — ${violations.length} violation(s):\n${details}`)
-      }
       expect(violations).toHaveLength(0)
     })
   })
@@ -50,10 +46,6 @@ describe('Bug Condition Exploration — Property 1: No Starknet strings', () => 
 
     it('should have no leaf values containing "starknet" (case-insensitive)', () => {
       const violations = esLeaves.filter(({ value }) => isBugCondition(value))
-      if (violations.length > 0) {
-        const details = violations.map(({ path, value }) => `  es.json ${path} = "${value}"`).join('\n')
-        throw new Error(`Bug condition found in es.json — ${violations.length} violation(s):\n${details}`)
-      }
       expect(violations).toHaveLength(0)
     })
   })
@@ -63,19 +55,16 @@ describe('Bug Condition Exploration — Property 1: No Starknet strings', () => 
       const url = explorerUrl('abc123', 'tx')
       const lower = url.toLowerCase()
       const hasBug = lower.includes('starknet') || lower.includes('voyager') || lower.includes('starkscan')
-      if (hasBug) {
-        throw new Error(`Bug condition found in explorerUrl("abc123", "tx") = "${url}" — contains Starknet explorer reference`)
-      }
       expect(hasBug).toBe(false)
     })
+  })
+
+  describe('explorerUrl helper (account)', () => {
 
     it('should not return an account URL containing "starknet", "voyager", or "starkscan"', () => {
       const url = explorerUrl('abc123', 'account')
       const lower = url.toLowerCase()
       const hasBug = lower.includes('starknet') || lower.includes('voyager') || lower.includes('starkscan')
-      if (hasBug) {
-        throw new Error(`Bug condition found in explorerUrl("abc123", "account") = "${url}" — contains Starknet explorer reference`)
-      }
       expect(hasBug).toBe(false)
     })
   })
