@@ -31,6 +31,52 @@ export function estimateTokens(text: string): number {
 }
 
 /**
+ * Scrubs common PII patterns from a message before it is persisted to
+ * `chat_messages`. Redaction applies to stored content only; the unredacted
+ * text is still sent upstream for the live model response.
+ *
+ * Scope (intentionally conservative to avoid mangling normal marketplace
+ * questions such as "NFTs under 50 XLM" or "token id 12345"):
+ *   - email addresses
+ *   - phone numbers (US/international formats with separators)
+ *   - payment-card / long numeric sequences (13-19 consecutive digits)
+ *   - Stellar secret keys (S followed by 55 base-32 chars)
+ *   - US SSN (xxx-xx-xxxx)
+ *
+ * Limitations: regex-based, not a full PII classifier. Novel or obfuscated
+ * PII may slip through; this is defense-in-depth, not a compliance guarantee.
+ */
+export function redactPii(text: string): string {
+  if (!text) return text;
+
+  let out = text;
+
+  // Email addresses
+  out = out.replace(
+    /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g,
+    '[REDACTED_EMAIL]',
+  );
+
+  // Stellar secret keys (S + 55 base-32 chars)
+  out = out.replace(/\bS[A-Z2-7]{55}\b/g, '[REDACTED_SECRET_KEY]');
+
+  // Payment card / long numeric sequences (13-19 consecutive digits)
+  out = out.replace(/\b\d{13,19}\b/g, '[REDACTED_NUMBER]');
+
+  // US SSN
+  out = out.replace(/\b\d{3}-\d{2}-\d{4}\b/g, '[REDACTED_SSN]');
+
+  // Phone numbers (US/international with separators). Separators are required
+  // between groups so bare numeric IDs are not falsely redacted.
+  out = out.replace(
+    /(?:\+?\d{1,3}[-.\s])?\(?\d{3}\)[-.\s]\d{3}[-.\s]\d{4}\b/g,
+    '[REDACTED_PHONE]',
+  );
+
+  return out;
+}
+
+/**
  * Condenses a list of older chat messages into a concise summary pair to reduce
  * token usage while maintaining context and proper user/assistant turn alternation.
  */
@@ -227,7 +273,10 @@ export class ChatSessionService {
         this.messageRepo.create({
           sessionId,
           role: 'user',
-          content: userMessage,
+          // Redact PII before persistence: stored history must not retain
+          // sensitive user-entered data (emails, phones, keys, cards). The
+          // unredacted text is still sent upstream for the live response.
+          content: redactPii(userMessage),
         }),
         this.messageRepo.create({
           sessionId,
