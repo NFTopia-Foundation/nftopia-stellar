@@ -1,16 +1,37 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Wifi, WifiOff, RefreshCw } from 'lucide-react';
+import { Wifi, WifiOff, RefreshCw, ListTodo } from 'lucide-react';
+import { useOfflineQueueStore } from '@/stores/offlineQueueStore';
 
 export default function OfflinePage() {
   const [isOnline, setIsOnline] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
+  const pending = useOfflineQueueStore((s) => s.queue.length);
 
   useEffect(() => {
     setIsOnline(navigator.onLine);
 
-    const handleOnline = () => setIsOnline(true);
+    const handleOnline = () => {
+      setIsOnline(true);
+      // Replay any queued offline actions in insertion order once connectivity
+      // returns. The executor is best-effort; failures are retried/dropped by
+      // the store's conflict handling.
+      const executor = async (item: { action: string; payload: Record<string, unknown> }) => {
+        const { usePreferencesStore } = await import('@/lib/stores/preferences-store');
+        const store = usePreferencesStore.getState();
+        const id = String(item.payload.id);
+        const type = (item.payload.itemType as 'nft' | 'collection') || 'nft';
+        if (item.action === 'favorite') {
+          if (type === 'collection') store.addToFavorites(id);
+          else store.addToFavoriteNFTs(id);
+        } else if (item.action === 'unfavorite') {
+          if (type === 'collection') store.removeFromFavorites(id);
+          else store.removeFromFavoriteNFTs(id);
+        }
+      };
+      void useOfflineQueueStore.getState().processQueue(executor);
+    };
     const handleOffline = () => setIsOnline(false);
 
     window.addEventListener('online', handleOnline);
@@ -77,7 +98,16 @@ export default function OfflinePage() {
             {isRetrying ? 'Retrying...' : 'Try Again'}
           </button>
           
-          <div className="text-sm text-gray-400">
+          {pending > 0 && (
+          <div className="mb-4 flex items-center justify-center gap-2 rounded-lg bg-yellow-500/20 px-3 py-2 text-sm text-yellow-200">
+            <ListTodo className="w-4 h-4" />
+            <span>
+              {pending} action{pending === 1 ? '' : 's'} queued — will replay when you're back online.
+            </span>
+          </div>
+        )}
+
+        <div className="text-sm text-gray-400">
             <p>While offline, you can still:</p>
             <ul className="mt-2 space-y-1">
               <li>• View cached NFT collections</li>

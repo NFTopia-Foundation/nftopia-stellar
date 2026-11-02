@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Heart } from "lucide-react";
 import { useFavorites } from "@/lib/stores/preferences-store";
+import { useOfflineQueueStore } from "@/stores/offlineQueueStore";
 import { telemetry } from "@/lib/telemetry";
 import { EVENT_NAMES } from "@/lib/telemetry/events";
 import { cn } from "@/lib/utils";
@@ -43,6 +44,17 @@ export function FavoriteButton({
     (e: React.MouseEvent<HTMLButtonElement>) => {
       e.preventDefault();
       e.stopPropagation();
+
+      // Offline: queue the write instead of failing outright; replay happens
+      // automatically once connectivity is restored (see offline page / store).
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        useOfflineQueueStore.getState().enqueue(
+          active ? 'unfavorite' : 'favorite',
+          { id, itemType },
+        );
+        if (onToggle) onToggle(!active);
+        return;
+      }
 
       toggleFavorite(id, itemType);
       const newFavoriteState = !active;
