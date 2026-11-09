@@ -4,6 +4,7 @@ import {
   ChatSessionService,
   estimateTokens,
   summarizeHistory,
+  redactPii,
 } from './chat-session.service';
 import { ChatMessage } from './entities/chat-message.entity';
 
@@ -466,6 +467,44 @@ describe('ChatSessionService', () => {
       expect(defaultService.summarizationThreshold).toBe(10);
       expect(defaultService.maxHistoryTokens).toBe(4000);
       expect(defaultService.recentMessagesCount).toBe(6);
+    });
+  });
+
+  describe('redactPii', () => {
+    it('redacts email addresses', () => {
+      expect(redactPii('contact me at alice@example.com please')).toBe(
+        'contact me at [REDACTED_EMAIL] please',
+      );
+    });
+
+    it('redacts phone numbers with separators', () => {
+      expect(redactPii('call +1 (555) 123-4567 now')).toContain(
+        '[REDACTED_PHONE]',
+      );
+    });
+
+    it('redacts long numeric sequences (cards/keys)', () => {
+      expect(redactPii('card 4111111111111111 expired')).toBe(
+        'card [REDACTED_NUMBER] expired',
+      );
+    });
+
+    it('redacts Stellar secret keys', () => {
+      const secret = 'S' + 'A'.repeat(55);
+      expect(redactPii(`key ${secret}`)).toBe('key [REDACTED_SECRET_KEY]');
+    });
+
+    it('redacts US SSN', () => {
+      expect(redactPii('ssn 123-45-6789 here')).toBe('ssn [REDACTED_SSN] here');
+    });
+
+    it('does not mangle normal marketplace questions', () => {
+      const q = 'Show me Bored Ape NFTs under 50 XLM with token id 42';
+      expect(redactPii(q)).toBe(q);
+    });
+
+    it('returns empty/falsy input unchanged', () => {
+      expect(redactPii('')).toBe('');
     });
   });
 });
