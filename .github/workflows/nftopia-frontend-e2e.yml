@@ -22,7 +22,10 @@ env:
 jobs:
   e2e:
     name: E2E (auction bid flow)
-    runs-on: ubuntu-latest
+    # Pin to 24.04: Playwright's browser install does not yet support the
+    # ubuntu-26.04 runner image ("Playwright does not support chromium on
+    # ubuntu26.04-x64"), which made this job fail before any test ran.
+    runs-on: ubuntu-24.04
 
     defaults:
       run:
