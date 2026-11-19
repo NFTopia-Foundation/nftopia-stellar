@@ -18,8 +18,6 @@ export interface ResolveVerificationDialogProps {
   error?: string | null
   onClose: () => void
   onSubmit: (payload: { action: 'approve' | 'reject'; reason?: string }) => void | Promise<void>
-  approveVerification: (verification: { id: string; name: string }) => void
-  rejectVerification: (verification: { id: string; name: string; reason: string }) => void
 }
 
 const OUTCOMES = ['approve', 'reject'] as const

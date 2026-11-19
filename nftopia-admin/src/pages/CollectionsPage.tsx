@@ -392,8 +392,6 @@ export default function CollectionsPage() {
         error={error}
         onClose={closeDialog}
         onSubmit={handleSubmit}
-        approveVerification={approveVerification}
-        rejectVerification={rejectVerification}
       />
     </section>
   )
