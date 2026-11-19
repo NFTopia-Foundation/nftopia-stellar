@@ -80,6 +80,19 @@ const nextConfig = {
       },
     ];
   },
+  webpack: (config, { isServer }) => {
+    if (process.env.ANALYZE === "true" && !isServer) {
+      const { BundleAnalyzerPlugin } = require("webpack-bundle-analyzer");
+      config.plugins.push(
+        new BundleAnalyzerPlugin({
+          analyzerMode: "static",
+          reportFilename: "./analyze/client.html",
+          openAnalyzer: false,
+        })
+      );
+    }
+    return config;
+  },
 };
 
 module.exports = withPWA(nextConfig);
