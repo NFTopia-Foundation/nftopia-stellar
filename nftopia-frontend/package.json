@@ -87,7 +87,7 @@
     "@graphql-codegen/typescript-react-apollo": "^4.3.3",
     "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.60.0",
-    "@size-limit/file": "^14.3.0",
+    "@size-limit/file": "^11.2.0",
     "@storybook/react": "^9.0.18",
     "@swc/jest": "^0.2.39",
     "@testing-library/dom": "^10.4.0",
@@ -102,7 +102,7 @@
     "jest": "^30.0.5",
     "jest-axe": "^10.0.0",
     "jest-environment-jsdom": "^30.0.5",
-    "size-limit": "^14.3.0",
+    "size-limit": "^11.2.0",
     "ts-jest": "^29.4.0",
     "typescript": "^5.8.3",
     "webpack-bundle-analyzer": "^4.10.2"
