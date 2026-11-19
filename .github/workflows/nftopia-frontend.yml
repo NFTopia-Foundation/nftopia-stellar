@@ -112,3 +112,14 @@ jobs:
           else
             npm run build
           fi
+
+      # ----------------------------------
+      # Bundle Size Budget Enforcement
+      # ----------------------------------
+      - name: Check bundle size budgets
+        run: |
+          if [ "${{ steps.detect.outputs.manager }}" = "pnpm" ]; then
+            pnpm run size-limit
+          else
+            npm run size-limit
+          fi
