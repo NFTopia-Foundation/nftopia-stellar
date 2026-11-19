@@ -221,6 +221,8 @@ Additional quality scripts:
 - Asset storage is designed with IPFS-first configuration and optional Arweave fallback.
 - The backend currently uses TypeORM `synchronize: true`, which is convenient for development but should be replaced with an explicit migration workflow before production rollout.
 
+For reporting vulnerabilities in the Soroban contracts or any other part of this repository, please follow the responsible-disclosure process documented in [`SECURITY.md`](SECURITY.md). Do not open public issues for security-sensitive findings.
+
 ## 📌 Repository Notes
 
 - Some UI copy and translation strings in the web and mobile projects still reference legacy Starknet terminology. The active integration code is Stellar/Soroban-focused.
@@ -233,5 +235,7 @@ Additional quality scripts:
 2. Keep changes scoped to the workspace you are modifying.
 3. Run the local test or lint command for that workspace before opening a PR.
 4. Update the relevant README when setup, architecture, or operational behavior changes.
+
+Security reports should not be filed as public issues or pull requests; see [`SECURITY.md`](SECURITY.md) for the private disclosure channel and expected response times.
 
 For deeper setup details, use the workspace-level READMEs in each project folder.
