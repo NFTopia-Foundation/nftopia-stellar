@@ -68,7 +68,8 @@
     "collections": "Colecciones",
     "settings": "Configuración",
     "contentFlags": "Contenido marcado",
-    "transactionRetry": "Reintentos"
+    "transactionRetry": "Reintentos",
+    "collectionVerification": "Verificación de colecciones"
   },
   "shell": {
     "openSidebar": "Abrir menú lateral",
@@ -182,6 +183,58 @@
       "previous": "Anterior",
       "next": "Siguiente",
       "page": "Página {{page}} de {{pages}}"
+    }
+  },
+  "collections": {
+    "title": "Verificación de colecciones",
+    "description": "Revisa y verifica colecciones NFT pendientes de publicación.",
+    "empty": "No hay colecciones que coincidan con estos filtros.",
+    "error": {
+      "load": "No se pudieron cargar las colecciones.",
+      "approve": "No se pudo aprobar la colección. Inténtalo de nuevo.",
+      "reject": "No se pudo rechazar la colección. Inténtalo de nuevo."
+    },
+    "columns": {
+      "select": "Seleccionar",
+      "item": "Elemento",
+      "reason": "Motivo",
+      "severity": "Gravedad",
+      "status": "Estado",
+      "created": "Fecha",
+      "actions": "Acciones"
+    },
+    "actions": {
+      "bulkApproveReject": "Aprobar/rechazar seleccionadas"
+    },
+    "status": {
+      "pending": "Pendiente",
+      "approved": "Aprobado",
+      "rejected": "Rechazado"
+    },
+    "severity": {
+      "low": "Gravedad baja",
+      "medium": "Gravedad media",
+      "high": "Gravedad alta",
+      "critical": "Gravedad crítica"
+    },
+    "results": "{{count}} colecciones coincidentes (se muestran hasta 50).",
+    "pagination": {
+      "label": "Páginas de verificación de colecciones",
+      "previous": "Anterior",
+      "next": "Siguiente",
+      "page": "Página {{page}} de {{pages}}"
+    },
+    "confirm": {
+      "approve": "Aprobar colección {{collectionName}} para publicación?",
+      "reject": "Rechazar colección {{collectionName}}?"
+    },
+    "success": {
+      "approve": "Colección aprobada.",
+      "reject": "Colección rechazada."
+    },
+    "notice": {
+      "approve": "Colección aprobada con éxito.",
+      "reject": "Colección rechazada con éxito."
     }
   },
   "dlq": {
