@@ -940,7 +940,7 @@ export class TransactionService {
     }
   }
 
-  private async applySettlement(transaction: Transaction): Promise<void> {
+  async applySettlement(transaction: Transaction): Promise<void> {
     const listingId = this.readStringMetadata(transaction, 'listingId');
     if (listingId) {
       const listing = await this.listingRepo.findOne({
@@ -1168,7 +1168,7 @@ export class TransactionService {
     return `tx-history:user:${userId}:${JSON.stringify(query || {})}`;
   }
 
-  private async invalidateCaches(transaction: Transaction): Promise<void> {
+  async invalidateCaches(transaction: Transaction): Promise<void> {
     const userHistoryKeys = [transaction.buyerId, transaction.sellerId]
       .filter((userId): userId is string => Boolean(userId))
       .map((userId) => this.getUserHistoryCacheKey(userId, {}));
