@@ -3,10 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { API_BASE_URL } from '../auth/authApi'
 import { createAuthorizedFetch } from '../auth/authorizedFetch'
 import { useAuth } from '../auth/useAuth'
-import ResolveVerificationDialog, {
-  type ApproveVerificationPayload,
-  type RejectVerificationPayload,
-} from '../components/ResolveVerificationDialog'
+ import ResolveVerificationDialog from '../components/ResolveVerificationDialog'
 
 /** A collection verification row as returned by `GET /admin/verifications`. */
 interface CollectionVerification {
@@ -59,11 +56,6 @@ function previewFromEntity(entity: Record<string, unknown>): {
     description: typeof entity.description === 'string' ? entity.description : undefined,
     imageUrl: typeof entity.imageUrl === 'string' ? entity.imageUrl : undefined,
   }
-}
-
-/** Maps a dialog outcome to the backend's verification status. */
-function outcomeToStatus(outcome: 'approve' | 'reject'): 'approved' | 'rejected' {
-  return outcome === 'approve' ? 'approved' : 'rejected'
 }
 
 export default function CollectionsPage() {
@@ -330,7 +322,7 @@ export default function CollectionsPage() {
                           visibleVerifications.map((ver) => ver.id),
                         )
                       }
-                    }},
+                    }}
                   />
                 </th>
                 <th scope="col" className="px-3 py-2">{t('collections.columns.item')}</th>

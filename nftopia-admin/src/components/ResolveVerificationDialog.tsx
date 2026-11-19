@@ -51,15 +51,12 @@ export default function ResolveVerificationDialog({
 }
 
 function ResolveVerificationDialogForm({
-  verificationId,
   verificationName,
   bulk = false,
   submitting = false,
   error = null,
   onClose,
   onSubmit,
-  approveVerification,
-  rejectVerification,
 }: Omit<ResolveVerificationDialogProps, 'open'>) {
   const [outcome, setOutcome] = useState<'approve' | 'reject'>('approve')
   const [reason, setReason] = useState('')
