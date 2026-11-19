@@ -24,3 +24,5 @@ pub use types::*;
 
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod test_state_machine;
