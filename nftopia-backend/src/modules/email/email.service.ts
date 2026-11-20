@@ -164,6 +164,27 @@ export class EmailService {
     );
   }
 
+  async sendModerationExhaustedAlertEmail(
+    to: string,
+    listingId: string,
+    errorMessage: string,
+    suppressedCount: number,
+  ): Promise<void> {
+    const { html, text } = this.templateService.render(
+      'moderation-exhausted-alert',
+      { listingId, errorMessage, suppressedCount },
+    );
+
+    await this.enqueue(
+      EmailType.MODERATION_EXHAUSTED_ALERT,
+      to,
+      'AI moderation retries exhausted',
+      html,
+      text,
+      { listingId, suppressedCount },
+    );
+  }
+
   private async enqueue(
     type: EmailType,
     to: string,

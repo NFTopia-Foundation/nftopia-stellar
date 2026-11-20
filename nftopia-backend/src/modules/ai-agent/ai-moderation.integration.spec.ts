@@ -11,6 +11,7 @@ import { ContentFlagService } from './content-flag.service';
 import type { ListingCreatedEvent } from './listeners/ai-moderation.types';
 import type { AuditService } from '../../common/audit/audit.service';
 import type { PrometheusService } from '../../common/metrics/prometheus';
+import type { ModerationAlertService } from './moderation-alert.service';
 
 /**
  * Exercises the real listener -> queue job -> processor -> ContentFlagService
@@ -144,6 +145,7 @@ describe('listing.created -> ai-moderation queue -> ContentFlag (integration, #5
       stellarNftRepo as never,
       contentFlagService,
       prometheusService as unknown as PrometheusService,
+      { alertExhausted: jest.fn() } as unknown as ModerationAlertService,
     );
   });
 
