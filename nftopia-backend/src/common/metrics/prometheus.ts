@@ -74,6 +74,12 @@ const aiModerationJobsProcessedTotal = new Counter({
   registers: [registry],
 });
 
+const aiModerationJobsExhaustedTotal = new Counter({
+  name: 'ai_moderation_jobs_exhausted_total',
+  help: 'Total number of ai-moderation jobs that exhausted all retry attempts',
+  registers: [registry],
+});
+
 const nftImageOptimizationBytes = new Histogram({
   name: 'nft_image_optimization_bytes',
   help: 'Original and optimized NFT image byte sizes',
@@ -226,6 +232,16 @@ export class PrometheusService {
     } catch (error) {
       this.logger.warn(
         `Failed to increment ai_moderation_jobs_processed_total: ${error}`,
+      );
+    }
+  }
+
+  incrementAiModerationJobsExhausted(): void {
+    try {
+      aiModerationJobsExhaustedTotal.inc();
+    } catch (error) {
+      this.logger.warn(
+        `Failed to increment ai_moderation_jobs_exhausted_total: ${error}`,
       );
     }
   }

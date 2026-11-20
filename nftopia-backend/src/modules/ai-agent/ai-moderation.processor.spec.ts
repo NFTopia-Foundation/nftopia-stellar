@@ -10,6 +10,7 @@ import type { AiModerationJobData } from './listeners/ai-moderation.types';
 import type { StellarNft } from '../../nft/entities/stellar-nft.entity';
 import type { ContentFlagService } from './content-flag.service';
 import type { PrometheusService } from '../../common/metrics/prometheus';
+import type { ModerationAlertService } from './moderation-alert.service';
 import type { RunnableToolLike, ToolSetName } from './tools/tool-set.types';
 
 describe('AiModerationProcessor (#527)', () => {
@@ -27,6 +28,11 @@ describe('AiModerationProcessor (#527)', () => {
 
   const prometheusService = {
     incrementAiModerationJobProcessed: jest.fn(),
+    incrementAiModerationJobsExhausted: jest.fn(),
+  };
+
+  const moderationAlertService = {
+    alertExhausted: jest.fn(),
   };
 
   let processor: AiModerationProcessor;
@@ -115,6 +121,7 @@ describe('AiModerationProcessor (#527)', () => {
       stellarNftRepo as never,
       contentFlagService as unknown as ContentFlagService,
       prometheusService as unknown as PrometheusService,
+      moderationAlertService as unknown as ModerationAlertService,
     );
   });
 
@@ -275,6 +282,94 @@ describe('AiModerationProcessor (#527)', () => {
       expect(
         prometheusService.incrementAiModerationJobProcessed,
       ).toHaveBeenCalledWith('clean');
+    });
+  });
+  describe('onFailed — retryable vs. exhausted (#748)', () => {
+    let errorSpy: jest.SpyInstance;
+    let warnSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+      const logger = (processor as unknown as { logger: object }).logger;
+      errorSpy = jest.spyOn(logger as never, 'error').mockImplementation();
+      warnSpy = jest.spyOn(logger as never, 'warn').mockImplementation();
+      contentFlagService.findExistingFlag.mockResolvedValue(null);
+      contentFlagService.createFlag.mockResolvedValue({ id: 'flag-1' });
+      moderationAlertService.alertExhausted.mockResolvedValue(undefined);
+    });
+
+    it.each([1, 2])(
+      'attempt %i of 3: no "permanently failed" log, metric, flag or alert',
+      async (attemptsMade) => {
+        await processor.onFailed(
+          makeJob({}, attemptsMade, 3),
+          new Error('anthropic 529'),
+        );
+
+        expect(errorSpy).not.toHaveBeenCalledWith(
+          expect.stringContaining('permanently failed'),
+        );
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('retry scheduled'),
+        );
+        expect(
+          prometheusService.incrementAiModerationJobsExhausted,
+        ).not.toHaveBeenCalled();
+        expect(contentFlagService.createFlag).not.toHaveBeenCalled();
+        expect(moderationAlertService.alertExhausted).not.toHaveBeenCalled();
+      },
+    );
+
+    it('attempt 3 of 3: logs, increments the counter, alerts, and flags the listing for admins', async () => {
+      await processor.onFailed(makeJob({}, 3, 3), new Error('anthropic 529'));
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('permanently failed'),
+      );
+      expect(
+        prometheusService.incrementAiModerationJobsExhausted,
+      ).toHaveBeenCalledTimes(1);
+      expect(moderationAlertService.alertExhausted).toHaveBeenCalledWith(
+        LISTING_ID,
+        'anthropic 529',
+      );
+      expect(contentFlagService.createFlag).toHaveBeenCalledWith(
+        expect.objectContaining({
+          entityType: 'listing',
+          entityId: LISTING_ID,
+          reason: expect.stringMatching(/^moderation_failed:/),
+        }),
+      );
+    });
+
+    it('does not create a duplicate flag when the listing already has one', async () => {
+      contentFlagService.findExistingFlag.mockResolvedValue({ id: 'old' });
+
+      await processor.onFailed(makeJob({}, 3, 3), new Error('boom'));
+
+      expect(contentFlagService.createFlag).not.toHaveBeenCalled();
+      expect(moderationAlertService.alertExhausted).toHaveBeenCalled();
+    });
+
+    it('skips the flag for a non-UUID listing but still counts and alerts', async () => {
+      await processor.onFailed(
+        makeJob({ listingId: NON_UUID_LISTING_ID }, 3, 3),
+        new Error('boom'),
+      );
+
+      expect(contentFlagService.createFlag).not.toHaveBeenCalled();
+      expect(
+        prometheusService.incrementAiModerationJobsExhausted,
+      ).toHaveBeenCalledTimes(1);
+      expect(moderationAlertService.alertExhausted).toHaveBeenCalled();
+    });
+
+    it('still alerts when persisting the flag fails (handler never throws)', async () => {
+      contentFlagService.createFlag.mockRejectedValue(new Error('db down'));
+
+      await expect(
+        processor.onFailed(makeJob({}, 3, 3), new Error('boom')),
+      ).resolves.toBeUndefined();
+      expect(moderationAlertService.alertExhausted).toHaveBeenCalled();
     });
   });
 });
