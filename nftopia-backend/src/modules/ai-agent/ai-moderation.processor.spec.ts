@@ -332,13 +332,13 @@ describe('AiModerationProcessor (#527)', () => {
         LISTING_ID,
         'anthropic 529',
       );
-      expect(contentFlagService.createFlag).toHaveBeenCalledWith(
-        expect.objectContaining({
-          entityType: 'listing',
-          entityId: LISTING_ID,
-          reason: expect.stringMatching(/^moderation_failed:/),
-        }),
-      );
+      expect(contentFlagService.createFlag).toHaveBeenCalledTimes(1);
+      const [flagInput] = contentFlagService.createFlag.mock.calls[0] as [
+        { entityType: string; entityId: string; reason: string },
+      ];
+      expect(flagInput.entityType).toBe('listing');
+      expect(flagInput.entityId).toBe(LISTING_ID);
+      expect(flagInput.reason).toMatch(/^moderation_failed:/);
     });
 
     it('does not create a duplicate flag when the listing already has one', async () => {
