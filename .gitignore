@@ -23,3 +23,5 @@ target
 
 ## Test Snapshots
 **/test_snapshots/**
+config.bat
+node_modules

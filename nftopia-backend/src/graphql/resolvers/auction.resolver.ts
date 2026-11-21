@@ -123,7 +123,55 @@ export class AuctionResolver {
     @Args('limit', { type: () => Number, nullable: true }) limit?: number,
     @Args('cursor', { type: () => String, nullable: true }) cursor?: string,
   ): Promise<GraphqlBid[]> {
-    const page = await this.auctionService.getBids(auctionId, { limit, cursor });
-    return page.items.map((bid) => this.toGraphqlBid(bid));
+    const bids = await this.auctionService.getBids(auctionId);
+    const startIndex = cursor
+      ? Math.max(bids.findIndex((bid) => bid.id === cursor) + 1, 0)
+      : 0;
+    const pageSize = limit ?? 20;
+    const page = bids.slice(startIndex, startIndex + pageSize);
+    return page.map((bid) => this.toGraphqlBid(bid));
+  }
+
+  // === SUBSCRIPTIONS ===
+
+  @Subscription(() => GraphqlBid, {
+    name: 'auctionBidPlaced',
+    description: 'Emits when a new bid is placed on the given auction',
+    filter: auctionBidPlacedFilter,
+  })
+  auctionBidPlaced(
+    @Args('auctionId', { type: () => ID }) auctionId: string,
+  ) {
+    return this.pubSub.asyncIterator(AUCTION_BID_PLACED_TOPIC);
+  }
+
+  // === MAPPING HELPERS ===
+
+  private toGraphqlAuction(auction: Auction): GraphqlAuction {
+    return auction as unknown as GraphqlAuction;
+  }
+
+  private toGraphqlBid(bid: Bid): GraphqlBid {
+    return bid as unknown as GraphqlBid;
+  }
+
+  private toConnection(
+    items: Auction[],
+    totalCount: number,
+    hasNextPage: boolean,
+  ): AuctionConnection {
+    return {
+      edges: items.map((node) => ({
+        node: this.toGraphqlAuction(node),
+        cursor: node.id,
+      })),
+      pageInfo: {
+        hasNextPage,
+        hasPreviousPage: false,
+        startCursor: items.length ? items[0].id : null,
+        endCursor: items.length ? items[items.length - 1].id : null,
+      },
+      totalCount,
+    } as AuctionConnection;
   }
 }

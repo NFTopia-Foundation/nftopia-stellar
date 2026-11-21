@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 5000",
-    "build": "next build",
-    "start": "next start",
+    "dev": "node init && next dev -p 5000",
+    "build": "node init && next build",
+    "start": "node init && next start",
     "lint": "next lint",
     "graphql:codegen": "graphql-codegen --config codegen.ts",
     "graphql:codegen:watch": "graphql-codegen --config codegen.ts --watch",
