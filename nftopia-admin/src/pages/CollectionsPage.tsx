@@ -72,6 +72,7 @@ export default function CollectionsPage() {
   const [selected, setSelected] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dialogTarget, setDialogTarget] = useState<CollectionVerification | null>(null)
@@ -134,6 +135,7 @@ export default function CollectionsPage() {
         setDialogOpen(false)
         setDialogTarget(null)
         await load()
+        setSuccessMessage(t('collections.success.approve'))
       } catch (err: unknown) {
         setError(
           err instanceof Error ? err.message : t('collections.error.approve'),
@@ -165,6 +167,7 @@ export default function CollectionsPage() {
         setDialogOpen(false)
         setDialogTarget(null)
         await load()
+        setSuccessMessage(t('collections.success.reject'))
       } catch (err: unknown) {
         setError(
           err instanceof Error ? err.message : t('collections.error.reject'),
@@ -177,12 +180,14 @@ export default function CollectionsPage() {
   )
 
   const openSingle = (verification: CollectionVerification) => {
+    setSuccessMessage(null)
     setDialogTarget(verification)
     setBulk(false)
     setDialogOpen(true)
   }
 
   const openBulk = () => {
+    setSuccessMessage(null)
     setDialogTarget(null)
     setBulk(true)
     setDialogOpen(true)
@@ -217,6 +222,11 @@ export default function CollectionsPage() {
         } else {
           setDialogOpen(false)
           setBulk(false)
+          setSuccessMessage(
+            payload.action === 'approve'
+              ? t('collections.success.approve')
+              : t('collections.success.reject'),
+          )
         }
       } else if (dialogTarget) {
         if (payload.action === 'approve') {
@@ -279,6 +289,7 @@ export default function CollectionsPage() {
             onChange={(event) => {
               setOffset(0)
               setSelected([])
+              setSuccessMessage(null)
               setStatusFilter(event.target.value as 'pending' | 'approved' | 'rejected')
             }}
             className="rounded-md border border-white/10 bg-slate-900 px-2 py-1 text-white"
@@ -293,6 +304,12 @@ export default function CollectionsPage() {
       {error ? (
         <p role="alert" className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
           {error}
+        </p>
+      ) : null}
+
+      {successMessage ? (
+        <p role="status" className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
+          {successMessage}
         </p>
       ) : null}
 

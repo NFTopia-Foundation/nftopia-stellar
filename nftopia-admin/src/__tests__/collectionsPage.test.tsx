@@ -20,6 +20,8 @@ vi.mock('react-i18next', () => ({
         'collections.error.reject': 'Unable to reject the collection. Please try again.',
         'collections.error.bulkAction': 'Unable to resolve some of the selected collections. Please try again.',
         'collections.error.resolve': 'Unable to resolve the collection. Please try again.',
+        'collections.success.approve': 'Collection successfully approved.',
+        'collections.success.reject': 'Collection successfully rejected.',
         'collections.filters.status': 'Status',
         'collections.confirm.approve': `Approve collection ${options?.collectionName} for publication?`,
         'collections.confirm.reject': `Reject collection ${options?.collectionName}?`,
@@ -129,6 +131,9 @@ describe('Collection verifications queue (#562)', () => {
         expect.objectContaining({ method: 'POST' }),
       ),
     )
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toBe('Collection successfully approved.'),
+    )
   })
 
   it('rejects a collection with a required reason', async () => {
@@ -156,6 +161,9 @@ describe('Collection verifications queue (#562)', () => {
           body: JSON.stringify({ reason: 'Artwork does not meet guidelines' }),
         }),
       ),
+    )
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toBe('Collection successfully rejected.'),
     )
   })
 })
