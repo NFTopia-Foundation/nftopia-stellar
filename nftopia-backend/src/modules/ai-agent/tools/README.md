@@ -285,3 +285,19 @@ Chat sessions and messages are persisted in PostgreSQL (`chat_sessions`, `chat_m
 - **Recent Messages Kept:** Default `6` messages (3 turns), configurable via `AI_CHAT_RECENT_MESSAGES_COUNT`.
 - **Mechanism:** When loaded for model context, long histories are summarized into concise conversational context turns (`[Summary of earlier conversation in this session]`), drastically reducing per-turn token spend against user token caps while preserving prompt context and alternating user/assistant message roles.
 
+## Opt-in scenario evaluations
+
+The `evals/scenarios/` directory contains five scenarios for each registered
+tool set. Run the real-model harness with:
+
+```sh
+ANTHROPIC_API_KEY=... npm run eval:ai
+```
+
+The runner uses the production `resolveToolSet` registry, records the tools
+selected by the model, and prints per-tool-set and overall pass rates. It is
+intentionally opt-in and is not included in the default Jest suite because it
+makes real Anthropic API calls. Run it before changing prompts, model ids, or
+tool registrations. Set `AI_EVAL_MODEL` to evaluate a different compatible
+model.
+

@@ -1,0 +1,7 @@
+[
+  {"id":"marketplace-search-nfts","prompt":"Find NFTs from the Stellar sunset collection.","expectedTools":["search_nfts"]},
+  {"id":"marketplace-get-nft","prompt":"Show me the details for NFT 550e8400-e29b-41d4-a716-446655440000.","expectedTools":["get_nft"]},
+  {"id":"marketplace-search-listings","prompt":"Find active listings under 100 XLM.","expectedTools":["search_listings"]},
+  {"id":"marketplace-search-collections","prompt":"Which collections are tagged as generative art?","expectedTools":["search_collections"]},
+  {"id":"marketplace-search-auctions","prompt":"Show auctions ending soon for space-themed NFTs.","expectedTools":["search_auctions"]}
+]
