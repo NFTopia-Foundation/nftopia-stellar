@@ -77,7 +77,7 @@ const transactionReconciliationCorrectionsTotal = new Counter({
 const aiModerationJobsProcessedTotal = new Counter({
   name: 'ai_moderation_jobs_processed_total',
   help: 'Total number of ai-moderation queue jobs processed, by outcome',
-  labelNames: ['outcome'], // 'flagged' | 'clean' | 'skipped' | 'error'
+  labelNames: ['outcome'], // 'flagged' | 'below_threshold' | 'clean' | 'skipped' | 'error'
   registers: [registry],
 });
 
@@ -248,7 +248,7 @@ export class PrometheusService {
   }
 
   incrementAiModerationJobProcessed(
-    outcome: 'flagged' | 'clean' | 'skipped' | 'error',
+    outcome: 'flagged' | 'below_threshold' | 'clean' | 'skipped' | 'error',
   ): void {
     try {
       aiModerationJobsProcessedTotal.inc({ outcome });

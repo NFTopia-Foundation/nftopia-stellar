@@ -58,12 +58,13 @@ function ResolveVerificationDialogForm({
 }: Omit<ResolveVerificationDialogProps, 'open'>) {
   const [outcome, setOutcome] = useState<'approve' | 'reject'>('approve')
   const [reason, setReason] = useState('')
+  const [confirming, setConfirming] = useState(false)
 
-  const isBulk = typeof bulk === 'number' ? bulk > 1 : false
+  const isBulk = Boolean(bulk)
   const title = isBulk ? 'Approve/reject selected collections' : `${OUTCOME_LABELS[outcome]} collection`
 
   const handleConfirm = () => {
-    setOutcome(outcome === 'approve' ? 'reject' : 'approve')
+    setConfirming(true)
   }
 
   const handleSubmit = async () => {
@@ -89,7 +90,7 @@ function ResolveVerificationDialogForm({
           <p className="mt-1 text-sm text-gray-500">Collection: {verificationName}</p>
         ) : null}
 
-        <fieldset className="mt-4" disabled={submitting}>
+        <fieldset className="mt-4" disabled={confirming || submitting}>
           <legend className="text-sm font-medium text-gray-700">Outcome</legend>
           <div className="mt-2 space-y-2">
             {OUTCOMES.map((option) => (
@@ -128,12 +129,12 @@ function ResolveVerificationDialogForm({
           </p>
         ) : null}
 
-        {submitting ? (
+        {confirming ? (
           <div className="mt-4 rounded-md bg-amber-50 border border-amber-200 p-3">
             <p className="text-sm text-amber-900">
               {isBulk
-                ? `${OUTCOME_LABELS[outcome]}ing ${isBulk} collections... This cannot be undone.`
-                : `${OUTCOME_LABELS[outcome]}ing this collection? This cannot be undone.`}
+                ? `Are you sure you want to ${OUTCOME_LABELS[outcome].toLowerCase()} the selected collections? This cannot be undone.`
+                : `Are you sure you want to ${OUTCOME_LABELS[outcome].toLowerCase()} this collection? This cannot be undone.`}
             </p>
           </div>
         ) : null}
@@ -150,7 +151,7 @@ function ResolveVerificationDialogForm({
               id="reject-reason"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              disabled={submitting}
+              disabled={confirming || submitting}
               rows={3}
               placeholder="e.g. Missing metadata, copyright issues, incomplete setup..."
               className="mt-1 w-full rounded-md border border-gray-300 p-2 text-sm focus:border-blue-500 focus:outline-none"
@@ -162,25 +163,26 @@ function ResolveVerificationDialogForm({
           <button
             type="button"
             onClick={onClose}
-            disabled={submitting}
+            disabled={confirming || submitting}
             className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
           >
             Cancel
           </button>
-          {submitting ? (
+          {confirming ? (
             <button
               type="button"
               onClick={handleSubmit}
               disabled={submitting}
               className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
             >
-              {submitting ? 'Submitting…' : 'Submit'}
+              {submitting ? 'Submitting…' : 'Confirm'}
             </button>
           ) : (
             <button
               type="button"
               onClick={handleConfirm}
-              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              disabled={outcome === 'reject' && !isBulk && !reason.trim()}
+              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
             >
               {OUTCOME_LABELS[outcome]}
             </button>

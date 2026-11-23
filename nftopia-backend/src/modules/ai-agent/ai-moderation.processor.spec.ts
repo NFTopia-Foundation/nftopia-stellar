@@ -35,6 +35,10 @@ describe('AiModerationProcessor (#527)', () => {
     alertExhausted: jest.fn(),
   };
 
+  const configService = {
+    get: jest.fn(),
+  };
+
   let processor: AiModerationProcessor;
 
   const makeJob = (
@@ -116,12 +120,14 @@ describe('AiModerationProcessor (#527)', () => {
       entityType: 'listing',
       entityId: LISTING_ID,
     });
+    configService.get.mockReturnValue(undefined); // falls back to the 0.5 default
 
     processor = new AiModerationProcessor(
       stellarNftRepo as never,
       contentFlagService as unknown as ContentFlagService,
       prometheusService as unknown as PrometheusService,
       moderationAlertService as unknown as ModerationAlertService,
+      configService as never,
     );
   });
 
@@ -136,6 +142,43 @@ describe('AiModerationProcessor (#527)', () => {
     expect(
       prometheusService.incrementAiModerationJobProcessed,
     ).toHaveBeenCalledWith('flagged');
+  });
+
+  it('auto-clears a below-threshold result instead of flagging it (#642)', async () => {
+    mockMessagesCreate(makeToolUseResponse({ confidence: 0.3 }));
+
+    await processor.handleModerateListing(makeJob());
+
+    expect(contentFlagService.createFlag).not.toHaveBeenCalled();
+    expect(
+      prometheusService.incrementAiModerationJobProcessed,
+    ).toHaveBeenCalledWith('below_threshold');
+  });
+
+  it('flags a result exactly at the configured threshold (#642)', async () => {
+    configService.get.mockReturnValue('0.9');
+    mockMessagesCreate(makeToolUseResponse({ confidence: 0.9 }));
+
+    await processor.handleModerateListing(makeJob());
+
+    expect(contentFlagService.createFlag).toHaveBeenCalled();
+    expect(
+      prometheusService.incrementAiModerationJobProcessed,
+    ).toHaveBeenCalledWith('flagged');
+  });
+
+  it('getConfidenceThreshold reads AI_MODERATION_CONFIDENCE_THRESHOLD, falling back to the sane default for an invalid value (#642)', () => {
+    configService.get.mockReturnValue('0.75');
+    expect(processor.getConfidenceThreshold()).toBe(0.75);
+
+    configService.get.mockReturnValue('not-a-number');
+    expect(processor.getConfidenceThreshold()).toBe(0.5);
+
+    configService.get.mockReturnValue(1.5); // out of [0, 1] range
+    expect(processor.getConfidenceThreshold()).toBe(0.5);
+
+    configService.get.mockReturnValue(undefined);
+    expect(processor.getConfidenceThreshold()).toBe(0.5);
   });
 
   it('does not flag a clean listing (no tool_use block in the response)', async () => {

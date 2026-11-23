@@ -72,6 +72,56 @@ describe('moderation.tools', () => {
       });
     });
 
+    it('auto-clears a below-threshold result without persisting a flag (#642)', async () => {
+      const result = await getTool('flag_content').run({
+        entityType: 'listing' as const,
+        entityId: LISTING_ID,
+        reason: 'Mildly suggestive content',
+        severity: 'low' as const,
+        confidence: 0.4,
+      });
+
+      expect(contentFlagService.createFlag).not.toHaveBeenCalled();
+      expect(JSON.parse(result as string)).toEqual({
+        flagged: false,
+        confidence: 0.4,
+        threshold: 0.5, // DEFAULT_MODERATION_CONFIDENCE_THRESHOLD
+      });
+    });
+
+    it('persists a flag exactly at the configured threshold (#642)', async () => {
+      const savedFlag: Partial<ContentFlag> = {
+        id: 'flag-3',
+        status: 'pending',
+        entityType: 'listing',
+        entityId: LISTING_ID,
+      };
+      contentFlagService.createFlag.mockResolvedValue(savedFlag);
+
+      const tools = buildModerationTools({
+        contentFlagService: contentFlagService as never,
+        expectedEntity: defaultExpectedEntity,
+        confidenceThreshold: 0.7,
+      });
+      const tool = tools.find((t) => t.name === 'flag_content')!;
+
+      const result = await tool.run({
+        entityType: 'listing' as const,
+        entityId: LISTING_ID,
+        reason: 'Scam indicators',
+        severity: 'high' as const,
+        confidence: 0.7,
+      });
+
+      expect(contentFlagService.createFlag).toHaveBeenCalled();
+      expect(JSON.parse(result as string)).toEqual({
+        id: 'flag-3',
+        status: 'pending',
+        entityType: 'listing',
+        entityId: LISTING_ID,
+      });
+    });
+
     it('rejects a flag for a different entity than the one under review (never trusts entityId from the model alone)', async () => {
       await expect(
         getTool('flag_content', {

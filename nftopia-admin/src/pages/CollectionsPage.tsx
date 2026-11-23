@@ -4,6 +4,7 @@ import { API_BASE_URL } from '../auth/authApi'
 import { createAuthorizedFetch } from '../auth/authorizedFetch'
 import { useAuth } from '../auth/useAuth'
  import ResolveVerificationDialog from '../components/ResolveVerificationDialog'
+import { formatTimePending } from '../utils/timePending'
 
 /** A collection verification row as returned by `GET /admin/verifications`. */
 interface CollectionVerification {
@@ -357,7 +358,21 @@ export default function CollectionsPage() {
                   <td className="px-3 py-2 text-slate-300">{ver.reason}</td>
                   <td className="px-3 py-2 text-slate-300">{ver.severity}</td>
                   <td className="px-3 py-2 text-slate-300">{t(`collections.status.${ver.status}`)}</td>
-                  <td className="px-3 py-2 text-slate-400">{ver.createdAt}</td>
+                  <td className="px-3 py-2 text-slate-400">
+                    {ver.status === 'pending' ? (
+                      (() => {
+                        const pending = formatTimePending(ver.createdAt)
+                        return (
+                          <span className={pending.overdue ? 'font-medium text-amber-400' : undefined}>
+                            {pending.label}
+                            {pending.overdue ? ` (${t('collections.pending.overdue')})` : ''}
+                          </span>
+                        )
+                      })()
+                    ) : (
+                      ver.createdAt
+                    )}
+                  </td>
                   <td className="px-3 py-2">
                     <button
                       type="button"

@@ -14,6 +14,7 @@ import { AiAgentController } from './ai-agent.controller';
 import { AiAgentService } from './ai-agent.service';
 import { AiUsageService } from './ai-usage.service';
 import { AiAgentHealthService } from './ai-agent-health.service';
+import { AiModerationProcessor } from './ai-moderation.processor';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AiChatRateLimitGuard } from '../../common/guards/ai-chat-rate-limit.guard';
 import { CopilotRateLimitGuard } from '../../common/guards/copilot-rate-limit.guard';
@@ -39,10 +40,15 @@ describe('AiAgentController', () => {
     getHealth: jest.fn(),
   };
 
+  const aiModerationProcessor = {
+    getConfidenceThreshold: jest.fn(),
+  };
+
   const controller = new AiAgentController(
     aiAgentService as unknown as AiAgentService,
     aiUsageService as unknown as AiUsageService,
     aiAgentHealthService as unknown as AiAgentHealthService,
+    aiModerationProcessor as unknown as AiModerationProcessor,
   );
 
   const makeRequest = (userId?: string) =>
@@ -439,6 +445,27 @@ describe('AiAgentController', () => {
         limit: 20,
       });
       expect(result).toEqual(expectedResult);
+    });
+  });
+
+  describe('getModerationConfig (#642)', () => {
+    it('applies JwtAuthGuard and RolesGuard', () => {
+      const guards = Reflect.getMetadata(
+        GUARDS_METADATA,
+        controller.getModerationConfig,
+      ) as unknown[] | undefined;
+
+      expect(guards).toContain(JwtAuthGuard);
+      expect(guards).toContain(RolesGuard);
+    });
+
+    it('delegates to AiModerationProcessor.getConfidenceThreshold', () => {
+      aiModerationProcessor.getConfidenceThreshold.mockReturnValue(0.5);
+
+      const result = controller.getModerationConfig();
+
+      expect(aiModerationProcessor.getConfidenceThreshold).toHaveBeenCalled();
+      expect(result).toEqual({ confidenceThreshold: 0.5 });
     });
   });
 
