@@ -146,6 +146,7 @@ describe('listing.created -> ai-moderation queue -> ContentFlag (integration, #5
       contentFlagService,
       prometheusService as unknown as PrometheusService,
       { alertExhausted: jest.fn() } as unknown as ModerationAlertService,
+      { get: jest.fn().mockReturnValue(undefined) } as never,
     );
   });
 
