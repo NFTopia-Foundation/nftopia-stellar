@@ -174,6 +174,8 @@ The contract workspace already includes several explicit security-oriented modul
 
 Those modules are worth preserving as first-class documentation targets when the contracts mature further.
 
+Internal review and tests are not a substitute for an independent audit. [`docs/security-audit-tracking.md`](docs/security-audit-tracking.md) tracks engaging a third-party Soroban-specialized auditor for `marketplace_settlement` and `nft_contract`, the remediation process for findings, and the hard gate: **no mainnet deployment until that audit is complete and every critical/high finding is remediated.**
+
 ## 📌 Repository Notes
 
 - `nft_contract` is not yet as developed as the other packages and should be documented as scaffolded.
