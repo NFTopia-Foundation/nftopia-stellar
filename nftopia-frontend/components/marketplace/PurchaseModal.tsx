@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import { TransactionFeePreview } from "@/components/wallet/TransactionFeePreview";
 import { useWalletBalance } from "@/hooks/useWalletBalance";
 import { PurchaseReceipt, type PurchaseReceiptData } from "@/components/marketplace/PurchaseReceipt";
+import type { StellarNetwork } from "@/types/stellar";
 
 export type CheckoutStep = "review" | "sign" | "submit" | "confirmed" | "failed";
 
@@ -57,7 +58,7 @@ export function PurchaseModal({
   const { connected: isConnected, address, network } = useWalletStore() as {
     connected: boolean;
     address?: string;
-    network?: "testnet" | "public";
+    network?: StellarNetwork;
   };
   const router = useRouter();
   const { showSuccess, showError } = useToast();
@@ -101,7 +102,12 @@ export function PurchaseModal({
       const { data } = await buyNFT({ variables: { listingId } });
       if (data?.buyNFT?.success) {
         setStep("confirmed");
-        const txHash = data?.buyNFT?.transactionHash ?? data?.buyNFT?.txHash ?? null;
+        // buyNFT's schema type is TransactionResult (success/listingId/buyerId);
+        // a hash is not part of it, so read one defensively if the API adds it.
+        const buyResult = data?.buyNFT as unknown as
+          | { transactionHash?: string | null; txHash?: string | null }
+          | undefined;
+        const txHash = buyResult?.transactionHash ?? buyResult?.txHash ?? null;
         const receiptData: PurchaseReceiptData = {
           nftName,
           nftImage,
