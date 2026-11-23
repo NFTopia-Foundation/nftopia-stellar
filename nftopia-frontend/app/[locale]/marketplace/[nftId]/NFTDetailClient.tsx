@@ -1,5 +1,7 @@
 "use client";
 
+import { IncomingOffersPanel } from "@/components/marketplace/IncomingOffersPanel";
+
 import React, { useState, useEffect, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { 
