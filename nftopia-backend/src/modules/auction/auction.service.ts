@@ -80,6 +80,7 @@ export class AuctionService {
       reservePrice,
       startTime,
       endTime,
+      minBidIncrementPct,
     } = createDto;
 
     // Prevent duplicate active auctions for same NFT
@@ -106,6 +107,7 @@ export class AuctionService {
       startTime: startTime ? new Date(startTime) : now,
       endTime: new Date(endTime),
       status: AuctionStatus.ACTIVE,
+      minBidIncrementPct: minBidIncrementPct ?? null,
     });
 
     return this.auctionRepo.save(auction);
