@@ -228,7 +228,7 @@ export class AiAgentController {
   @Post('admin/usage/:userId/override')
   @ApiOperation({
     summary:
-      "Set (replacing any existing) an override of a user's AI chat spend caps",
+      "Set (replacing any existing) an override of a user's AI chat spend caps and per-tool-set chat rate limits",
   })
   async setCapOverride(
     @Param('userId') userId: string,
@@ -240,6 +240,7 @@ export class AiAgentController {
       monthlyTokenCap: dto.monthlyTokenCap,
       dailySpendCapUsd: dto.dailySpendCapUsd,
       monthlySpendCapUsd: dto.monthlySpendCapUsd,
+      rateLimitPoints: dto.rateLimitPoints,
       reason: dto.reason,
       grantedBy: req.user?.userId,
       expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : undefined,

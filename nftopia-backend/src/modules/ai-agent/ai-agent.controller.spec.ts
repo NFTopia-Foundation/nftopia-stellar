@@ -502,12 +502,30 @@ describe('AiAgentController', () => {
           monthlyTokenCap: undefined,
           dailySpendCapUsd: undefined,
           monthlySpendCapUsd: undefined,
+          rateLimitPoints: undefined,
           reason: 'VIP',
           grantedBy: 'admin-1',
           expiresAt: undefined,
         },
       );
       expect(result).toBe(created);
+    });
+
+    it('setCapOverride forwards per-tool-set rateLimitPoints (#751)', async () => {
+      aiUsageService.setCapOverride.mockResolvedValue({});
+
+      await controller.setCapOverride(
+        'target-user',
+        { rateLimitPoints: { 'marketplace-assistant': 60 } },
+        makeRequest('admin-1'),
+      );
+
+      expect(aiUsageService.setCapOverride).toHaveBeenCalledWith(
+        'target-user',
+        expect.objectContaining({
+          rateLimitPoints: { 'marketplace-assistant': 60 },
+        }),
+      );
     });
 
     it('setCapOverride converts an ISO expiresAt string to a Date', async () => {
