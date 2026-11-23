@@ -601,6 +601,111 @@ fn test_create_trade_empty_nfts_fails() {
         .is_err());
 }
 
+/// Builds a funded (accepted) trade of one NFT each way, each NFT backed by
+/// its own `MockNft` instance with a real, stateful `owner_of`/`transfer` —
+/// unlike `MockEscrowNft`, `MockNft::transfer` actually asserts the caller
+/// owns the token and moves it, so a test can verify ownership genuinely
+/// changed, not just that the trade's own status field flipped (#552).
+fn new_funded_trade(
+    env: &Env,
+    client: &MarketplaceSettlementClient<'static>,
+) -> (u64, Address, Address, Address, Address) {
+    use crate::types::{NFTItem, RoyaltyDistribution};
+
+    let initiator = Address::generate(env);
+    let counterparty = Address::generate(env);
+    let creator = Address::generate(env);
+    let dummy = RoyaltyDistribution {
+        creator_address: creator.clone(),
+        creator_percentage: 500,
+        seller_address: creator.clone(),
+        seller_percentage: 9000,
+        platform_address: creator.clone(),
+        platform_percentage: 500,
+        total_amount: 0,
+        amounts: soroban_sdk::Map::new(env),
+    };
+
+    let initiator_nft = env.register(MockNft, ());
+    MockNftClient::new(env, &initiator_nft).set_owner(&initiator);
+    let counterparty_nft = env.register(MockNft, ());
+    MockNftClient::new(env, &counterparty_nft).set_owner(&counterparty);
+
+    let mut i_nfts = soroban_sdk::Vec::new(env);
+    i_nfts.push_back(NFTItem {
+        nft_address: initiator_nft.clone(),
+        token_id: 1,
+        royalty_info: dummy.clone(),
+    });
+    let mut c_nfts = soroban_sdk::Vec::new(env);
+    c_nfts.push_back(NFTItem {
+        nft_address: counterparty_nft.clone(),
+        token_id: 1,
+        royalty_info: dummy,
+    });
+
+    let trade_id = client.create_trade(&initiator, &None, &i_nfts, &c_nfts, &3600u64);
+    client.accept_trade(&trade_id, &counterparty);
+
+    (
+        trade_id,
+        initiator,
+        counterparty,
+        initiator_nft,
+        counterparty_nft,
+    )
+}
+
+#[test]
+fn test_execute_trade_transfers_nft_ownership() {
+    let (env, _cid, client, _admin) = new_env();
+    let (trade_id, initiator, counterparty, initiator_nft, counterparty_nft) =
+        new_funded_trade(&env, &client);
+
+    client.execute_trade(&trade_id, &initiator);
+
+    // The whole point of #552: ownership on each NFT contract actually
+    // changed, not just the trade's own status field.
+    assert_eq!(
+        MockNftClient::new(&env, &initiator_nft).owner_of(&1),
+        counterparty,
+    );
+    assert_eq!(
+        MockNftClient::new(&env, &counterparty_nft).owner_of(&1),
+        initiator,
+    );
+}
+
+#[test]
+fn test_execute_trade_fails_without_leaving_executed_but_untransferred_state() {
+    let (env, cid, client, _admin) = new_env();
+    let (trade_id, initiator, counterparty, initiator_nft, counterparty_nft) =
+        new_funded_trade(&env, &client);
+
+    // Simulate the initiator no longer actually owning the NFT they staked —
+    // e.g. transferred it away through some other path after staking it here.
+    let someone_else = Address::generate(&env);
+    MockNftClient::new(&env, &initiator_nft).set_owner(&someone_else);
+
+    assert!(client.try_execute_trade(&trade_id, &initiator).is_err());
+
+    // Neither side's NFT moved, and the trade is still `Funded`, not
+    // `Executed` — a failed transfer must never leave the two inconsistent.
+    assert_eq!(
+        MockNftClient::new(&env, &initiator_nft).owner_of(&1),
+        someone_else,
+    );
+    assert_eq!(
+        MockNftClient::new(&env, &counterparty_nft).owner_of(&1),
+        counterparty,
+    );
+    env.as_contract(&cid, || {
+        let trade =
+            crate::storage::transaction_store::TradeTransactionStore::get(&env, trade_id).unwrap();
+        assert_eq!(trade.state, crate::types::TransactionState::Funded);
+    });
+}
+
 // ─── Bundle ───────────────────────────────────────────────────────────────────
 
 #[test]
