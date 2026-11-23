@@ -30,6 +30,8 @@ import { ContentFlagService } from './content-flag.service';
 import { AuditModule } from '../../common/audit/audit.module';
 import { PromptInjectionService } from './prompt-injection.service';
 import { AiModerationProcessor } from './ai-moderation.processor';
+import { EmailModule } from '../email/email.module';
+import { ModerationAlertService } from './moderation-alert.service';
 import { AiChatStreamRegistryService } from './ai-chat-stream-registry.service';
 
 @Module({
@@ -51,6 +53,7 @@ import { AiChatStreamRegistryService } from './ai-chat-stream-registry.service';
     ]),
     BullModule.registerQueue({ name: AI_MODERATION_QUEUE_NAME }),
     AuditModule,
+    EmailModule,
     NftModule,
     ListingModule,
     CollectionModule,
@@ -68,6 +71,7 @@ import { AiChatStreamRegistryService } from './ai-chat-stream-registry.service';
     copilotRateLimiterProvider,
     ListingCreatedListener,
     AiModerationProcessor,
+    ModerationAlertService,
     ContentFlagService,
     PromptInjectionService,
     AiChatStreamRegistryService,
