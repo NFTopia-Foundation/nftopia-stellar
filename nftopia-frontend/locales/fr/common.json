@@ -106,6 +106,31 @@
       "createdBy": "Créé par",
       "ownedBy": "Possédé par",
       "viewDetails": "Voir les détails"
+    },
+    "presets": {
+      "nameLabel": "Nom du préréglage",
+      "namePlaceholder": "Nommer ces filtres",
+      "save": "Enregistrer les filtres actuels",
+      "listLabel": "Préréglages de filtres enregistrés",
+      "choose": "Choisir un préréglage",
+      "none": "Aucun préréglage enregistré",
+      "apply": "Appliquer le préréglage",
+      "delete": "Supprimer le préréglage",
+      "saved": "« {{name}} » enregistré",
+      "applied": "« {{name}} » appliqué",
+      "deleted": "« {{name}} » supprimé",
+      "errors": {
+        "emptyName": "Saisissez un nom pour ce préréglage.",
+        "noFilters": "Définissez au moins un filtre avant d'enregistrer un préréglage.",
+        "limitReached": "Vous pouvez enregistrer jusqu'à {{max}} préréglages. Supprimez-en un pour en ajouter un autre.",
+        "storageUnavailable": "Impossible d'enregistrer des préréglages dans ce navigateur pour le moment. Le filtrage fonctionne toujours."
+      }
+    },
+    "priceRange": {
+      "group": "Fourchette de prix",
+      "minThumb": "Curseur du prix minimum",
+      "maxThumb": "Curseur du prix maximum",
+      "invalid": "Le prix minimum ne peut pas dépasser le prix maximum."
     }
   },
   "profile": {

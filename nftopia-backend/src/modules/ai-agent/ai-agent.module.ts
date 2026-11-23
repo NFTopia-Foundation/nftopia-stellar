@@ -20,8 +20,11 @@ import { ContentFlag } from './entities/content-flag.entity';
 import { AiToolCallLog } from './entities/ai-tool-call-log.entity';
 import { StellarNft } from '../../nft/entities/stellar-nft.entity';
 import { NftMetadata } from '../../nft/entities/nft-metadata.entity';
-import { AiChatRateLimitGuard } from '../../common/guards/ai-chat-rate-limit.guard';
-import { aiChatRateLimiterProvider } from '../../common/guards/ai-chat-rate-limiter.provider';
+import {
+  AI_CHAT_RATE_LIMIT_OVERRIDES,
+  AiChatRateLimitGuard,
+} from '../../common/guards/ai-chat-rate-limit.guard';
+import { aiChatRateLimiterProviders } from '../../common/guards/ai-chat-rate-limiter.provider';
 import { CopilotRateLimitGuard } from '../../common/guards/copilot-rate-limit.guard';
 import { copilotRateLimiterProvider } from '../../common/guards/copilot-rate-limiter.provider';
 import { ListingCreatedListener } from './listeners/listing-created.listener';
@@ -66,7 +69,9 @@ import { AiChatStreamRegistryService } from './ai-chat-stream-registry.service';
     AiAgentHealthService,
     ChatSessionService,
     AiChatRateLimitGuard,
-    aiChatRateLimiterProvider,
+    ...aiChatRateLimiterProviders,
+    // Per-user chat rate-limit overrides (#751) live on UserAiCapOverride.
+    { provide: AI_CHAT_RATE_LIMIT_OVERRIDES, useExisting: AiUsageService },
     CopilotRateLimitGuard,
     copilotRateLimiterProvider,
     ListingCreatedListener,
