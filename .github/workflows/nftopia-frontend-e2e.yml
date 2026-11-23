@@ -22,7 +22,10 @@ env:
 jobs:
   e2e:
     name: E2E (auction bid flow)
-    runs-on: ubuntu-latest
+    # Playwright 1.60 does not support the ubuntu-26.04 image that
+    # `ubuntu-latest` currently resolves to. Pin a supported image so browser
+    # installation and the required E2E gate work on every PR.
+    runs-on: ubuntu-24.04
 
     defaults:
       run:
