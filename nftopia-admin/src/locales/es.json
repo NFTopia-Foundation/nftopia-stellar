@@ -192,7 +192,12 @@
     "error": {
       "load": "No se pudieron cargar las colecciones.",
       "approve": "No se pudo aprobar la colección. Inténtalo de nuevo.",
-      "reject": "No se pudo rechazar la colección. Inténtalo de nuevo."
+      "reject": "No se pudo rechazar la colección. Inténtalo de nuevo.",
+      "bulkAction": "No se pudieron resolver algunas de las colecciones seleccionadas. Inténtalo de nuevo.",
+      "resolve": "No se pudo resolver la colección. Inténtalo de nuevo."
+    },
+    "filters": {
+      "status": "Estado"
     },
     "columns": {
       "select": "Seleccionar",
@@ -218,6 +223,9 @@
       "critical": "Gravedad crítica"
     },
     "results": "{{count}} colecciones coincidentes (se muestran hasta 50).",
+    "pending": {
+      "overdue": "atrasado"
+    },
     "pagination": {
       "label": "Páginas de verificación de colecciones",
       "previous": "Anterior",

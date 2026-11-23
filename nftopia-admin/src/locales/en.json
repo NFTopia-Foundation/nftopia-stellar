@@ -207,7 +207,12 @@
     "error": {
       "load": "Unable to load collections.",
       "approve": "Unable to approve the collection. Please try again.",
-      "reject": "Unable to reject the collection. Please try again."
+      "reject": "Unable to reject the collection. Please try again.",
+      "bulkAction": "Unable to resolve some of the selected collections. Please try again.",
+      "resolve": "Unable to resolve the collection. Please try again."
+    },
+    "filters": {
+      "status": "Status"
     },
     "confirm": {
       "approve": "Approve collection {{collectionName}} for publication?",
@@ -237,6 +242,9 @@
       "critical": "Critical severity"
     },
     "results": "{{count}} matching collections (showing up to 50).",
+    "pending": {
+      "overdue": "overdue"
+    },
     "pagination": {
       "label": "Collection verification pages",
       "previous": "Previous",
