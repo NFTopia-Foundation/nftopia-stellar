@@ -11,8 +11,11 @@ export type GraphqlUser = {
 };
 
 export interface GraphqlContext {
-  req: Request;
-  res: Response;
+  // Absent for a GraphQL-WS subscription connection — it has no underlying
+  // HTTP request/response, only connectionParams (see
+  // GraphqlContextFactory.createForSubscription).
+  req?: Request;
+  res?: Response;
   user?: GraphqlUser;
   loaders: GraphqlLoaders;
 }

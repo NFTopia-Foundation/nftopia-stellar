@@ -3,11 +3,13 @@
 // tests below override/restore it per-case around the actual check).
 process.env.ANTHROPIC_API_KEY = 'test-anthropic-key';
 
+import type { Cache } from 'cache-manager';
 import { AiAgentHealthService } from './ai-agent-health.service';
 
 describe('AiAgentHealthService', () => {
   let service: AiAgentHealthService;
   let originalApiKey: string | undefined;
+  let mockCacheManager: { get: jest.Mock; set: jest.Mock };
 
   const mockRetrieve = (impl: jest.Mock) => {
     const client = (service as unknown as { client: unknown }).client as {
@@ -20,7 +22,13 @@ describe('AiAgentHealthService', () => {
   beforeEach(() => {
     originalApiKey = process.env.ANTHROPIC_API_KEY;
     process.env.ANTHROPIC_API_KEY = 'test-anthropic-key';
-    service = new AiAgentHealthService();
+    // Cache miss by default, so each test exercises a fresh probe unless it
+    // explicitly stubs a cached value.
+    mockCacheManager = {
+      get: jest.fn().mockResolvedValue(undefined),
+      set: jest.fn().mockResolvedValue(undefined),
+    };
+    service = new AiAgentHealthService(mockCacheManager as unknown as Cache);
   });
 
   afterEach(() => {
@@ -126,6 +134,41 @@ describe('AiAgentHealthService', () => {
       const health = await service.getHealth();
 
       expect(health.status).toBe('unconfigured');
+    });
+  });
+
+  describe('caching', () => {
+    it('stores the probed status in the cache with the configured TTL', async () => {
+      mockRetrieve(jest.fn().mockResolvedValue({ id: 'claude-opus-5' }));
+
+      await service.checkAnthropic();
+
+      expect(mockCacheManager.set).toHaveBeenCalledWith(
+        'ai-agent:anthropic-health-status',
+        'up',
+        10_000,
+      );
+    });
+
+    it('reuses a cached status instead of re-probing Anthropic', async () => {
+      mockCacheManager.get.mockResolvedValue('down');
+      const retrieve = mockRetrieve(
+        jest.fn().mockResolvedValue({ id: 'claude-opus-5' }),
+      );
+
+      const status = await service.checkAnthropic();
+
+      expect(status).toBe('down');
+      expect(retrieve).not.toHaveBeenCalled();
+    });
+
+    it('does not consult the cache when unconfigured', async () => {
+      delete process.env.ANTHROPIC_API_KEY;
+
+      await service.checkAnthropic();
+
+      expect(mockCacheManager.get).not.toHaveBeenCalled();
+      expect(mockCacheManager.set).not.toHaveBeenCalled();
     });
   });
 });

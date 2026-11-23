@@ -386,6 +386,35 @@ class ApiClient {
       // Silently fail telemetry
     }
   }
+
+  // AI Usage API
+  async getAIUsage(): Promise<{
+    daily: {
+      totalTokens: number;
+      estimatedCostUsd: number;
+      cap: number;
+      remaining: number;
+      spendCapUsd: number | null;
+      spendRemaining: number | null;
+      percentUsed: number;
+      approachingCap: boolean;
+      resetsAt: string;
+    };
+    monthly: {
+      totalTokens: number;
+      estimatedCostUsd: number;
+      cap: number;
+      remaining: number;
+      spendCapUsd: number | null;
+      spendRemaining: number | null;
+      percentUsed: number;
+      approachingCap: boolean;
+      resetsAt: string;
+    };
+    hasOverride: boolean;
+  }> {
+    return this.request('/ai/usage');
+  }
 }
 
 // Use config for API base URL and timeout

@@ -14,15 +14,18 @@ import { AiAgentController } from './ai-agent.controller';
 import { AiAgentService } from './ai-agent.service';
 import { AiUsageService } from './ai-usage.service';
 import { AiAgentHealthService } from './ai-agent-health.service';
+import { AiModerationProcessor } from './ai-moderation.processor';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AiChatRateLimitGuard } from '../../common/guards/ai-chat-rate-limit.guard';
 import { CopilotRateLimitGuard } from '../../common/guards/copilot-rate-limit.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { TOOL_SET_KEY } from '../../common/decorators/tool-set.decorator';
 
 describe('AiAgentController', () => {
   const aiAgentService = {
     chat: jest.fn(),
     chatStream: jest.fn(),
+    resumeChatStream: jest.fn(),
     getToolLogs: jest.fn(),
     draftListing: jest.fn(),
   };
@@ -37,10 +40,15 @@ describe('AiAgentController', () => {
     getHealth: jest.fn(),
   };
 
+  const aiModerationProcessor = {
+    getConfidenceThreshold: jest.fn(),
+  };
+
   const controller = new AiAgentController(
     aiAgentService as unknown as AiAgentService,
     aiUsageService as unknown as AiUsageService,
     aiAgentHealthService as unknown as AiAgentHealthService,
+    aiModerationProcessor as unknown as AiModerationProcessor,
   );
 
   const makeRequest = (userId?: string) =>
@@ -65,6 +73,12 @@ describe('AiAgentController', () => {
 
     expect(guards).toContain(JwtAuthGuard);
     expect(guards).toContain(AiChatRateLimitGuard);
+  });
+
+  it('tags the chat route as the marketplace-assistant tool set for rate limiting (#645)', () => {
+    expect(Reflect.getMetadata(TOOL_SET_KEY, controller.chat)).toBe(
+      'marketplace-assistant',
+    );
   });
 
   it('applies JwtAuthGuard to the usage route', () => {
@@ -180,6 +194,12 @@ describe('AiAgentController', () => {
       expect(guards).toContain(AiChatRateLimitGuard);
     });
 
+    it('tags the stream route as the marketplace-assistant tool set for rate limiting (#645)', () => {
+      expect(Reflect.getMetadata(TOOL_SET_KEY, controller.chatStream)).toBe(
+        'marketplace-assistant',
+      );
+    });
+
     it('delegates to AiAgentService.chatStream with the authenticated user id', () => {
       const observable = of();
       aiAgentService.chatStream.mockReturnValue(observable);
@@ -235,6 +255,80 @@ describe('AiAgentController', () => {
         controller.chatStream(makeRequest(undefined), { message: 'hi' }),
       ).toThrow(UnauthorizedException);
       expect(aiAgentService.chatStream).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('resumeChatStream (#644)', () => {
+    it('is registered as an SSE route under the chat stream resource', () => {
+      expect(
+        Reflect.getMetadata(SSE_METADATA, controller.resumeChatStream),
+      ).toBe(true);
+      expect(
+        Reflect.getMetadata(PATH_METADATA, controller.resumeChatStream),
+      ).toBe('chat/stream/:streamId/resume');
+    });
+
+    it('applies JwtAuthGuard but not AiChatRateLimitGuard (resuming does not spend new cap)', () => {
+      const guards = Reflect.getMetadata(
+        GUARDS_METADATA,
+        controller.resumeChatStream,
+      ) as unknown[] | undefined;
+
+      expect(guards).toContain(JwtAuthGuard);
+      expect(guards).not.toContain(AiChatRateLimitGuard);
+    });
+
+    it('delegates to AiAgentService.resumeChatStream with the authenticated user id, streamId, and parsed afterSeq', () => {
+      const observable = of();
+      aiAgentService.resumeChatStream.mockReturnValue(observable);
+
+      const result = controller.resumeChatStream(
+        makeRequest('user-1'),
+        'stream-abc',
+        '5',
+      );
+
+      expect(aiAgentService.resumeChatStream).toHaveBeenCalledWith(
+        'user-1',
+        'stream-abc',
+        5,
+      );
+      expect(result).toBe(observable);
+    });
+
+    it('defaults afterSeq to -1 (resume from the start) when omitted', () => {
+      aiAgentService.resumeChatStream.mockReturnValue(of());
+
+      controller.resumeChatStream(makeRequest('user-1'), 'stream-abc');
+
+      expect(aiAgentService.resumeChatStream).toHaveBeenCalledWith(
+        'user-1',
+        'stream-abc',
+        -1,
+      );
+    });
+
+    it('falls back to -1 for a non-numeric afterSeq rather than forwarding NaN', () => {
+      aiAgentService.resumeChatStream.mockReturnValue(of());
+
+      controller.resumeChatStream(
+        makeRequest('user-1'),
+        'stream-abc',
+        'not-a-number',
+      );
+
+      expect(aiAgentService.resumeChatStream).toHaveBeenCalledWith(
+        'user-1',
+        'stream-abc',
+        -1,
+      );
+    });
+
+    it('throws UnauthorizedException when no authenticated user is present', () => {
+      expect(() =>
+        controller.resumeChatStream(makeRequest(undefined), 'stream-abc'),
+      ).toThrow(UnauthorizedException);
+      expect(aiAgentService.resumeChatStream).not.toHaveBeenCalled();
     });
   });
 
@@ -354,6 +448,27 @@ describe('AiAgentController', () => {
     });
   });
 
+  describe('getModerationConfig (#642)', () => {
+    it('applies JwtAuthGuard and RolesGuard', () => {
+      const guards = Reflect.getMetadata(
+        GUARDS_METADATA,
+        controller.getModerationConfig,
+      ) as unknown[] | undefined;
+
+      expect(guards).toContain(JwtAuthGuard);
+      expect(guards).toContain(RolesGuard);
+    });
+
+    it('delegates to AiModerationProcessor.getConfidenceThreshold', () => {
+      aiModerationProcessor.getConfidenceThreshold.mockReturnValue(0.5);
+
+      const result = controller.getModerationConfig();
+
+      expect(aiModerationProcessor.getConfidenceThreshold).toHaveBeenCalled();
+      expect(result).toEqual({ confidenceThreshold: 0.5 });
+    });
+  });
+
   describe('admin cap override endpoints (#529)', () => {
     it('applies JwtAuthGuard and RolesGuard to getUsageForAdmin', () => {
       const guards = Reflect.getMetadata(
@@ -414,12 +529,30 @@ describe('AiAgentController', () => {
           monthlyTokenCap: undefined,
           dailySpendCapUsd: undefined,
           monthlySpendCapUsd: undefined,
+          rateLimitPoints: undefined,
           reason: 'VIP',
           grantedBy: 'admin-1',
           expiresAt: undefined,
         },
       );
       expect(result).toBe(created);
+    });
+
+    it('setCapOverride forwards per-tool-set rateLimitPoints (#751)', async () => {
+      aiUsageService.setCapOverride.mockResolvedValue({});
+
+      await controller.setCapOverride(
+        'target-user',
+        { rateLimitPoints: { 'marketplace-assistant': 60 } },
+        makeRequest('admin-1'),
+      );
+
+      expect(aiUsageService.setCapOverride).toHaveBeenCalledWith(
+        'target-user',
+        expect.objectContaining({
+          rateLimitPoints: { 'marketplace-assistant': 60 },
+        }),
+      );
     });
 
     it('setCapOverride converts an ISO expiresAt string to a Date', async () => {

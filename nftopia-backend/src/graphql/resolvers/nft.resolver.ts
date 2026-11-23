@@ -42,6 +42,11 @@ import { GraphqlAuction, AuctionStatus } from '../types/auction.types'; // eslin
 import type { User } from '../../users/user.entity';
 import type { Auction } from '../../modules/auction/entities/auction.entity';
 import { NftTransferEvent } from '../../jobs/entities/nft-transfer-event.entity';
+import {
+  DATALOADER_LIST_RELATION_COMPLEXITY,
+  DATALOADER_RELATION_COMPLEXITY,
+  paginatedComplexity,
+} from '../complexity';
 
 type CursorPayload = {
   createdAt: string;
@@ -71,6 +76,7 @@ export class NftResolver {
   @Query(() => NFTConnection, {
     name: 'nfts',
     description: 'Fetch NFTs with cursor pagination and optional filters',
+    complexity: paginatedComplexity(),
   })
   async nfts(
     @Args('pagination', { type: () => PaginationInput, nullable: true })
@@ -99,6 +105,7 @@ export class NftResolver {
   @Query(() => NFTConnection, {
     name: 'nftsByOwner',
     description: 'Fetch NFTs owned by a specific user',
+    complexity: paginatedComplexity(),
   })
   async nftsByOwner(
     @Args('ownerId', { type: () => ID }) ownerId: string,
@@ -184,6 +191,7 @@ export class NftResolver {
     name: 'owner',
     nullable: true,
     description: 'Resolve NFT owner using request-scoped DataLoader',
+    complexity: DATALOADER_RELATION_COMPLEXITY,
   })
   async owner(
     @Parent() nft: GraphqlNft,
@@ -202,6 +210,7 @@ export class NftResolver {
     name: 'creator',
     nullable: true,
     description: 'Resolve NFT creator using request-scoped DataLoader',
+    complexity: DATALOADER_RELATION_COMPLEXITY,
   })
   async creator(
     @Parent() nft: GraphqlNft,
@@ -220,6 +229,7 @@ export class NftResolver {
     name: 'collection',
     nullable: true,
     description: 'Resolve NFT collection using request-scoped DataLoader',
+    complexity: DATALOADER_RELATION_COMPLEXITY,
   })
   async collection(
     @Parent() nft: GraphqlNft,
@@ -244,6 +254,7 @@ export class NftResolver {
     nullable: true,
     description:
       'Resolve active listing by NFT using request-scoped DataLoader',
+    complexity: DATALOADER_RELATION_COMPLEXITY,
   })
   async listing(
     @Parent() nft: GraphqlNft,
@@ -261,6 +272,7 @@ export class NftResolver {
     name: 'listings',
     description:
       'Resolve NFT listings using request-scoped DataLoader (active listing only)',
+    complexity: DATALOADER_LIST_RELATION_COMPLEXITY,
   })
   async listings(
     @Parent() nft: GraphqlNft,
@@ -279,6 +291,7 @@ export class NftResolver {
     nullable: true,
     description:
       'Resolve active auction by NFT using request-scoped DataLoader',
+    complexity: DATALOADER_RELATION_COMPLEXITY,
   })
   async auction(
     @Parent() nft: GraphqlNft,
@@ -297,6 +310,7 @@ export class NftResolver {
     nullable: true,
     description:
       'Resolve current auction by NFT using request-scoped DataLoader',
+    complexity: DATALOADER_RELATION_COMPLEXITY,
   })
   async currentAuction(
     @Parent() nft: GraphqlNft,
@@ -313,6 +327,7 @@ export class NftResolver {
   @ResolveField(() => [GraphqlOrder], {
     name: 'orders',
     description: 'Resolve NFT orders using request-scoped DataLoader',
+    complexity: DATALOADER_LIST_RELATION_COMPLEXITY,
   })
   async orders(
     @Parent() nft: GraphqlNft,
@@ -328,6 +343,7 @@ export class NftResolver {
   @Query(() => TransferEventConnection, {
     name: 'nftTransferHistory',
     description: 'Fetch NFT transfer history with pagination (page-based)',
+    complexity: paginatedComplexity(10),
   })
   async nftTransferHistory(
     @Args('nftId', { type: () => ID }) nftId: string,
@@ -361,6 +377,7 @@ export class NftResolver {
   @Query(() => TransferEventConnection, {
     name: 'nftTransferHistoryCursor',
     description: 'Fetch NFT transfer history with cursor-based pagination',
+    complexity: paginatedComplexity(10),
   })
   async nftTransferHistoryCursor(
     @Args('nftId', { type: () => ID }) nftId: string,
@@ -417,6 +434,7 @@ export class NftResolver {
     name: 'transferHistory',
     nullable: true,
     description: 'Resolve NFT transfer history using request-scoped DataLoader',
+    complexity: paginatedComplexity(10),
   })
   async transferHistory(
     @Parent() nft: GraphqlNft,

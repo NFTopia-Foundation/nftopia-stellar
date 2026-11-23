@@ -145,6 +145,12 @@ findings behind it.
   - `NAVIGATION-README.md`
   - `AUTH-NAVIGATION-SETUP.md`
   - `QUICK-NAV-REFERENCE.md`
+- The codebase has both root-level (`components/`, `screens/`, `stores/`)
+  and `src/`-prefixed directories from an incremental migration. New files
+  go under `src/`. See
+  [`docs/DIRECTORY-CONVENTIONS.md`](./docs/DIRECTORY-CONVENTIONS.md) for
+  which side won on each concern that used to be duplicated, and why.
+
 ### Session renewal
 
 The auth store owns a single refresh timer, scheduled two minutes before access-token

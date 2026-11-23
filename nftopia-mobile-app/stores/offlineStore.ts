@@ -1,5 +1,6 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
-import { persist, PersistOptions } from 'zustand/middleware';
+import { createJSONStorage, persist, type PersistOptions } from 'zustand/middleware';
 import { OfflineQueueItem, CachedData, NFT, Collection, Notification } from '@/types';
 
 interface OfflineStore {
@@ -9,7 +10,7 @@ interface OfflineStore {
   lastSync: string | null;
   writeActionsBlocked: boolean;
 
-  setOnlineStatus: (isOnline: boolean) => void;
+  setOnlineStatus: (isOnline: boolean) => Promise<void>;
   addToQueue: (item: Omit<OfflineQueueItem, 'id' | 'timestamp' | 'retryCount' | 'maxRetries'>) => void;
   processQueue: () => Promise<void>;
   removeFromQueue: (id: string) => void;
@@ -39,6 +40,8 @@ const initialCachedData: CachedData = {
   lastSync: '',
 };
 
+let queueProcessing: Promise<void> | null = null;
+
 export const useOfflineStore = create<OfflineStore>()(
   persist(
     (set, get) => ({
@@ -48,10 +51,10 @@ export const useOfflineStore = create<OfflineStore>()(
       lastSync: null,
       writeActionsBlocked: false,
 
-      setOnlineStatus: (isOnline: boolean) => {
+      setOnlineStatus: async (isOnline: boolean) => {
         set({ isOnline, writeActionsBlocked: !isOnline });
         if (isOnline) {
-          get().processQueue();
+          await get().processQueue();
         }
       },
 
@@ -75,25 +78,45 @@ export const useOfflineStore = create<OfflineStore>()(
         set((state) => ({ queue: [...state.queue, queueItem] }));
       },
 
-      processQueue: async () => {
-        const { queue, isOnline } = get();
-        if (!isOnline || queue.length === 0) return;
+      processQueue: () => {
+        if (queueProcessing) return queueProcessing;
 
-        const remaining: OfflineQueueItem[] = [];
-        for (const item of queue) {
-          try {
-            // Process each queued action
-            await processOfflineAction(item);
-          } catch {
-            if (item.retryCount < item.maxRetries) {
-              remaining.push({
-                ...item,
-                retryCount: item.retryCount + 1,
-              });
+        const { queue, isOnline } = get();
+        if (!isOnline || queue.length === 0) return Promise.resolve();
+
+        queueProcessing = (async () => {
+          for (const queuedItem of queue) {
+            if (!get().isOnline) break;
+
+            const item = get().queue.find(({ id }) => id === queuedItem.id);
+            if (!item) continue;
+
+            try {
+              await processOfflineAction(item);
+              set((state) => ({
+                queue: state.queue.filter(({ id }) => id !== item.id),
+              }));
+            } catch {
+              if (item.retryCount < item.maxRetries) {
+                set((state) => ({
+                  queue: state.queue.map((queued) =>
+                    queued.id === item.id
+                      ? { ...queued, retryCount: queued.retryCount + 1 }
+                      : queued
+                  ),
+                }));
+              } else {
+                set((state) => ({
+                  queue: state.queue.filter(({ id }) => id !== item.id),
+                }));
+              }
             }
           }
-        }
-        set({ queue: remaining });
+        })().finally(() => {
+          queueProcessing = null;
+        });
+
+        return queueProcessing;
       },
 
       removeFromQueue: (id: string) => {
@@ -195,6 +218,7 @@ export const useOfflineStore = create<OfflineStore>()(
     }),
     {
       name: 'offline-storage',
+      storage: createJSONStorage(() => AsyncStorage),
       partialize: (state: OfflineStore) => ({
         cachedData: state.cachedData,
         lastSync: state.lastSync,

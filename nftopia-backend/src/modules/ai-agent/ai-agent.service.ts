@@ -27,6 +27,12 @@ import { AiUsageService } from './ai-usage.service';
 import { ChatSessionService } from './chat-session.service';
 import { AiToolCallLog } from './entities/ai-tool-call-log.entity';
 import { PromptInjectionService } from './prompt-injection.service';
+import {
+  AiAgentHealthService,
+  type AnthropicHealthStatus,
+} from './ai-agent-health.service';
+import { AiChatStreamRegistryService } from './ai-chat-stream-registry.service';
+import type { ChatTurnDto } from './dto/chat-request.dto';
 
 const SYSTEM_PROMPT = `You are the NFTopia marketplace assistant. You help users find NFTs, \
 listings, and collections on the NFTopia Stellar marketplace, answer questions about the \
@@ -61,7 +67,46 @@ export class AiAgentService {
     @InjectRepository(AiToolCallLog)
     private readonly toolCallLogRepo: Repository<AiToolCallLog>,
     private readonly promptInjectionService: PromptInjectionService,
+    private readonly aiAgentHealthService: AiAgentHealthService,
+    private readonly streamRegistry: AiChatStreamRegistryService,
   ) {}
+
+  /**
+   * Short-circuits chat()/chatStream() while Anthropic is known to be
+   * down/unconfigured (#643), instead of letting every request pay for its
+   * own doomed attempt (and, for an auth failure, an avoidable billed call).
+   * checkAnthropic() is itself cache-backed (AiAgentHealthService), so this
+   * doesn't add a reachability round-trip to every chat message.
+   *
+   * Thrown outside of chat()'s/chatStream()'s try/catch around the Anthropic
+   * call, so it reaches the caller as-is rather than through
+   * mapAnthropicError's generic fallback — see that method's explicit
+   * ServiceUnavailableException passthrough.
+   */
+  private async assertAnthropicAvailable(): Promise<void> {
+    const status = await this.aiAgentHealthService.checkAnthropic();
+    if (status === 'up') return;
+
+    throw this.assistantUnavailableError(status);
+  }
+
+  /**
+   * The 'assistant temporarily unavailable' response (#643): a distinct,
+   * machine-readable `code` (mirroring AiUsageService's cap-exceeded shape)
+   * so a client can render this differently from a generic failure, rather
+   * than just a prose message.
+   */
+  private assistantUnavailableError(
+    status: AnthropicHealthStatus,
+  ): ServiceUnavailableException {
+    return new ServiceUnavailableException({
+      statusCode: 503,
+      code: 'AI_ASSISTANT_UNAVAILABLE',
+      message:
+        'The AI assistant is temporarily unavailable. Please try again shortly.',
+      anthropicStatus: status,
+    });
+  }
 
   private getToolLogger(userId: string, sessionId: string) {
     return (
@@ -96,12 +141,21 @@ export class AiAgentService {
     };
   }
 
+  /**
+   * A queued-retry for a degraded Anthropic API (so a chat sent while down
+   * could be delivered automatically once it recovers, rather than the
+   * caller having to resend) is explicitly deferred — out of scope for
+   * #643, which is about fail-safe degradation (a clear, fast, distinct
+   * "unavailable" response) rather than delivery guarantees. Worth
+   * revisiting as a follow-up if that gap matters in practice.
+   */
   async chat(
     userId: string,
     toolSet: ToolSetName,
     message: string,
     sessionId?: string,
   ): Promise<{ reply: string; sessionId: string }> {
+    await this.assertAnthropicAvailable();
     await this.aiUsageService.assertWithinCap(userId);
 
     // Screen the message for prompt-injection / jailbreak attempts before
@@ -179,13 +233,22 @@ export class AiAgentService {
   }
 
   /**
-   * Streaming variant of chat(). Emits `text` deltas as they're generated,
-   * a `tool_call` event whenever the model starts a tool_use block, and a
-   * terminal `done` event with the full assembled reply. A mid-stream
-   * `pause_turn` (long-running server-tool turns) is resumed transparently
-   * by pushing the paused assistant turn back into the runner, per the
-   * Anthropic SDK's documented streaming pause/resume pattern — the caller
-   * never sees a truncated answer.
+   * Streaming variant of chat(). Emits a `stream_start` event first
+   * (carrying the id a dropped connection can reconnect with — #644), then
+   * `text` deltas as they're generated, a `tool_call` event whenever the
+   * model starts a tool_use block, and a terminal `done` event with the
+   * full assembled reply. A mid-stream `pause_turn` (long-running
+   * server-tool turns) is resumed transparently by pushing the paused
+   * assistant turn back into the runner, per the Anthropic SDK's documented
+   * streaming pause/resume pattern — the caller never sees a truncated
+   * answer.
+   *
+   * The generation itself (runGeneration) is registered with
+   * AiChatStreamRegistryService and run detached from this specific
+   * subscriber: if the original connection drops, the generation keeps
+   * going and keeps buffering, so resumeChatStream() can pick it back up
+   * instead of the caller having to restart the whole exchange. See
+   * docs/ai-chat-streaming-reconnect.md for the client-facing contract.
    *
    * Errors are delivered via the Observable's error channel. NestJS's SSE
    * response controller emits a terminal `error` SSE event for them once
@@ -199,10 +262,12 @@ export class AiAgentService {
     sessionId?: string,
   ): Observable<MessageEvent> {
     return new Observable<MessageEvent>((subscriber) => {
-      let unsubscribed = false;
+      let tornDown = false;
+      let innerSubscription: { unsubscribe: () => void } | null = null;
 
       void (async () => {
         try {
+          await this.assertAnthropicAvailable();
           await this.aiUsageService.assertWithinCap(userId);
 
           // Screen for injection/jailbreak before opening the session or
@@ -224,108 +289,171 @@ export class AiAgentService {
               sessionId,
             );
 
-          const tools = resolveToolSet(toolSet, {
-            nftService: this.nftService,
-            listingService: this.listingService,
-            collectionService: this.collectionService,
-            orderService: this.orderService,
-            auctionService: this.auctionService,
-            userId,
-            toolLogger: this.getToolLogger(userId, session.id),
+          const handles = this.streamRegistry.start(userId, session.id);
+          handles.append({
+            type: 'stream_start',
+            data: { streamId: handles.streamId, sessionId: session.id },
           });
 
-          const messages: BetaMessageParam[] = [
-            ...history.map((turn) => ({
-              role: turn.role,
-              content: turn.content,
-            })),
-            { role: 'user', content: message },
-          ];
-
-          const runner = this.client.beta.messages.toolRunner({
-            model: 'claude-opus-5',
-            max_tokens: 64000,
-            thinking: { type: 'adaptive' },
-            output_config: { effort: 'medium' },
-            system: SYSTEM_PROMPT,
-            tools,
-            messages,
-            stream: true,
-          });
-
-          const replyParts: string[] = [];
-          let lastMessage: BetaMessage | null = null;
-
-          for await (const stream of runner) {
-            if (unsubscribed) return;
-
-            for await (const event of stream) {
-              if (unsubscribed) return;
-
-              if (
-                event.type === 'content_block_start' &&
-                event.content_block.type === 'tool_use'
-              ) {
-                subscriber.next({
-                  type: 'tool_call',
-                  data: {
-                    id: event.content_block.id,
-                    name: event.content_block.name,
-                  },
-                });
-              } else if (
-                event.type === 'content_block_delta' &&
-                event.delta.type === 'text_delta'
-              ) {
-                replyParts.push(event.delta.text);
-                subscriber.next({
-                  type: 'text',
-                  data: { text: event.delta.text },
-                });
-              }
-            }
-
-            lastMessage = await stream.finalMessage();
-            if (lastMessage.stop_reason === 'pause_turn') {
-              runner.pushMessages({
-                role: 'assistant',
-                content: lastMessage.content,
-              });
-            }
-          }
-
-          const finalMessage = lastMessage ?? (await runner.done());
-
-          // Fire-and-forget, same contract as chat(): never blocks the
-          // stream and never throws (see AiUsageService.recordUsage).
-          void this.aiUsageService.recordUsage(
+          // Detached from this subscriber on purpose (#644): dropping this
+          // connection must not abort the generation — see tornDown below.
+          void this.runStreamGeneration(
             userId,
-            finalMessage.model,
-            finalMessage.usage.input_tokens,
-            finalMessage.usage.output_tokens,
-          );
-
-          const reply = replyParts.join('').trim();
-          await this.chatSessionService.appendExchange(
-            session.id,
+            toolSet,
             message,
-            reply,
+            session.id,
+            history,
+            handles,
           );
 
-          subscriber.next({
-            type: 'done',
-            data: { reply, sessionId: session.id },
+          if (tornDown) return;
+          const attached = this.streamRegistry.attach(
+            handles.streamId,
+            userId,
+            -1,
+          );
+          innerSubscription = attached.subscribe({
+            next: (event) => subscriber.next(event),
+            error: (error: Error) => subscriber.error(error),
+            complete: () => subscriber.complete(),
           });
-          subscriber.complete();
         } catch (error) {
           subscriber.error(this.mapAnthropicError(error));
         }
       })();
 
       return () => {
-        unsubscribed = true;
+        tornDown = true;
+        innerSubscription?.unsubscribe();
       };
     });
+  }
+
+  /**
+   * Reattaches to an in-flight or recently-completed stream from `afterSeq`
+   * onward (#644), instead of restarting the exchange from scratch. Throws
+   * NotFoundException if the stream is unknown or its resume window has
+   * expired, or ForbiddenException if the caller didn't start it.
+   */
+  resumeChatStream(
+    userId: string,
+    streamId: string,
+    afterSeq: number,
+  ): Observable<MessageEvent> {
+    return this.streamRegistry.attach(streamId, userId, afterSeq);
+  }
+
+  /**
+   * The actual Anthropic tool-runner loop for chatStream(), extracted so it
+   * can run independent of any one subscriber's connection (#644). Reports
+   * every event through `handles` (buffered + broadcast by
+   * AiChatStreamRegistryService) rather than touching an Observable
+   * directly, and always resolves via exactly one of handles.complete() /
+   * handles.fail() — there is no longer an "the caller stopped listening"
+   * early return, since the whole point is that the generation keeps going
+   * regardless.
+   */
+  private async runStreamGeneration(
+    userId: string,
+    toolSet: ToolSetName,
+    message: string,
+    sessionId: string,
+    history: ChatTurnDto[],
+    handles: {
+      append: (event: MessageEvent) => void;
+      complete: () => void;
+      fail: (error: Error) => void;
+    },
+  ): Promise<void> {
+    try {
+      const tools = resolveToolSet(toolSet, {
+        nftService: this.nftService,
+        listingService: this.listingService,
+        collectionService: this.collectionService,
+        orderService: this.orderService,
+        auctionService: this.auctionService,
+        userId,
+        toolLogger: this.getToolLogger(userId, sessionId),
+      });
+
+      const messages: BetaMessageParam[] = [
+        ...history.map((turn) => ({
+          role: turn.role,
+          content: turn.content,
+        })),
+        { role: 'user', content: message },
+      ];
+
+      const runner = this.client.beta.messages.toolRunner({
+        model: 'claude-opus-5',
+        max_tokens: 64000,
+        thinking: { type: 'adaptive' },
+        output_config: { effort: 'medium' },
+        system: SYSTEM_PROMPT,
+        tools,
+        messages,
+        stream: true,
+      });
+
+      const replyParts: string[] = [];
+      let lastMessage: BetaMessage | null = null;
+
+      for await (const stream of runner) {
+        for await (const event of stream) {
+          if (
+            event.type === 'content_block_start' &&
+            event.content_block.type === 'tool_use'
+          ) {
+            handles.append({
+              type: 'tool_call',
+              data: {
+                id: event.content_block.id,
+                name: event.content_block.name,
+              },
+            });
+          } else if (
+            event.type === 'content_block_delta' &&
+            event.delta.type === 'text_delta'
+          ) {
+            replyParts.push(event.delta.text);
+            handles.append({
+              type: 'text',
+              data: { text: event.delta.text },
+            });
+          }
+        }
+
+        lastMessage = await stream.finalMessage();
+        if (lastMessage.stop_reason === 'pause_turn') {
+          runner.pushMessages({
+            role: 'assistant',
+            content: lastMessage.content,
+          });
+        }
+      }
+
+      const finalMessage = lastMessage ?? (await runner.done());
+
+      // Fire-and-forget, same contract as chat(): never blocks the
+      // stream and never throws (see AiUsageService.recordUsage).
+      void this.aiUsageService.recordUsage(
+        userId,
+        finalMessage.model,
+        finalMessage.usage.input_tokens,
+        finalMessage.usage.output_tokens,
+      );
+
+      const reply = replyParts.join('').trim();
+      await this.chatSessionService.appendExchange(sessionId, message, reply);
+
+      handles.append({
+        type: 'done',
+        data: { reply, sessionId },
+      });
+      handles.complete();
+    } catch (error) {
+      handles.fail(this.mapAnthropicError(error));
+    }
   }
 
   /**
@@ -423,6 +551,12 @@ export class AiAgentService {
   private mapAnthropicError(error: unknown): Error {
     if (error instanceof ForbiddenException) {
       // Cap-exceeded, already a clear typed/user-facing error — pass through.
+      return error;
+    }
+    if (error instanceof ServiceUnavailableException) {
+      // Already a clear typed/user-facing error (e.g. assertAnthropicAvailable's
+      // AI_ASSISTANT_UNAVAILABLE, thrown from inside chatStream()'s try block) —
+      // pass through rather than falling into the generic mapping below.
       return error;
     }
     if (error instanceof Anthropic.RateLimitError) {

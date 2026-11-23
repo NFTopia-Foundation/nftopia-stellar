@@ -39,6 +39,7 @@ import {
   FollowResultType,
   PublicCreatorType,
 } from '../types/public-creator.types';
+import { paginatedComplexity } from '../complexity';
 
 const IDENTIFIER_MAX_LENGTH = 100;
 
@@ -138,6 +139,7 @@ export class PublicCreatorResolver {
   @ResolveField(() => NFTConnection, {
     name: 'nfts',
     nullable: true,
+    complexity: paginatedComplexity(),
   })
   async nfts(
     @Parent() creator: PublicCreatorType,
@@ -164,6 +166,7 @@ export class PublicCreatorResolver {
   @ResolveField(() => CollectionConnection, {
     name: 'collections',
     nullable: true,
+    complexity: paginatedComplexity(),
   })
   async collections(
     @Parent() creator: PublicCreatorType,
@@ -189,6 +192,9 @@ export class PublicCreatorResolver {
   @ResolveField(() => CreatorActivityConnection, {
     name: 'activity',
     nullable: true,
+    // Fans out to 3 independent paginated queries (minted/listings/sales) of
+    // the same page size, so it costs 3x a single paginated connection.
+    complexity: (options) => paginatedComplexity()(options) * 3,
   })
   async activity(
     @Parent() creator: PublicCreatorType,

@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { AuctionService } from './auction.service';
 import { Auction } from './entities/auction.entity';
@@ -83,6 +84,7 @@ describe('AuctionService — settlement winner notification', () => {
         { provide: MarketplaceSettlementClient, useValue: settlementClient },
         { provide: TransactionService, useValue: transactionService },
         { provide: NotificationsService, useValue: notificationsService },
+        { provide: DataSource, useValue: { transaction: jest.fn() } },
       ],
     }).compile();
 

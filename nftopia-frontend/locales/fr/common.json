@@ -106,6 +106,31 @@
       "createdBy": "Créé par",
       "ownedBy": "Possédé par",
       "viewDetails": "Voir les détails"
+    },
+    "presets": {
+      "nameLabel": "Nom du préréglage",
+      "namePlaceholder": "Nommer ces filtres",
+      "save": "Enregistrer les filtres actuels",
+      "listLabel": "Préréglages de filtres enregistrés",
+      "choose": "Choisir un préréglage",
+      "none": "Aucun préréglage enregistré",
+      "apply": "Appliquer le préréglage",
+      "delete": "Supprimer le préréglage",
+      "saved": "« {{name}} » enregistré",
+      "applied": "« {{name}} » appliqué",
+      "deleted": "« {{name}} » supprimé",
+      "errors": {
+        "emptyName": "Saisissez un nom pour ce préréglage.",
+        "noFilters": "Définissez au moins un filtre avant d'enregistrer un préréglage.",
+        "limitReached": "Vous pouvez enregistrer jusqu'à {{max}} préréglages. Supprimez-en un pour en ajouter un autre.",
+        "storageUnavailable": "Impossible d'enregistrer des préréglages dans ce navigateur pour le moment. Le filtrage fonctionne toujours."
+      }
+    },
+    "priceRange": {
+      "group": "Fourchette de prix",
+      "minThumb": "Curseur du prix minimum",
+      "maxThumb": "Curseur du prix maximum",
+      "invalid": "Le prix minimum ne peut pas dépasser le prix maximum."
     }
   },
   "profile": {
@@ -134,6 +159,7 @@
   "creatorProfile": {
     "verified": "Vérifié",
     "followers": "abonnés",
+    "following": "abonnements",
     "nftsCreated": "NFTs",
     "volume": "volume",
     "tabNfts": "NFTs",
@@ -159,6 +185,7 @@
     "edit": "Modifier",
     "view": "Voir",
     "close": "Fermer",
+    "dismiss": "Ignorer",
     "confirm": "Confirmer",
     "back": "Retour",
     "next": "Suivant",
@@ -408,5 +435,18 @@
       "failedToCreate": "Échec de la création de la collection"
     },
     "success": "Collection créée avec succès !"
+  },
+  "pushNotifications": {
+    "promptTitle": "Activer les notifications push",
+    "promptBody": "Soyez informé des nouvelles enchères, ventes et abonnés, même lorsque NFTopia est fermé.",
+    "notNow": "Pas maintenant",
+    "enable": "Activer",
+    "enabling": "Activation...",
+    "subscribeError": "Impossible d'activer les notifications push. Veuillez réessayer.",
+    "settingsTitle": "Notifications push",
+    "settingsDescription": "Soyez informé des enchères, ventes et abonnés même lorsque cet onglet est fermé.",
+    "settingsToggleOn": "Les notifications push sont activées",
+    "settingsToggleOff": "Les notifications push sont désactivées",
+    "unsupported": "Les notifications push ne sont pas prises en charge par ce navigateur."
   }
 }

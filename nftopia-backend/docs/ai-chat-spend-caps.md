@@ -60,6 +60,18 @@ All three require `JwtAuthGuard` + `RolesGuard` with `@Roles(UserRole.ADMIN)` �
 
 An override's cap fields are consulted in `assertWithinCap`/`getUsageSummary` in place of the env defaults; an expired override (`expiresAt` in the past) is treated as absent automatically, without an admin needing to clean it up.
 
+### Per-user chat rate limits (#751)
+
+The same override can also change a user's **request rate** per AI tool set, via an optional `rateLimitPoints` object (stored in the `rate_limit_points` JSONB column):
+
+```json
+{ "rateLimitPoints": { "marketplace-assistant": 60, "creator-copilot": 15 } }
+```
+
+Each value is the number of chat requests allowed per `AI_CHAT_RATE_LIMIT_TTL` window (integer, 1–10,000). Tool sets left out keep their env default (`AI_CHAT_RATE_LIMIT_POINTS` / `AI_CHAT_RATE_LIMIT_POINTS_CREATOR_COPILOT`). `AiChatRateLimitGuard` looks the override up through `AiUsageService.getRateLimitPointsOverride`, which caches each user's entry for `AI_CHAT_RATE_LIMIT_OVERRIDE_CACHE_TTL_MS` (default 30s; set/clear on this instance invalidate it at once, other instances pick it up within the TTL). The effective budget is returned in `X-RateLimit-Limit`.
+
+Because rate-limiter-flexible fixes the point budget per limiter instance, an overridden user is counted in a bucket sized to their budget (`ai-chat-rl:<toolSet>:override-<points>`). As a result, changing or clearing an override starts the user in a fresh window rather than carrying over requests they already made. If the override lookup fails (for example, the database is unavailable), the guard logs a warning and applies the default budget instead of failing the chat request.
+
 ## Per-tier caps: deliberately not built as a separate concept
 
 The problem this issue described included "no notion of different spend limits for different user tiers". There is no subscription/billing-tier concept anywhere in this codebase today — only `UserRole` (`USER`/`ADMIN`/`MODERATOR`), which is an *authorization* role, not a billing tier. Automatically deriving spend caps from that role would conflate the two, and baking a fake tier system on top of it would likely need undoing once a real subscription concept exists.

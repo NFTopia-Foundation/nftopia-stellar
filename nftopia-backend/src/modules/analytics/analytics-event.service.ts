@@ -49,4 +49,47 @@ export class AnalyticsEventService {
       .limit(limit)
       .exec();
   }
+
+  /**
+   * Counts *distinct sessions* (not raw event counts — a session may enter
+   * the same stage more than once) that reached each `payload.stage` value
+   * for events named `eventName`, within `[from, to]`. Backs the funnel
+   * drop-off dashboard (#662).
+   */
+  async countDistinctSessionsByStage(
+    eventName: string,
+    from: Date,
+    to: Date,
+  ): Promise<Record<string, number>> {
+    const results = await this.analyticsEventModel.aggregate<{
+      _id: string;
+      count: number;
+    }>([
+      {
+        $match: {
+          eventName,
+          receivedAt: { $gte: from, $lte: to },
+        },
+      },
+      {
+        $group: {
+          _id: '$payload.stage',
+          sessions: { $addToSet: '$context.sessionId' },
+        },
+      },
+      {
+        $project: {
+          count: { $size: '$sessions' },
+        },
+      },
+    ]);
+
+    const byStage: Record<string, number> = {};
+    for (const row of results) {
+      if (row._id) {
+        byStage[row._id] = row.count;
+      }
+    }
+    return byStage;
+  }
 }

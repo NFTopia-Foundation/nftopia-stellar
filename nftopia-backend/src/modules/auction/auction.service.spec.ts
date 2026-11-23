@@ -7,6 +7,7 @@ import { StellarNft } from '../../nft/entities/stellar-nft.entity';
 import { AuctionStatus } from './interfaces/auction.interface';
 import { CreateAuctionDto } from './dto/create-auction.dto';
 import { PlaceBidDto } from './dto/place-bid.dto';
+import { DataSource } from 'typeorm';
 import {
   BadRequestException,
   NotFoundException,
@@ -68,6 +69,35 @@ const mockNotificationsService = {
   broadcastAuctionExtended: jest.fn(),
 };
 
+const mockEntityManager = {
+  findOne: jest.fn().mockImplementation((entity: unknown, opts: unknown) => {
+    if (entity === Auction)
+      return mockAuctionRepo.findOne(opts) as Promise<Auction | null>;
+    return Promise.resolve(null);
+  }),
+  create: jest.fn().mockImplementation((entity: unknown, dto: unknown) => {
+    if (entity === Bid) return mockBidRepo.create(dto) as Bid;
+    return dto;
+  }),
+  save: jest.fn().mockImplementation((entity: unknown, data: unknown) => {
+    if (entity === Auction)
+      return mockAuctionRepo.save(data) as Promise<Auction>;
+    if (entity === Bid) {
+      void mockBidRepo.save(data);
+      return Promise.resolve(data);
+    }
+    return Promise.resolve(data);
+  }),
+};
+
+const mockDataSource = {
+  transaction: jest
+    .fn()
+    .mockImplementation((cb: (manager: unknown) => unknown) =>
+      cb(mockEntityManager),
+    ),
+};
+
 function createFindAllQbMock(result: unknown[]) {
   return {
     where: jest.fn().mockReturnThis(),
@@ -102,6 +132,10 @@ describe('AuctionService', () => {
       state: TransactionState.COMPLETED,
     });
 
+    mockDataSource.transaction.mockImplementation(
+      (cb: (manager: unknown) => unknown) => cb(mockEntityManager),
+    );
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuctionService,
@@ -116,6 +150,7 @@ describe('AuctionService', () => {
         },
         { provide: TransactionService, useValue: mockTransactionService },
         { provide: NotificationsService, useValue: mockNotificationsService },
+        { provide: DataSource, useValue: mockDataSource },
       ],
     }).compile();
 
@@ -408,6 +443,208 @@ describe('AuctionService', () => {
       await expect(
         service.placeBid('nonexistent', 'b1', { amount: 2 }),
       ).rejects.toThrow(NotFoundException);
+    });
+
+    it('acquires a pessimistic_write lock on the auction row inside a database transaction', async () => {
+      const auction = {
+        id: 'a1',
+        status: AuctionStatus.ACTIVE,
+        sellerId: 'seller-1',
+        endTime: new Date(Date.now() + 10000),
+        currentPrice: 1,
+      } as unknown as Auction;
+      mockAuctionRepo.findOne.mockResolvedValueOnce(auction);
+
+      await service.placeBid('a1', 'b1', { amount: 5 });
+
+      expect(mockDataSource.transaction).toHaveBeenCalled();
+      expect(mockEntityManager.findOne).toHaveBeenCalledWith(Auction, {
+        where: { id: 'a1' },
+        lock: { mode: 'pessimistic_write' },
+      });
+    });
+
+    describe('concurrency protection for simultaneous bids', () => {
+      it('serializes simultaneous bids of identical amounts so exactly one wins and the competing bid is rejected', async () => {
+        const auctionState: Auction = {
+          id: 'auction-concurrent-1',
+          status: AuctionStatus.ACTIVE,
+          sellerId: 'seller-1',
+          endTime: new Date(Date.now() + 600_000),
+          currentPrice: 10,
+          startPrice: 10,
+          extensionCount: 0,
+        } as Auction;
+
+        const persistedBids: Bid[] = [];
+        let rowLockHeld = false;
+        const waitingResolvers: Array<() => void> = [];
+
+        const acquireRowLock = async () => {
+          if (rowLockHeld) {
+            await new Promise<void>((resolve) =>
+              waitingResolvers.push(resolve),
+            );
+          }
+          rowLockHeld = true;
+        };
+
+        const releaseRowLock = () => {
+          rowLockHeld = false;
+          const next = waitingResolvers.shift();
+          if (next) next();
+        };
+
+        mockDataSource.transaction.mockImplementation(
+          async (cb: (manager: unknown) => Promise<unknown>) => {
+            await acquireRowLock();
+            try {
+              const manager = {
+                findOne: jest.fn().mockImplementation((entity: unknown) => {
+                  if (entity === Auction) {
+                    return Promise.resolve({ ...auctionState });
+                  }
+                  return Promise.resolve(null);
+                }),
+                create: jest
+                  .fn()
+                  .mockImplementation((entity: unknown, dto: Partial<Bid>) => ({
+                    id: `bid-${persistedBids.length + 1}`,
+                    ...dto,
+                  })),
+                save: jest
+                  .fn()
+                  .mockImplementation((entity: unknown, item: unknown) => {
+                    if (entity === Auction) {
+                      const typed = item as Auction;
+                      auctionState.currentPrice = typed.currentPrice;
+                      auctionState.endTime = typed.endTime;
+                      auctionState.extensionCount = typed.extensionCount;
+                      return Promise.resolve({ ...auctionState });
+                    }
+                    if (entity === Bid) {
+                      persistedBids.push(item as Bid);
+                      return Promise.resolve(item);
+                    }
+                    return Promise.resolve(item);
+                  }),
+              };
+              return await cb(manager);
+            } finally {
+              releaseRowLock();
+            }
+          },
+        );
+
+        // Two simultaneous bids submitted at the same time with identical amounts (15)
+        const [result1, result2] = await Promise.allSettled([
+          service.placeBid('auction-concurrent-1', 'bidder-1', { amount: 15 }),
+          service.placeBid('auction-concurrent-1', 'bidder-2', { amount: 15 }),
+        ]);
+
+        const fulfilled = [result1, result2].filter(
+          (r) => r.status === 'fulfilled',
+        );
+        const rejected = [result1, result2].filter(
+          (r) => r.status === 'rejected',
+        );
+
+        // Exactly one must win and the other must be rejected
+        expect(fulfilled).toHaveLength(1);
+        expect(rejected).toHaveLength(1);
+
+        const rejectionReason = rejected[0].reason as Error;
+        expect(rejectionReason).toBeInstanceOf(BadRequestException);
+        expect(rejectionReason.message).toBe(
+          'Bid must be greater than current price',
+        );
+
+        // Final state is completely consistent
+        expect(auctionState.currentPrice).toBe(15);
+        expect(persistedBids).toHaveLength(1);
+        expect(persistedBids[0].amount).toBe(15);
+      });
+
+      it('ensures competing simultaneous bids of different amounts always yield the higher price without regression', async () => {
+        const auctionState: Auction = {
+          id: 'auction-concurrent-2',
+          status: AuctionStatus.ACTIVE,
+          sellerId: 'seller-1',
+          endTime: new Date(Date.now() + 600_000),
+          currentPrice: 10,
+          startPrice: 10,
+          extensionCount: 0,
+        } as Auction;
+
+        const persistedBids: Bid[] = [];
+        let rowLockHeld = false;
+        const waitingResolvers: Array<() => void> = [];
+
+        const acquireRowLock = async () => {
+          if (rowLockHeld) {
+            await new Promise<void>((resolve) =>
+              waitingResolvers.push(resolve),
+            );
+          }
+          rowLockHeld = true;
+        };
+
+        const releaseRowLock = () => {
+          rowLockHeld = false;
+          const next = waitingResolvers.shift();
+          if (next) next();
+        };
+
+        mockDataSource.transaction.mockImplementation(
+          async (cb: (manager: unknown) => Promise<unknown>) => {
+            await acquireRowLock();
+            try {
+              const manager = {
+                findOne: jest.fn().mockImplementation((entity: unknown) => {
+                  if (entity === Auction) {
+                    return Promise.resolve({ ...auctionState });
+                  }
+                  return Promise.resolve(null);
+                }),
+                create: jest
+                  .fn()
+                  .mockImplementation((entity: unknown, dto: Partial<Bid>) => ({
+                    id: `bid-${persistedBids.length + 1}`,
+                    ...dto,
+                  })),
+                save: jest
+                  .fn()
+                  .mockImplementation((entity: unknown, item: unknown) => {
+                    if (entity === Auction) {
+                      const typed = item as Auction;
+                      auctionState.currentPrice = typed.currentPrice;
+                      return Promise.resolve({ ...auctionState });
+                    }
+                    if (entity === Bid) {
+                      persistedBids.push(item as Bid);
+                      return Promise.resolve(item);
+                    }
+                    return Promise.resolve(item);
+                  }),
+              };
+              return await cb(manager);
+            } finally {
+              releaseRowLock();
+            }
+          },
+        );
+
+        // Two concurrent bids: bidder-A offers 12, bidder-B offers 16
+        const [, resB] = await Promise.allSettled([
+          service.placeBid('auction-concurrent-2', 'bidder-A', { amount: 12 }),
+          service.placeBid('auction-concurrent-2', 'bidder-B', { amount: 16 }),
+        ]);
+
+        // In both interleavings, final currentPrice must be 16
+        expect(auctionState.currentPrice).toBe(16);
+        // The highest bid of 16 must have succeeded
+        expect(resB.status).toBe('fulfilled');
+      });
     });
   });
 

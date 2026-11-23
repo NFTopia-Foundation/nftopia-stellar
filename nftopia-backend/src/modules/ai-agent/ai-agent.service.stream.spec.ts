@@ -1,4 +1,7 @@
-import { ForbiddenException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import type { MessageEvent } from '@nestjs/common';
 import type { Observable } from 'rxjs';
 import { AiAgentService } from './ai-agent.service';
@@ -12,6 +15,8 @@ import type { AiUsageService } from './ai-usage.service';
 import type { ChatSessionService } from './chat-session.service';
 import type { Repository } from 'typeorm';
 import type { AiToolCallLog } from './entities/ai-tool-call-log.entity';
+import type { AiAgentHealthService } from './ai-agent-health.service';
+import { AiChatStreamRegistryService } from './ai-chat-stream-registry.service';
 
 // Anthropic() reads ANTHROPIC_API_KEY at construction time — see
 // ai-agent.service.spec.ts for why this must be set before import.
@@ -96,6 +101,77 @@ const toolUseStart = (id: string, name: string): FakeStreamEvent => ({
   content_block: { type: 'tool_use', id, name, input: {} },
 });
 
+/** Waits for currently-queued microtasks (any number of chained `await`s) to flush. */
+const flush = (): Promise<void> =>
+  new Promise((resolve) => setImmediate(resolve));
+
+/**
+ * A single-iteration (no pause_turn), no-tool-call runner whose events are
+ * pushed one at a time from the test instead of being fixed up front, so a
+ * test can control exactly how much has been "generated" before simulating
+ * a dropped connection (#644).
+ */
+function makeControllableFakeRunner() {
+  type Resolver = (result: IteratorResult<FakeStreamEvent>) => void;
+  const pendingEvent: Resolver[] = [];
+  const queuedEvents: FakeStreamEvent[] = [];
+  let finished = false;
+  let finalMessage: Record<string, unknown> | null = null;
+
+  const eventIterator = {
+    next: (): Promise<IteratorResult<FakeStreamEvent>> => {
+      if (queuedEvents.length > 0) {
+        return Promise.resolve({ value: queuedEvents.shift()!, done: false });
+      }
+      if (finished) {
+        return Promise.resolve({ value: undefined, done: true });
+      }
+      return new Promise((resolve) => pendingEvent.push(resolve));
+    },
+  };
+
+  const pushEvent = (event: FakeStreamEvent) => {
+    const waiting = pendingEvent.shift();
+    if (waiting) {
+      waiting({ value: event, done: false });
+    } else {
+      queuedEvents.push(event);
+    }
+  };
+
+  const finish = (completedMessage: Record<string, unknown>) => {
+    finished = true;
+    finalMessage = completedMessage;
+    const waiting = pendingEvent.shift();
+    if (waiting) waiting({ value: undefined, done: true });
+  };
+
+  const messageStream = {
+    [Symbol.asyncIterator]: () => eventIterator,
+    finalMessage: () =>
+      finished
+        ? Promise.resolve(finalMessage)
+        : Promise.reject(new Error('finalMessage() called before finish()')),
+  };
+
+  let runnerYielded = false;
+  const runner = {
+    pushMessages: jest.fn(),
+    [Symbol.asyncIterator]: () => ({
+      next: () => {
+        if (runnerYielded) {
+          return Promise.resolve({ value: undefined, done: true });
+        }
+        runnerYielded = true;
+        return Promise.resolve({ value: messageStream, done: false });
+      },
+    }),
+    done: jest.fn(() => Promise.resolve(finalMessage)),
+  };
+
+  return { runner, pushEvent, finish };
+}
+
 describe('AiAgentService.chatStream', () => {
   let service: AiAgentService;
 
@@ -109,6 +185,15 @@ describe('AiAgentService.chatStream', () => {
     appendExchange: jest.fn(),
   };
 
+  const aiAgentHealthService = {
+    checkAnthropic: jest.fn(),
+  };
+
+  // Real instance, not a mock: it's a pure in-memory class with no external
+  // dependencies, and chatStream() now relies on its actual start/attach
+  // behavior (buffering, broadcasting) rather than just calling through it.
+  let streamRegistry: AiChatStreamRegistryService;
+
   beforeEach(() => {
     jest.clearAllMocks();
     aiUsageService.assertWithinCap.mockResolvedValue(undefined);
@@ -118,6 +203,8 @@ describe('AiAgentService.chatStream', () => {
       history: [],
     });
     chatSessionService.appendExchange.mockResolvedValue(undefined);
+    aiAgentHealthService.checkAnthropic.mockResolvedValue('up');
+    streamRegistry = new AiChatStreamRegistryService();
 
     service = new AiAgentService(
       {} as NftService,
@@ -132,6 +219,8 @@ describe('AiAgentService.chatStream', () => {
         createQueryBuilder: jest.fn(),
       } as unknown as Repository<AiToolCallLog>,
       new PromptInjectionService(),
+      aiAgentHealthService as unknown as AiAgentHealthService,
+      streamRegistry,
     );
   });
 
@@ -433,6 +522,175 @@ describe('AiAgentService.chatStream', () => {
     });
   });
 
+  describe('drop-and-resume (#644)', () => {
+    it('emits stream_start first, carrying the id a dropped connection can resume with', async () => {
+      const { runner, finish } = makeControllableFakeRunner();
+      mockToolRunner(runner);
+
+      const firstEvent: MessageEvent[] = [];
+      const subscription = service
+        .chatStream('user-1', 'marketplace-assistant', 'hi')
+        .subscribe({ next: (e) => firstEvent.push(e) });
+      await flush();
+
+      expect(firstEvent).toHaveLength(1);
+      expect(firstEvent[0].type).toBe('stream_start');
+      expect(firstEvent[0].data).toMatchObject({ sessionId: 'session-1' });
+      expect(typeof (firstEvent[0].data as { streamId: string }).streamId).toBe(
+        'string',
+      );
+
+      subscription.unsubscribe();
+      finish({
+        model: 'claude-opus-5',
+        stop_reason: 'end_turn',
+        usage: { input_tokens: 10, output_tokens: 1 },
+      });
+    });
+
+    it('a client that reconnects after dropping mid-stream resumes without restarting or duplicating content', async () => {
+      const { runner, pushEvent, finish } = makeControllableFakeRunner();
+      mockToolRunner(runner);
+
+      const firstEvents: MessageEvent[] = [];
+      let streamId = '';
+      const firstSubscription = service
+        .chatStream(
+          'user-1',
+          'marketplace-assistant',
+          'What NFTs are trending?',
+        )
+        .subscribe({
+          next: (event) => {
+            firstEvents.push(event);
+            if (event.type === 'stream_start') {
+              streamId = (event.data as { streamId: string }).streamId;
+            }
+          },
+        });
+
+      // Let the generation register the stream and emit stream_start.
+      await flush();
+      expect(streamId).not.toBe('');
+
+      pushEvent(textDelta('Looking '));
+      await flush();
+      pushEvent(textDelta('for '));
+      await flush();
+
+      expect(firstEvents.map((e) => e.type)).toEqual([
+        'stream_start',
+        'text',
+        'text',
+      ]);
+      const textSoFar = firstEvents
+        .filter((e) => e.type === 'text')
+        .map((e) => (e.data as { text: string }).text);
+      expect(textSoFar).toEqual(['Looking ', 'for ']);
+
+      // Connection drops. The generation is registered under its own
+      // streamId, detached from this subscription, so it is unaffected.
+      firstSubscription.unsubscribe();
+      const lastSeqSeen = firstEvents.length - 1;
+
+      pushEvent(textDelta('listings.'));
+      finish({
+        model: 'claude-opus-5',
+        stop_reason: 'end_turn',
+        usage: { input_tokens: 120, output_tokens: 24 },
+      });
+      await flush();
+
+      const resumed = await collect(
+        service.resumeChatStream('user-1', streamId, lastSeqSeen),
+      );
+
+      expect(resumed.error).toBeUndefined();
+      const resumedText = resumed.events
+        .filter((e) => e.type === 'text')
+        .map((e) => (e.data as { text: string }).text);
+      expect(resumedText).toEqual(['listings.']);
+
+      const doneEvent = resumed.events[resumed.events.length - 1];
+      expect(doneEvent.type).toBe('done');
+      expect(doneEvent.data).toEqual({
+        reply: 'Looking for listings.',
+        sessionId: 'session-1',
+      });
+
+      // No duplication across the two connections: concatenating what each
+      // one received reconstructs the reply exactly once.
+      expect([...textSoFar, ...resumedText].join('')).toBe(
+        'Looking for listings.',
+      );
+
+      // The reply is persisted exactly once, by the detached generation —
+      // not by either connection individually.
+      expect(chatSessionService.appendExchange).toHaveBeenCalledTimes(1);
+      expect(chatSessionService.appendExchange).toHaveBeenCalledWith(
+        'session-1',
+        'What NFTs are trending?',
+        'Looking for listings.',
+      );
+    });
+
+    it('resumeChatStream rejects an unknown streamId', () => {
+      expect(() =>
+        service.resumeChatStream('user-1', 'does-not-exist', -1),
+      ).toThrow('not found or has expired');
+    });
+
+    it("resumeChatStream rejects a stream the caller doesn't own", async () => {
+      const { runner, finish } = makeControllableFakeRunner();
+      mockToolRunner(runner);
+
+      let streamId = '';
+      service.chatStream('user-1', 'marketplace-assistant', 'hi').subscribe({
+        next: (event) => {
+          if (event.type === 'stream_start') {
+            streamId = (event.data as { streamId: string }).streamId;
+          }
+        },
+      });
+      await flush();
+      finish({
+        model: 'claude-opus-5',
+        stop_reason: 'end_turn',
+        usage: { input_tokens: 10, output_tokens: 1 },
+      });
+
+      expect(() =>
+        service.resumeChatStream('a-different-user', streamId, -1),
+      ).toThrow('You do not have access to this chat stream');
+    });
+  });
+
+  describe('model fallback when Anthropic is degraded (#643)', () => {
+    it.each(['down', 'unconfigured'] as const)(
+      'emits a distinct AI_ASSISTANT_UNAVAILABLE error when health is %s, without calling the cap check or the Anthropic API',
+      async (status) => {
+        aiAgentHealthService.checkAnthropic.mockResolvedValue(status);
+        const toolRunner = mockToolRunner(makeFakeStreamingRunner([]));
+
+        const { events, error } = await collect(
+          service.chatStream('user-1', 'marketplace-assistant', 'hi'),
+        );
+
+        expect(events).toHaveLength(0);
+        expect(error).toBeInstanceOf(ServiceUnavailableException);
+        const response = (error as ServiceUnavailableException).getResponse();
+        expect(response).toMatchObject({
+          statusCode: 503,
+          code: 'AI_ASSISTANT_UNAVAILABLE',
+          anthropicStatus: status,
+        });
+
+        expect(aiUsageService.assertWithinCap).not.toHaveBeenCalled();
+        expect(toolRunner).not.toHaveBeenCalled();
+      },
+    );
+  });
+
   describe('errors', () => {
     it('propagates a cap-exceeded error before calling the Anthropic API', async () => {
       aiUsageService.assertWithinCap.mockRejectedValue(
@@ -483,7 +741,11 @@ describe('AiAgentService.chatStream', () => {
         service.chatStream('user-1', 'marketplace-assistant', 'hi'),
       );
 
-      expect(events).toHaveLength(0);
+      // The stream had already started (stream_start was emitted) by the
+      // time the mid-generation failure happened, unlike the cap/health
+      // rejections above which happen before the stream is ever registered.
+      expect(events).toHaveLength(1);
+      expect(events[0].type).toBe('stream_start');
       expect(error).toBeInstanceOf(Error);
     });
   });

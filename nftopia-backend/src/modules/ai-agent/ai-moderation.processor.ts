@@ -6,10 +6,13 @@ import { isUUID } from 'class-validator';
 import type { Job } from 'bull';
 import Anthropic from '@anthropic-ai/sdk';
 import type { BetaMessage } from '@anthropic-ai/sdk/resources/beta/messages';
+import { ConfigService } from '@nestjs/config';
 import { StellarNft } from '../../nft/entities/stellar-nft.entity';
 import { ContentFlagService } from './content-flag.service';
+import { ModerationAlertService } from './moderation-alert.service';
 import { PrometheusService } from '../../common/metrics/prometheus';
 import { resolveToolSet } from './tools/tool-set.registry';
+import { DEFAULT_MODERATION_CONFIDENCE_THRESHOLD } from './tools/moderation.tools';
 import {
   AI_MODERATION_QUEUE_NAME,
   MODERATE_LISTING_JOB,
@@ -54,7 +57,26 @@ export class AiModerationProcessor {
     private readonly stellarNftRepo: Repository<StellarNft>,
     private readonly contentFlagService: ContentFlagService,
     private readonly prometheusService: PrometheusService,
+    private readonly moderationAlertService: ModerationAlertService,
+    private readonly configService: ConfigService,
   ) {}
+
+  /**
+   * Minimum model confidence (#642) for a moderation result to actually
+   * become a reviewable flag. Configurable via
+   * AI_MODERATION_CONFIDENCE_THRESHOLD without a code change; also read by
+   * getModerationConfig() below for the admin-visible surface.
+   */
+  getConfidenceThreshold(): number {
+    const configured = Number(
+      this.configService.get<number | string>(
+        'AI_MODERATION_CONFIDENCE_THRESHOLD',
+      ),
+    );
+    return Number.isFinite(configured) && configured >= 0 && configured <= 1
+      ? configured
+      : DEFAULT_MODERATION_CONFIDENCE_THRESHOLD;
+  }
 
   /**
    * Structured, DB-free logging for individual tool calls — deliberately
@@ -114,6 +136,7 @@ export class AiModerationProcessor {
     const tools = resolveToolSet('moderation', {
       contentFlagService: this.contentFlagService,
       expectedEntity: { entityType: 'listing', entityId: listingId },
+      confidenceThreshold: this.getConfidenceThreshold(),
       toolLogger: this.toolLogger,
     });
     const flagContentTool = tools.find((t) => t.name === 'flag_content');
@@ -182,9 +205,23 @@ export class AiModerationProcessor {
 
     try {
       const parsedInput: unknown = flagContentTool.parse(toolUseBlock.input);
-      await flagContentTool.run(parsedInput);
-      this.logger.log(`Listing ${listingId} flagged for moderation review.`);
-      this.prometheusService.incrementAiModerationJobProcessed('flagged');
+      const resultStr = await flagContentTool.run(parsedInput);
+      const result = JSON.parse(resultStr as string) as {
+        flagged?: boolean;
+        id?: string;
+      };
+
+      if (result.flagged === false) {
+        this.logger.log(
+          `Listing ${listingId}: moderation confidence below threshold — auto-cleared, not flagged.`,
+        );
+        this.prometheusService.incrementAiModerationJobProcessed(
+          'below_threshold',
+        );
+      } else {
+        this.logger.log(`Listing ${listingId} flagged for moderation review.`);
+        this.prometheusService.incrementAiModerationJobProcessed('flagged');
+      }
     } catch (err) {
       this.logger.error(
         `Failed to persist moderation flag for listing=${listingId} (attempt ${attempt}/${maxAttempts}): ${(err as Error).message}`,
@@ -194,10 +231,64 @@ export class AiModerationProcessor {
     }
   }
 
+  /**
+   * Bull emits `failed` after EVERY failed attempt, not just the last. Only
+   * when attempts are exhausted (#748) do we log "permanently failed", bump
+   * ai_moderation_jobs_exhausted_total, surface the listing to admins via a
+   * `moderation_failed` content flag, and send the (debounced) operator alert.
+   */
   @OnQueueFailed()
-  onFailed(job: Job<AiModerationJobData>, err: Error): void {
+  async onFailed(job: Job<AiModerationJobData>, err: Error): Promise<void> {
+    const { listingId } = job.data;
+    const maxAttempts =
+      typeof job.opts.attempts === 'number' ? job.opts.attempts : 1;
+
+    if (job.attemptsMade < maxAttempts) {
+      this.logger.warn(
+        `Moderation attempt ${job.attemptsMade}/${maxAttempts} failed for listing=${listingId}; retry scheduled: ${err.message}`,
+      );
+      return;
+    }
+
     this.logger.error(
-      `Moderation job permanently failed for listing=${job.data.listingId}: ${err.message}`,
+      `Moderation job permanently failed for listing=${listingId}: ${err.message}`,
     );
+    this.prometheusService.incrementAiModerationJobsExhausted();
+    await this.flagExhaustedListing(listingId, err.message);
+    await this.moderationAlertService.alertExhausted(listingId, err.message);
+  }
+
+  /**
+   * Puts a listing whose moderation never completed into the existing admin
+   * review queue. Best-effort: an @OnQueueFailed handler must not throw.
+   */
+  private async flagExhaustedListing(
+    listingId: string,
+    errorMessage: string,
+  ): Promise<void> {
+    if (!isUUID(listingId)) {
+      // Non-persisted (on-chain-only) listing — no content_flags row possible.
+      return;
+    }
+    try {
+      const existing = await this.contentFlagService.findExistingFlag(
+        'listing',
+        listingId,
+      );
+      if (existing) {
+        return;
+      }
+      await this.contentFlagService.createFlag({
+        entityType: 'listing',
+        entityId: listingId,
+        reason: `moderation_failed: AI moderation exhausted all retries without completing (${errorMessage})`,
+        severity: 'medium',
+        confidence: 0,
+      });
+    } catch (flagErr) {
+      this.logger.error(
+        `Failed to record moderation_failed flag for listing=${listingId}: ${(flagErr as Error).message}`,
+      );
+    }
   }
 }
