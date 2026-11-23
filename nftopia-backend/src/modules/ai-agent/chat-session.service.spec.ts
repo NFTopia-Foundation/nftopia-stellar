@@ -284,6 +284,30 @@ describe('ChatSessionService', () => {
       expect(messageRepo.delete).not.toHaveBeenCalled();
     });
 
+    it('redacts PII from both turns before persisting (#646)', async () => {
+      messageRepo.create.mockImplementation((input: unknown) => input);
+      messageRepo.count.mockResolvedValue(2);
+
+      await service.appendExchange(
+        'session-1',
+        'My email is buyer@example.com',
+        'Got it, I will email jane.doe@example.com for you.',
+      );
+
+      expect(messageRepo.save).toHaveBeenCalledWith([
+        {
+          sessionId: 'session-1',
+          role: 'user',
+          content: 'My email is [REDACTED_EMAIL]',
+        },
+        {
+          sessionId: 'session-1',
+          role: 'assistant',
+          content: 'Got it, I will email [REDACTED_EMAIL] for you.',
+        },
+      ]);
+    });
+
     it('prunes oldest messages when session message count exceeds maxSessionMessages', async () => {
       messageRepo.create.mockImplementation((input: unknown) => input);
       // Assume total count is 54, cap is 50 -> excess is 4
