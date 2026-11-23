@@ -44,6 +44,22 @@ export class AuditService {
     return this.auditLogRepository.save(log);
   }
 
+  async logReconciliationAction(metadata: {
+    transactionId?: number | string;
+    beforeState?: Record<string, unknown>;
+    afterState?: Record<string, unknown>;
+  }): Promise<AuditLog> {
+    const log = this.auditLogRepository.create({
+      action: AuditAction.RECONCILE_TRANSACTION,
+      adminId: '00000000-0000-0000-0000-000000000000',
+      entityType: 'transaction',
+      beforeState: metadata.beforeState,
+      afterState: metadata.afterState,
+    });
+
+    return this.auditLogRepository.save(log);
+  }
+
   async findAuditLogs(filters: {
     adminId?: string;
     action?: string;
