@@ -2,15 +2,15 @@ import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { PurchaseModal } from "../PurchaseModal";
 
-const push = jest.fn();
-const buyNFT = jest.fn();
+const mockPush = jest.fn();
+const mockBuyNFT = jest.fn();
 
 jest.mock("next/navigation", () => ({
-  useRouter: () => ({ push }),
+  useRouter: () => ({ push: mockPush }),
 }));
 
 jest.mock("@/hooks/graphql/useMutations", () => ({
-  useBuyNFTMutation: () => [buyNFT, { loading: false, error: null }],
+  useBuyNFTMutation: () => [mockBuyNFT, { loading: false, error: null }],
 }));
 
 jest.mock("@/stores/walletStore", () => ({
@@ -66,7 +66,7 @@ describe("PurchaseModal (#754 #755 #757)", () => {
   });
 
   it("navigates to my-nfts on success, not dashboard/collection", async () => {
-    buyNFT.mockResolvedValue({
+    mockBuyNFT.mockResolvedValue({
       data: { buyNFT: { success: true, transactionHash: "abc123hash" } },
     });
     render(
@@ -84,12 +84,12 @@ describe("PurchaseModal (#754 #755 #757)", () => {
     fireEvent.click(screen.getByTestId("confirm-purchase-btn"));
     await waitFor(() => expect(screen.getByTestId("purchase-receipt")).toBeInTheDocument());
     fireEvent.click(screen.getByTestId("go-to-collection-btn"));
-    expect(push).toHaveBeenCalledWith("/en/creator-dashboard/my-nfts");
-    expect(push).not.toHaveBeenCalledWith("/dashboard/collection");
+    expect(mockPush).toHaveBeenCalledWith("/en/creator-dashboard/my-nfts");
+    expect(mockPush).not.toHaveBeenCalledWith("/dashboard/collection");
   });
 
   it("shows stage-specific failure and retry", async () => {
-    buyNFT.mockRejectedValue(new Error("User rejected signature"));
+    mockBuyNFT.mockRejectedValue(new Error("User rejected signature"));
     render(
       <PurchaseModal
         isOpen
