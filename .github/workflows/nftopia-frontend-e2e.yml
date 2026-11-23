@@ -22,7 +22,7 @@ env:
 jobs:
   e2e:
     name: E2E (auction bid flow)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     defaults:
       run:

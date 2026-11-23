@@ -48,6 +48,8 @@ export interface MarketplaceListingsFilter {
   maxPrice?: number;
   sortBy?: string;
   status?: ListingStatus;
+  /** Matches a listing's free-text `category` field (see lib/constants/categories.ts). */
+  category?: string;
 }
 
 export interface MarketplaceListingsPageParams {

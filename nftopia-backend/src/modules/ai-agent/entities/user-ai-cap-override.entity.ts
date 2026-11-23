@@ -5,6 +5,10 @@ import {
   PrimaryColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import type { ToolSetName } from '../tools/tool-set.types';
+
+/** Per-tool-set AI chat rate-limit points override (#751). */
+export type RateLimitPointsOverride = Partial<Record<ToolSetName, number>>;
 
 /**
  * An admin-granted override of a user's AI chat spend caps (#529). One row
@@ -45,6 +49,16 @@ export class UserAiCapOverride {
     nullable: true,
   })
   monthlySpendCapUsd?: string | null;
+
+  /**
+   * Optional per-tool-set AI chat request-rate budgets (#751), e.g.
+   * `{ "marketplace-assistant": 60 }`. A tool set absent from this map (or
+   * a null column) uses the env-configured default points for that tool
+   * set — see AiChatRateLimitGuard. The window length (AI_CHAT_RATE_LIMIT_TTL)
+   * is not overridable; only the number of requests allowed within it.
+   */
+  @Column({ name: 'rate_limit_points', type: 'jsonb', nullable: true })
+  rateLimitPoints?: RateLimitPointsOverride | null;
 
   @Column({ type: 'text', nullable: true })
   reason?: string | null;

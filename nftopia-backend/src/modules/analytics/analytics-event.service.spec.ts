@@ -21,6 +21,7 @@ describe('AnalyticsEventService', () => {
   const limitMock = jest.fn();
   const sortMock = jest.fn();
   const findMock = jest.fn();
+  const aggregateMock = jest.fn();
 
   // Mongoose models are constructor functions with static query methods —
   // a plain jest.fn() can't represent both, so this stands in for one:
@@ -34,6 +35,7 @@ describe('AnalyticsEventService', () => {
     this.save = saveMock;
   }
   (ModelMock as unknown as { find: jest.Mock }).find = findMock;
+  (ModelMock as unknown as { aggregate: jest.Mock }).aggregate = aggregateMock;
 
   let service: AnalyticsEventService;
 
@@ -124,6 +126,71 @@ describe('AnalyticsEventService', () => {
       await service.findRecentByEventName('auth_login_succeeded', 5);
 
       expect(limitMock).toHaveBeenCalledWith(5);
+    });
+  });
+
+  describe('countDistinctSessionsByStage (#662)', () => {
+    const from = new Date('2026-01-01T00:00:00.000Z');
+    const to = new Date('2026-01-07T23:59:59.999Z');
+
+    it('matches on eventName and the receivedAt range, grouping by payload.stage', async () => {
+      aggregateMock.mockResolvedValue([]);
+
+      await service.countDistinctSessionsByStage(
+        'funnel_stage_entered',
+        from,
+        to,
+      );
+
+      expect(aggregateMock).toHaveBeenCalledWith([
+        {
+          $match: {
+            eventName: 'funnel_stage_entered',
+            receivedAt: { $gte: from, $lte: to },
+          },
+        },
+        {
+          $group: {
+            _id: '$payload.stage',
+            sessions: { $addToSet: '$context.sessionId' },
+          },
+        },
+        {
+          $project: {
+            count: { $size: '$sessions' },
+          },
+        },
+      ]);
+    });
+
+    it('maps the aggregation result into a stage -> session count record', async () => {
+      aggregateMock.mockResolvedValue([
+        { _id: 'landing', count: 10 },
+        { _id: 'marketplace_browse', count: 6 },
+      ]);
+
+      const result = await service.countDistinctSessionsByStage(
+        'funnel_stage_entered',
+        from,
+        to,
+      );
+
+      expect(result).toEqual({ landing: 10, marketplace_browse: 6 });
+    });
+
+    it('skips a row with a null/missing stage rather than adding an undefined key', async () => {
+      aggregateMock.mockResolvedValue([
+        { _id: null, count: 3 },
+        { _id: 'landing', count: 10 },
+      ]);
+
+      const result = await service.countDistinctSessionsByStage(
+        'funnel_stage_entered',
+        from,
+        to,
+      );
+
+      expect(result).toEqual({ landing: 10 });
     });
   });
 });

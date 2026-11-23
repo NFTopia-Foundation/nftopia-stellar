@@ -15,6 +15,7 @@ already rendered. The moving parts:
 | Trigger: `useInfiniteScroll` (`IntersectionObserver` with a 1200px prefetch margin — roughly two viewports early) | `hooks/useInfiniteScroll.ts` |
 | Container: URL ⇄ store wiring, cursor replay for deep links | `components/marketplace/MarketplaceListings.tsx` |
 | Presentation: skeletons, counts, error/empty/end states | `components/marketplace/MarketplaceListingsGrid.tsx` |
+| Category chip row, writes `?category=` | `components/marketplace/CategorySelector.tsx` |
 
 Behaviour guarantees:
 
@@ -30,9 +31,9 @@ Behaviour guarantees:
   `setFilters` (local) clear every loaded page, so filters always start at
   page 1.
 - **URL sync.** Filters already live in the URL (`?search=`, `?sortBy=`,
-  `?minPrice=`, `?maxPrice=`). The current cursor is mirrored into `?cursor=`
-  for shareability, and a deep link replays pages (bounded to 10) until that
-  cursor is reached.
+  `?minPrice=`, `?maxPrice=`, `?category=`). The current cursor is mirrored
+  into `?cursor=` for shareability, and a deep link replays pages (bounded to
+  10) until that cursor is reached.
 - **Accessibility.** The count and the "loading more" indicator are
   `role="status"` / `aria-live="polite"`, the list carries `aria-busy` while a
   page loads, and the "Load more" button is the explicit fallback whenever
@@ -66,3 +67,16 @@ the sentinel would move to the virtualizer's end-of-list slot).
   margin, teardown.
 - `components/marketplace/__tests__/MarketplaceListingsGrid.test.tsx` —
   skeleton, empty, error/retry, count, `aria-busy`, load-more, end of list.
+- `components/marketplace/__tests__/MarketplaceListings.test.tsx` — `?category=`
+  flows through to the server-side filter.
+- `components/marketplace/__tests__/CategorySelector.test.tsx` and
+  `CategorySelector.a11y.test.tsx` — canonical taxonomy rendering, selection
+  state, URL writes (preserving other filters), and accessibility.
+
+## Category taxonomy
+
+The chip ids in `lib/constants/categories.ts` mirror
+`nftopia-mobile-app/constants/categories.ts` by hand (the two apps don't
+share a package) so a listing tagged e.g. `"gaming"` surfaces under the same
+chip on both platforms. Both map 1:1 to the free-text `category` field on
+`ListingFilterInput` in the backend GraphQL schema.

@@ -82,6 +82,22 @@
         "priceLowToHigh": "Precio: Menor a mayor",
         "priceHighToLow": "Precio: Mayor a menor"
       },
+      "categoriesTitle": "Explorar categorías",
+      "categories": {
+        "all": "Todos",
+        "art": "Arte",
+        "music": "Música",
+        "gaming": "Videojuegos",
+        "photography": "Fotografía",
+        "collectibles": "Coleccionables",
+        "sports": "Deportes",
+        "virtualWorlds": "Mundos virtuales",
+        "utility": "Utilidad"
+      },
+      "recentlyViewed": {
+        "title": "Vistos recientemente",
+        "clear": "Borrar"
+      },
       "nft": {
         "buyNow": "Comprar ahora",
         "placeBid": "Hacer oferta",
@@ -90,6 +106,31 @@
         "createdBy": "Creado por",
         "ownedBy": "Propiedad de",
         "viewDetails": "Ver detalles"
+      },
+      "presets": {
+        "nameLabel": "Nombre del ajuste",
+        "namePlaceholder": "Pon nombre a estos filtros",
+        "save": "Guardar filtros actuales",
+        "listLabel": "Ajustes de filtros guardados",
+        "choose": "Elige un ajuste guardado",
+        "none": "No hay ajustes guardados",
+        "apply": "Aplicar ajuste",
+        "delete": "Eliminar ajuste",
+        "saved": "Se guardó \"{{name}}\"",
+        "applied": "Se aplicó \"{{name}}\"",
+        "deleted": "Se eliminó \"{{name}}\"",
+        "errors": {
+          "emptyName": "Introduce un nombre para este ajuste.",
+          "noFilters": "Define al menos un filtro antes de guardar un ajuste.",
+          "limitReached": "Puedes guardar hasta {{max}} ajustes. Elimina uno para guardar otro.",
+          "storageUnavailable": "No se pueden guardar ajustes en este navegador ahora mismo. El filtrado sigue funcionando."
+        }
+      },
+      "priceRange": {
+        "group": "Rango de precios",
+        "minThumb": "Control deslizante del precio mínimo",
+        "maxThumb": "Control deslizante del precio máximo",
+        "invalid": "El precio mínimo no puede ser mayor que el precio máximo."
       }
     },
     "profile": {
@@ -118,6 +159,7 @@
     "creatorProfile": {
       "verified": "Verificado",
       "followers": "seguidores",
+      "following": "siguiendo",
       "nftsCreated": "NFTs",
       "volume": "volumen",
       "tabNfts": "NFTs",
@@ -143,6 +185,7 @@
       "edit": "Editar",
       "view": "Ver",
       "close": "Cerrar",
+      "dismiss": "Descartar",
       "confirm": "Confirmar",
       "back": "Atrás",
       "next": "Siguiente",
@@ -399,5 +442,18 @@
         "failedToCreate": "Error al crear la colección"
       },
       "success": "¡Colección creada exitosamente!"
-    }
+    },
+  "pushNotifications": {
+    "promptTitle": "Activar notificaciones push",
+    "promptBody": "Recibe avisos de nuevas pujas, ventas y seguidores, incluso cuando NFTopia no esté abierto.",
+    "notNow": "Ahora no",
+    "enable": "Activar",
+    "enabling": "Activando...",
+    "subscribeError": "No se pudieron activar las notificaciones push. Inténtalo de nuevo.",
+    "settingsTitle": "Notificaciones push",
+    "settingsDescription": "Recibe avisos de pujas, ventas y seguidores incluso con esta pestaña cerrada.",
+    "settingsToggleOn": "Las notificaciones push están activadas",
+    "settingsToggleOff": "Las notificaciones push están desactivadas",
+    "unsupported": "Este navegador no admite notificaciones push."
   }
+}

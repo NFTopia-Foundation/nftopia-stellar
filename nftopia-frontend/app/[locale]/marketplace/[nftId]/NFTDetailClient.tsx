@@ -24,6 +24,7 @@ import { useNFTByIdQuery, useNFTTransferHistoryQuery } from "@/hooks/graphql/use
 import TransferHistory from "@/components/nft/TransferHistory";
 import { FavoriteButton } from "@/components/ui/FavoriteButton";
 import { ReportButton } from "@/src/components/ReportButton";
+import { useRecentlyViewedStore } from "@/lib/stores/recently-viewed-store";
 
 // Helper function to format address
 function formatAddress(address: string | null | undefined): string {
@@ -166,6 +167,17 @@ export default function NFTDetailClient({
   const transferEvents = historyData?.nftTransferHistory?.edges?.map((edge: any) => edge.node) || [];
   const totalTransfers = historyData?.nftTransferHistory?.totalCount || 0;
   const hasNextPage = historyData?.nftTransferHistory?.pageInfo?.hasNextPage || false;
+
+  const trackView = useRecentlyViewedStore((state) => state.trackView);
+
+  // Records this NFT in the recently-viewed list once it has actually
+  // resolved (not during loading/notFound), and again on navigating
+  // straight from one NFT detail page to another (nftId change).
+  useEffect(() => {
+    if (nft) {
+      trackView(nftId);
+    }
+  }, [nft, nftId, trackView]);
 
   const handleCopyAddress = useCallback(async (address: string) => {
     try {

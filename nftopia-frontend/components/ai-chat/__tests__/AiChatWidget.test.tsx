@@ -1,17 +1,69 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { checkAiHealth, sendAiChat, streamAiChat } from "@/lib/api/ai-chat";
+import {
+  AiQuotaExceededError,
+  checkAiHealth,
+  deleteAiChatSession,
+  fetchAiChatSessionMessages,
+  fetchAiChatSessions,
+  getAiUsage,
+  sendAiChat,
+  streamAiChat,
+  type AiUsageSummary,
+} from "@/lib/api/ai-chat";
 import { useAiChatStore } from "@/lib/stores/ai-chat-store";
 import { AiChatWidget } from "@/components/ai-chat/AiChatWidget";
 
-jest.mock("@/lib/api/ai-chat", () => ({
-  sendAiChat: jest.fn(),
-  streamAiChat: jest.fn(),
-  checkAiHealth: jest.fn(),
-}));
+jest.mock("@/lib/api/ai-chat", () => {
+  const actual = jest.requireActual("@/lib/api/ai-chat");
+  return {
+    sendAiChat: jest.fn(),
+    streamAiChat: jest.fn(),
+    checkAiHealth: jest.fn(),
+    getAiUsage: jest.fn(),
+    fetchAiChatSessions: jest.fn(),
+    fetchAiChatSessionMessages: jest.fn(),
+    deleteAiChatSession: jest.fn(),
+    AiQuotaExceededError: actual.AiQuotaExceededError,
+  };
+});
 
 const mockedStreamAiChat = jest.mocked(streamAiChat);
 const mockedSendAiChat = jest.mocked(sendAiChat);
 const mockedCheckAiHealth = jest.mocked(checkAiHealth);
+const mockedGetAiUsage = jest.mocked(getAiUsage);
+const mockedFetchSessions = jest.mocked(fetchAiChatSessions);
+const mockedFetchSessionMessages = jest.mocked(fetchAiChatSessionMessages);
+const mockedDeleteSession = jest.mocked(deleteAiChatSession);
+
+function buildUsage(overrides: Partial<AiUsageSummary["daily"]> = {}): AiUsageSummary {
+  const dailyBase = {
+    totalTokens: 1000,
+    estimatedCostUsd: 0.05,
+    cap: 200000,
+    remaining: 199000,
+    spendCapUsd: null,
+    spendRemaining: null,
+    percentUsed: 1,
+    approachingCap: false,
+    resetsAt: "2026-10-21T00:00:00.000Z",
+    ...overrides,
+  };
+  return {
+    daily: dailyBase,
+    monthly: {
+      totalTokens: 50000,
+      estimatedCostUsd: 2.5,
+      cap: 2000000,
+      remaining: 1950000,
+      spendCapUsd: null,
+      spendRemaining: null,
+      percentUsed: 3,
+      approachingCap: false,
+      resetsAt: "2026-11-01T00:00:00.000Z",
+    },
+    hasOverride: false,
+  };
+}
 
 /** Minimal SSE-style stream mock: pushes `onText` then resolves. */
 function mockStreamingReply(reply: string, sessionId: string, text = reply) {
@@ -28,10 +80,17 @@ describe("AiChatWidget", () => {
       status: "up",
       timestamp: "2026-10-19T00:00:00.000Z",
     });
+    mockedGetAiUsage.mockResolvedValue(buildUsage());
+    localStorage.clear();
+    mockedFetchSessions.mockResolvedValue([]);
+    mockedFetchSessionMessages.mockResolvedValue([]);
+    mockedDeleteSession.mockResolvedValue();
+
     act(() => {
-      // The store is module-scoped, so clear both the transcript and the open
-      // state between cases.
+      // The store is module-scoped, so clear both the transcript, open state,
+      // and sessions between cases.
       useAiChatStore.getState().reset();
+      useAiChatStore.getState().clearSessions();
       useAiChatStore.getState().close();
     });
   });
@@ -338,6 +397,241 @@ describe("AiChatWidget", () => {
     expect(input).not.toBeDisabled();
 
     jest.useRealTimers();
+  });
+
+  it("shows remaining daily/monthly AI usage quota when opened", async () => {
+    mockedGetAiUsage.mockResolvedValue(
+      buildUsage({ remaining: 150000, cap: 200000 }),
+    );
+
+    render(<AiChatWidget />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Open AI assistant" }));
+    });
+
+    const indicator = await screen.findByTestId("ai-usage-indicator");
+    expect(indicator).toHaveTextContent("150,000 / 200,000 tokens left");
+    expect(indicator).toHaveTextContent("1,950,000 / 2,000,000 tokens left");
+    expect(screen.queryByTestId("ai-usage-near-limit")).not.toBeInTheDocument();
+  });
+
+  it("visually distinguishes a near-limit quota state", async () => {
+    mockedGetAiUsage.mockResolvedValue(
+      buildUsage({ remaining: 15000, cap: 200000, approachingCap: true }),
+    );
+
+    render(<AiChatWidget />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Open AI assistant" }));
+    });
+
+    const indicator = await screen.findByTestId("ai-usage-indicator");
+    expect(indicator.className).toContain("border-amber-500");
+    const nearLimit = screen.getByTestId("ai-usage-near-limit");
+    expect(nearLimit).toHaveTextContent("Approaching your daily limit");
+  });
+
+  it("shows a quota-exhausted message distinct from a generic failure, with no retry action", async () => {
+    mockedStreamAiChat.mockRejectedValue(
+      new AiQuotaExceededError(
+        "Daily AI usage cap reached (200000 tokens). Please try again tomorrow.",
+        "AI_DAILY_TOKEN_CAP_REACHED",
+        "2026-10-21T00:00:00.000Z",
+      ),
+    );
+    mockedSendAiChat.mockRejectedValue(
+      new AiQuotaExceededError(
+        "Daily AI usage cap reached (200000 tokens). Please try again tomorrow.",
+        "AI_DAILY_TOKEN_CAP_REACHED",
+        "2026-10-21T00:00:00.000Z",
+      ),
+    );
+
+    render(<AiChatWidget />);
+    fireEvent.click(screen.getByRole("button", { name: "Open AI assistant" }));
+    fireEvent.change(screen.getByLabelText("Message the AI assistant"), {
+      target: { value: "Hello?" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+
+    const quotaBanner = await screen.findByTestId("ai-chat-quota-exceeded");
+    expect(quotaBanner).toHaveTextContent("AI usage quota reached");
+    expect(quotaBanner).toHaveTextContent(
+      "Daily AI usage cap reached (200000 tokens). Please try again tomorrow.",
+    );
+    // Distinct from the generic retryable-error banner: no "Try again" button,
+    // and not styled/testable as the generic alert.
+    expect(
+      screen.queryByRole("button", { name: "Try again" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("ai-chat-degraded")).not.toBeInTheDocument();
+
+    // The non-streaming fallback should not even be attempted - the cap
+    // rejection comes back before any content streams, and both endpoints
+    // enforce the same cap, so there's nothing a fallback request would gain.
+    expect(mockedSendAiChat).not.toHaveBeenCalled();
+  });
+
+  describe("Conversation history UI", () => {
+    it("toggles history panel and shows empty state when no sessions exist", async () => {
+      render(<AiChatWidget />);
+      fireEvent.click(screen.getByRole("button", { name: "Open AI assistant" }));
+
+      const historyBtn = screen.getByTestId("ai-chat-history-btn");
+      expect(historyBtn).toBeInTheDocument();
+
+      fireEvent.click(historyBtn);
+
+      // Now showing conversation history
+      expect(screen.getByRole("region", { name: "Conversation history" })).toBeInTheDocument();
+      expect(await screen.findByTestId("ai-chat-history-empty")).toBeInTheDocument();
+      expect(screen.getByText("No past conversations")).toBeInTheDocument();
+
+      // Clicking back to chat button returns to chat panel
+      const backBtn = screen.getByRole("button", { name: "Back to chat" });
+      fireEvent.click(backBtn);
+      expect(screen.getByRole("log", { name: "Conversation" })).toBeInTheDocument();
+    });
+
+    it("displays list of recent sessions fetched from backend", async () => {
+      mockedFetchSessions.mockResolvedValue([
+        {
+          id: "session-101",
+          title: "How do auctions work?",
+          preview: "Auctions allow bidding using XLM...",
+          createdAt: "2026-10-18T10:00:00.000Z",
+          updatedAt: "2026-10-18T10:05:00.000Z",
+        },
+        {
+          id: "session-102",
+          title: "Collection verification process",
+          preview: "Creators can request verification...",
+          createdAt: "2026-10-18T09:00:00.000Z",
+          updatedAt: "2026-10-18T09:30:00.000Z",
+        },
+      ]);
+
+      render(<AiChatWidget />);
+      fireEvent.click(screen.getByRole("button", { name: "Open AI assistant" }));
+
+      // Open history view
+      fireEvent.click(screen.getByTestId("ai-chat-history-btn"));
+
+      expect(await screen.findByText("How do auctions work?")).toBeInTheDocument();
+      expect(screen.getByText("Collection verification process")).toBeInTheDocument();
+      expect(screen.getByText("Auctions allow bidding using XLM...")).toBeInTheDocument();
+    });
+
+    it("resumes a past session and loads its message history when clicked", async () => {
+      mockedFetchSessions.mockResolvedValue([
+        {
+          id: "session-history-1",
+          title: "Royalty questions",
+          preview: "Royalties are 5%",
+          createdAt: "2026-10-18T10:00:00.000Z",
+          updatedAt: "2026-10-18T10:05:00.000Z",
+        },
+      ]);
+      mockedFetchSessionMessages.mockResolvedValue([
+        { id: "m-user", role: "user", content: "What is creator royalty rate?" },
+        { id: "m-asst", role: "assistant", content: "Default royalty is 5% on secondary sales." },
+      ]);
+
+      render(<AiChatWidget />);
+      fireEvent.click(screen.getByRole("button", { name: "Open AI assistant" }));
+
+      // Open history
+      fireEvent.click(screen.getByTestId("ai-chat-history-btn"));
+      const sessionItem = await screen.findByTestId("ai-chat-session-item-session-history-1");
+
+      // Click to resume
+      await act(async () => {
+        fireEvent.click(sessionItem);
+      });
+
+      // Switches back to chat view and displays messages
+      expect(screen.getByRole("log", { name: "Conversation" })).toBeInTheDocument();
+      expect(screen.getByText("What is creator royalty rate?")).toBeInTheDocument();
+      expect(screen.getByText("Default royalty is 5% on secondary sales.")).toBeInTheDocument();
+      expect(screen.getByText("Royalty questions")).toBeInTheDocument();
+
+      // Subsequent messages reuse this session ID
+      mockStreamingReply("It applies on all marketplace resales.", "session-history-1");
+      const input = screen.getByLabelText("Message the AI assistant");
+      await act(async () => {
+        fireEvent.change(input, { target: { value: "Does it apply to all sales?" } });
+        fireEvent.keyDown(input, { key: "Enter" });
+      });
+
+      expect(mockedStreamAiChat).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: "session-history-1",
+          message: "Does it apply to all sales?",
+        }),
+        expect.any(Object),
+        expect.any(AbortSignal),
+      );
+    });
+
+    it("allows starting a new conversation without losing past ones", async () => {
+      // 1. User has an active conversation
+      mockStreamingReply("Here are top collections.", "session-alpha");
+
+      render(<AiChatWidget />);
+      fireEvent.click(screen.getByRole("button", { name: "Open AI assistant" }));
+
+      const input = screen.getByLabelText("Message the AI assistant");
+      await act(async () => {
+        fireEvent.change(input, { target: { value: "Top collections" } });
+        fireEvent.keyDown(input, { key: "Enter" });
+      });
+
+      expect(await screen.findByText("Here are top collections.")).toBeInTheDocument();
+
+      // 2. Click 'New conversation' button
+      const newBtn = screen.getByTestId("ai-chat-new-btn");
+      act(() => {
+        fireEvent.click(newBtn);
+      });
+
+      // Current conversation transcript is cleared, showing initial empty suggestions
+      expect(screen.getByTestId("ai-chat-empty")).toBeInTheDocument();
+      expect(screen.queryByText("Here are top collections.")).not.toBeInTheDocument();
+
+      // 3. Open history - past conversation is still preserved!
+      fireEvent.click(screen.getByTestId("ai-chat-history-btn"));
+      expect(await screen.findByText("Top collections")).toBeInTheDocument();
+    });
+
+    it("allows deleting a session from history", async () => {
+      mockedFetchSessions.mockResolvedValue([
+        {
+          id: "session-to-del",
+          title: "Session to delete",
+          preview: "Some text",
+          createdAt: "2026-10-18T10:00:00.000Z",
+          updatedAt: "2026-10-18T10:05:00.000Z",
+        },
+      ]);
+
+      render(<AiChatWidget />);
+      fireEvent.click(screen.getByRole("button", { name: "Open AI assistant" }));
+      fireEvent.click(screen.getByTestId("ai-chat-history-btn"));
+
+      expect(await screen.findByText("Session to delete")).toBeInTheDocument();
+
+      const deleteBtn = screen.getByRole("button", {
+        name: "Delete conversation Session to delete",
+      });
+
+      await act(async () => {
+        fireEvent.click(deleteBtn);
+      });
+
+      expect(mockedDeleteSession).toHaveBeenCalledWith("session-to-del");
+      expect(screen.queryByText("Session to delete")).not.toBeInTheDocument();
+      expect(screen.getByTestId("ai-chat-history-empty")).toBeInTheDocument();
+    });
   });
 });
 

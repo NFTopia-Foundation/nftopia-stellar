@@ -176,6 +176,46 @@ describe('useNotificationStore', () => {
     });
   });
 
+
+  describe('fetchNotifications', () => {
+    it('loads notifications from the API and updates unread count', async () => {
+      mockApiClient.getNotifications.mockResolvedValue([
+        { id: '1', read: false, title: 'A' },
+        { id: '2', read: true, title: 'B' },
+      ]);
+
+      await getStore().fetchNotifications();
+
+      expect(mockApiClient.getNotifications).toHaveBeenCalledWith(1, 20);
+      expect(getStore().loading).toBe(false);
+      expect(getStore().error).toBeNull();
+      expect(getStore().notifications).toHaveLength(2);
+      expect(getStore().unreadCount).toBe(1);
+      expect(mockPushNotificationService.updateBadgeCount).toHaveBeenCalledWith(1);
+    });
+
+    it('handles an empty result set', async () => {
+      mockApiClient.getNotifications.mockResolvedValue([]);
+
+      await getStore().fetchNotifications();
+
+      expect(getStore().notifications).toEqual([]);
+      expect(getStore().unreadCount).toBe(0);
+      expect(getStore().hasMore).toBe(false);
+      expect(getStore().loading).toBe(false);
+    });
+
+    it('sets error state when the API fails', async () => {
+      mockApiClient.getNotifications.mockRejectedValue(new Error('network down'));
+
+      await getStore().fetchNotifications();
+
+      expect(getStore().loading).toBe(false);
+      expect(getStore().error).toMatch(/network down/);
+      expect(getStore().notifications).toEqual([]);
+    });
+  });
+
   describe('persistence', () => {
     it('writes preference changes to storage', async () => {
       mockApiClient.updateNotificationPreferences.mockResolvedValue({

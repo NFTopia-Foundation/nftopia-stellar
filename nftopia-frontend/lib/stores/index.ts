@@ -9,6 +9,7 @@ export { useCollections, useCollectionStore } from "./collection-store";
 
 // Preferences Store
 export {
+  useDisplayCurrency,
   useDisplaySettings,
   useFavorites,
   useNotifications,
@@ -39,6 +40,9 @@ export {
   useUnreadCount,
   useNotificationActions,
 } from "./notification-store";
+
+// Recently Viewed NFTs Store
+export { useRecentlyViewedStore } from "./recently-viewed-store";
 
 
 export { useMarketplace } from "../../features/marketplace/store/marketplaceStore";

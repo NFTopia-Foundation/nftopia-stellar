@@ -7,6 +7,9 @@ import {
   getWalletConnectNetwork,
   parseStellarAddress,
   getChainForNetwork,
+  getWalletConnectSessions,
+  disconnectWalletConnectSession,
+  disconnectAllWalletConnectSessions,
 } from "@/lib/stellar/wallet/walletconnect";
 
 const mockApproval = jest.fn();
@@ -199,6 +202,178 @@ describe("lib/stellar/wallet/walletconnect", () => {
 
       const network = await getWalletConnectNetwork();
       expect(network).toBe("mainnet");
+    });
+  });
+
+  describe("getWalletConnectSessions", () => {
+    function fakeSession(overrides: Partial<Record<string, any>> = {}) {
+      return {
+        topic: "topic-1",
+        expiry: Math.floor(Date.now() / 1000) + 3600,
+        namespaces: {
+          stellar: {
+            accounts: ["stellar:testnet:GSESSIONACCOUNT1"],
+            chains: ["stellar:testnet"],
+          },
+        },
+        requiredNamespaces: {},
+        peer: {
+          metadata: {
+            name: "Example dApp",
+            url: "https://example.com",
+            icons: ["https://example.com/icon.png"],
+          },
+        },
+        ...overrides,
+      };
+    }
+
+    it("maps every SDK session into a summary, most recently connected first", async () => {
+      (mockClient.session as any).values = [
+        fakeSession({ topic: "topic-older" }),
+        fakeSession({ topic: "topic-newer" }),
+      ];
+
+      // "topic-older" was tracked as connected before "topic-newer".
+      localStorage.setItem(
+        "stellar_wc_session_meta",
+        JSON.stringify({ "topic-older": 1000, "topic-newer": 2000 }),
+      );
+
+      const sessions = await getWalletConnectSessions();
+
+      expect(sessions.map((s) => s.topic)).toEqual(["topic-newer", "topic-older"]);
+      expect(sessions[0]).toMatchObject({
+        dappName: "Example dApp",
+        dappIcon: "https://example.com/icon.png",
+        dappUrl: "https://example.com",
+        address: "GSESSIONACCOUNT1",
+        network: "testnet",
+        connectedAt: 2000,
+      });
+    });
+
+    it("falls back to sorting by expiry when connectedAt is unknown", async () => {
+      (mockClient.session as any).values = [
+        fakeSession({ topic: "topic-a", expiry: 2000 }),
+        fakeSession({ topic: "topic-b", expiry: 1000 }),
+      ];
+
+      const sessions = await getWalletConnectSessions();
+
+      expect(sessions.map((s) => s.topic)).toEqual(["topic-a", "topic-b"]);
+      expect(sessions.every((s) => s.connectedAt === null)).toBe(true);
+    });
+
+    it("marks the session matching the persisted active topic as current", async () => {
+      (mockClient.session as any).values = [fakeSession({ topic: "topic-current" })];
+      sessionStorage.setItem(
+        "stellar_wc_session",
+        JSON.stringify({ topic: "topic-current", address: "G1", network: "testnet" }),
+      );
+
+      const sessions = await getWalletConnectSessions();
+
+      expect(sessions[0].isCurrent).toBe(true);
+    });
+
+    it("falls back to 'Unknown app' when peer metadata is missing", async () => {
+      (mockClient.session as any).values = [
+        fakeSession({ topic: "topic-anon", peer: { metadata: {} } }),
+      ];
+
+      const sessions = await getWalletConnectSessions();
+
+      expect(sessions[0].dappName).toBe("Unknown app");
+      expect(sessions[0].dappIcon).toBeNull();
+    });
+  });
+
+  describe("disconnectWalletConnectSession", () => {
+    it("disconnects only the given topic and clears its connected-at entry", async () => {
+      localStorage.setItem(
+        "stellar_wc_session_meta",
+        JSON.stringify({ "topic-1": 1000, "topic-2": 2000 }),
+      );
+      mockDisconnect.mockResolvedValue(undefined);
+
+      await disconnectWalletConnectSession("topic-1");
+
+      expect(mockDisconnect).toHaveBeenCalledWith({
+        topic: "topic-1",
+        reason: { code: 6000, message: "User disconnected session" },
+      });
+      const meta = JSON.parse(localStorage.getItem("stellar_wc_session_meta") || "{}");
+      expect(meta).toEqual({ "topic-2": 2000 });
+    });
+
+    it("clears the persisted active session only if its topic matches", async () => {
+      sessionStorage.setItem(
+        "stellar_wc_session",
+        JSON.stringify({ topic: "topic-active", address: "G1", network: "testnet" }),
+      );
+      mockDisconnect.mockResolvedValue(undefined);
+
+      await disconnectWalletConnectSession("topic-other");
+      expect(sessionStorage.getItem("stellar_wc_session")).not.toBeNull();
+
+      await disconnectWalletConnectSession("topic-active");
+      expect(sessionStorage.getItem("stellar_wc_session")).toBeNull();
+    });
+
+    it("still cleans up local state when the SDK disconnect call rejects", async () => {
+      localStorage.setItem(
+        "stellar_wc_session_meta",
+        JSON.stringify({ "topic-gone": 1000 }),
+      );
+      mockDisconnect.mockRejectedValue(new Error("No matching topic"));
+
+      await disconnectWalletConnectSession("topic-gone");
+
+      const meta = JSON.parse(localStorage.getItem("stellar_wc_session_meta") || "{}");
+      expect(meta).toEqual({});
+    });
+  });
+
+  describe("disconnectAllWalletConnectSessions", () => {
+    it("disconnects every active session and clears all local state", async () => {
+      (mockClient.session as any).values = [
+        { topic: "topic-1" },
+        { topic: "topic-2" },
+      ];
+      localStorage.setItem(
+        "stellar_wc_session_meta",
+        JSON.stringify({ "topic-1": 1000, "topic-2": 2000 }),
+      );
+      sessionStorage.setItem(
+        "stellar_wc_session",
+        JSON.stringify({ topic: "topic-1", address: "G1", network: "testnet" }),
+      );
+      mockDisconnect.mockResolvedValue(undefined);
+
+      await disconnectAllWalletConnectSessions();
+
+      expect(mockDisconnect).toHaveBeenCalledTimes(2);
+      expect(mockDisconnect).toHaveBeenCalledWith({
+        topic: "topic-1",
+        reason: { code: 6000, message: "User disconnected session" },
+      });
+      expect(mockDisconnect).toHaveBeenCalledWith({
+        topic: "topic-2",
+        reason: { code: 6000, message: "User disconnected session" },
+      });
+      expect(localStorage.getItem("stellar_wc_session_meta")).toBeNull();
+      expect(sessionStorage.getItem("stellar_wc_session")).toBeNull();
+    });
+
+    it("clears local state even when one session fails to disconnect", async () => {
+      (mockClient.session as any).values = [{ topic: "topic-1" }, { topic: "topic-2" }];
+      mockDisconnect.mockRejectedValueOnce(new Error("relay unreachable"));
+      mockDisconnect.mockResolvedValueOnce(undefined);
+
+      await disconnectAllWalletConnectSessions();
+
+      expect(localStorage.getItem("stellar_wc_session_meta")).toBeNull();
     });
   });
 });

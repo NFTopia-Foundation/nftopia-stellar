@@ -195,6 +195,8 @@ pub enum DisputeError {
     NoEligibleArbitrators = 11,
     /// A vote value other than 0 (against) or 1 (for the initiator).
     InvalidVote = 12,
+    /// Evidence URI is unsupported or longer than the configured limit.
+    InvalidEvidenceUri = 13,
 }
 
 // Helper to convert DisputeError to SettlementError
@@ -213,6 +215,7 @@ impl From<DisputeError> for SettlementError {
             DisputeError::InvalidDisputeConfig => SettlementError::InvalidState,
             DisputeError::NoEligibleArbitrators => SettlementError::InsufficientArbitrators,
             DisputeError::InvalidVote => SettlementError::InvalidAmount,
+            DisputeError::InvalidEvidenceUri => SettlementError::InvalidAmount,
         }
     }
 }

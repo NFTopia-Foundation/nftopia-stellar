@@ -93,6 +93,10 @@ export class BidService {
       throw new NotFoundException('Auction not found');
     }
 
+    if (!auction.sellerId) {
+      throw new BadRequestException('Auction seller is no longer available');
+    }
+
     // Create the bid
     const bid = this.bidRepo.create({
       auctionId,
@@ -103,10 +107,7 @@ export class BidService {
     const savedBid = await this.bidRepo.save(bid);
 
     auction.currentPrice = amount;
-    const extended = extendAuctionForLastMinuteBid(
-      auction,
-      this.configService,
-    );
+    const extended = extendAuctionForLastMinuteBid(auction, this.configService);
     await this.auctionRepo.save(auction);
     if (extended) {
       this.notificationsService.broadcastAuctionExtended(auctionId, {
@@ -114,6 +115,26 @@ export class BidService {
         extensionCount: auction.extensionCount,
       });
     }
+
+    // This path (the GraphQL `placeBid` mutation) previously skipped
+    // BID_PLACED_EVENT entirely, so GraphQL-originated bids never refreshed
+    // the highest-bid cache, notified the seller, or reached the Socket.IO
+    // bid feed — only bids placed through the on-chain placeBid() path did.
+    // Emitting it here also feeds the auctionBidPlaced GraphQL subscription
+    // (#650), since every listener (including the subscription publisher)
+    // now fires for both bid-placement paths.
+    const event: BidPlacedEvent = {
+      bidId: savedBid.id,
+      auctionId,
+      sellerId: auction.sellerId,
+      bidderId,
+      stellarPublicKey: '',
+      amount,
+      amountXlm: savedBid.amountXlm ?? amount.toFixed(7),
+      sorobanStatus: BidSorobanStatus.SKIPPED,
+      timestamp: new Date(),
+    };
+    this.eventEmitter.emit(BID_PLACED_EVENT, event);
 
     return savedBid;
   }
@@ -178,10 +199,7 @@ export class BidService {
 
     // Update auction current price in DB
     auction.currentPrice = amountXlm;
-    const extended = extendAuctionForLastMinuteBid(
-      auction,
-      this.configService,
-    );
+    const extended = extendAuctionForLastMinuteBid(auction, this.configService);
     await this.auctionRepo.save(auction);
     if (extended) {
       this.notificationsService.broadcastAuctionExtended(auctionId, {
@@ -194,6 +212,7 @@ export class BidService {
     await this.cacheManager.del(`${BID_CACHE_PREFIX}${auctionId}`);
 
     const event: BidPlacedEvent = {
+      bidId: bid.id,
       auctionId,
       sellerId: auction.sellerId,
       bidderId,

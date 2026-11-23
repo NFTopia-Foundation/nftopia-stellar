@@ -46,6 +46,7 @@ function setHook(partial: Partial<ReturnType<typeof useCreatorSales>>) {
   mockedHook.mockReturnValue({
     summary: null,
     activity: [],
+    sales: [],
     loading: false,
     error: null,
     refetch: jest.fn(),
@@ -102,5 +103,13 @@ describe("SalesPage", () => {
     expect(screen.getByText("boom")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /retry/i }));
     expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders the CSV export control, disabled when there are no sales (#758)", () => {
+    setHook({ summary, activity, sales: [] });
+    render(<SalesPage />);
+    expect(screen.getByRole("button", { name: /export csv/i })).toBeDisabled();
+    expect(screen.getByLabelText("From (UTC)")).toBeInTheDocument();
+    expect(screen.getByLabelText("To (UTC)")).toBeInTheDocument();
   });
 });

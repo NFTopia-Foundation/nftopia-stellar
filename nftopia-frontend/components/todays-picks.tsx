@@ -80,7 +80,7 @@ export function TodaysPicks() {
 
   return (
     <section className="py-16 relative">
-      <MarketplaceFilters />
+      <MarketplaceFilters listingPrices={listings.map((l: any) => l.price)} />
 
       {error ? (
         <EmptyState

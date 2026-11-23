@@ -82,6 +82,22 @@
       "priceLowToHigh": "Price: Low to High",
       "priceHighToLow": "Price: High to Low"
     },
+    "categoriesTitle": "Browse Categories",
+    "categories": {
+      "all": "All",
+      "art": "Art",
+      "music": "Music",
+      "gaming": "Gaming",
+      "photography": "Photography",
+      "collectibles": "Collectibles",
+      "sports": "Sports",
+      "virtualWorlds": "Virtual Worlds",
+      "utility": "Utility"
+    },
+    "recentlyViewed": {
+      "title": "Recently Viewed",
+      "clear": "Clear"
+    },
     "nft": {
       "buyNow": "Buy Now",
       "placeBid": "Place Bid",
@@ -90,6 +106,31 @@
       "createdBy": "Created by",
       "ownedBy": "Owned by",
       "viewDetails": "View Details"
+    },
+    "presets": {
+      "nameLabel": "Preset name",
+      "namePlaceholder": "Name these filters",
+      "save": "Save current filters",
+      "listLabel": "Saved filter presets",
+      "choose": "Choose a saved preset",
+      "none": "No saved presets",
+      "apply": "Apply preset",
+      "delete": "Delete preset",
+      "saved": "Saved \"{{name}}\"",
+      "applied": "Applied \"{{name}}\"",
+      "deleted": "Deleted \"{{name}}\"",
+      "errors": {
+        "emptyName": "Enter a name for this preset.",
+        "noFilters": "Set at least one filter before saving a preset.",
+        "limitReached": "You can save up to {{max}} presets. Delete one to save another.",
+        "storageUnavailable": "Presets can't be saved in this browser right now. Filtering still works."
+      }
+    },
+    "priceRange": {
+      "group": "Price range",
+      "minThumb": "Minimum price slider",
+      "maxThumb": "Maximum price slider",
+      "invalid": "Minimum price can't be higher than maximum price."
     }
   },
   "profile": {
@@ -118,6 +159,7 @@
   "creatorProfile": {
     "verified": "Verified",
     "followers": "followers",
+    "following": "following",
     "nftsCreated": "NFTs",
     "volume": "volume",
     "tabNfts": "NFTs",
@@ -143,6 +185,7 @@
     "edit": "Edit",
     "view": "View",
     "close": "Close",
+    "dismiss": "Dismiss",
     "confirm": "Confirm",
     "back": "Back",
     "next": "Next",
@@ -496,5 +539,18 @@
       "failedToCreate": "Failed to create collection"
     },
     "success": "Collection created successfully!"
+  },
+  "pushNotifications": {
+    "promptTitle": "Turn on push notifications",
+    "promptBody": "Get notified about new bids, sales, and follows — even when NFTopia isn't open.",
+    "notNow": "Not now",
+    "enable": "Enable",
+    "enabling": "Enabling...",
+    "subscribeError": "Couldn't enable push notifications. Please try again.",
+    "settingsTitle": "Push Notifications",
+    "settingsDescription": "Get notified about bids, sales, and follows even when this tab is closed.",
+    "settingsToggleOn": "Push notifications are on",
+    "settingsToggleOff": "Push notifications are off",
+    "unsupported": "Push notifications aren't supported in this browser."
   }
 }

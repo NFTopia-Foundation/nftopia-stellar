@@ -8,6 +8,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { BetaMessage } from '@anthropic-ai/sdk/resources/beta/messages';
 import { StellarNft } from '../../nft/entities/stellar-nft.entity';
 import { ContentFlagService } from './content-flag.service';
+import { ModerationAlertService } from './moderation-alert.service';
 import { PrometheusService } from '../../common/metrics/prometheus';
 import { resolveToolSet } from './tools/tool-set.registry';
 import {
@@ -54,6 +55,7 @@ export class AiModerationProcessor {
     private readonly stellarNftRepo: Repository<StellarNft>,
     private readonly contentFlagService: ContentFlagService,
     private readonly prometheusService: PrometheusService,
+    private readonly moderationAlertService: ModerationAlertService,
   ) {}
 
   /**
@@ -194,10 +196,64 @@ export class AiModerationProcessor {
     }
   }
 
+  /**
+   * Bull emits `failed` after EVERY failed attempt, not just the last. Only
+   * when attempts are exhausted (#748) do we log "permanently failed", bump
+   * ai_moderation_jobs_exhausted_total, surface the listing to admins via a
+   * `moderation_failed` content flag, and send the (debounced) operator alert.
+   */
   @OnQueueFailed()
-  onFailed(job: Job<AiModerationJobData>, err: Error): void {
+  async onFailed(job: Job<AiModerationJobData>, err: Error): Promise<void> {
+    const { listingId } = job.data;
+    const maxAttempts =
+      typeof job.opts.attempts === 'number' ? job.opts.attempts : 1;
+
+    if (job.attemptsMade < maxAttempts) {
+      this.logger.warn(
+        `Moderation attempt ${job.attemptsMade}/${maxAttempts} failed for listing=${listingId}; retry scheduled: ${err.message}`,
+      );
+      return;
+    }
+
     this.logger.error(
-      `Moderation job permanently failed for listing=${job.data.listingId}: ${err.message}`,
+      `Moderation job permanently failed for listing=${listingId}: ${err.message}`,
     );
+    this.prometheusService.incrementAiModerationJobsExhausted();
+    await this.flagExhaustedListing(listingId, err.message);
+    await this.moderationAlertService.alertExhausted(listingId, err.message);
+  }
+
+  /**
+   * Puts a listing whose moderation never completed into the existing admin
+   * review queue. Best-effort: an @OnQueueFailed handler must not throw.
+   */
+  private async flagExhaustedListing(
+    listingId: string,
+    errorMessage: string,
+  ): Promise<void> {
+    if (!isUUID(listingId)) {
+      // Non-persisted (on-chain-only) listing — no content_flags row possible.
+      return;
+    }
+    try {
+      const existing = await this.contentFlagService.findExistingFlag(
+        'listing',
+        listingId,
+      );
+      if (existing) {
+        return;
+      }
+      await this.contentFlagService.createFlag({
+        entityType: 'listing',
+        entityId: listingId,
+        reason: `moderation_failed: AI moderation exhausted all retries without completing (${errorMessage})`,
+        severity: 'medium',
+        confidence: 0,
+      });
+    } catch (flagErr) {
+      this.logger.error(
+        `Failed to record moderation_failed flag for listing=${listingId}: ${(flagErr as Error).message}`,
+      );
+    }
   }
 }

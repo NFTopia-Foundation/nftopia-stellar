@@ -55,6 +55,14 @@ jest.mock("@/lib/graphql/client", () => {
   };
 });
 
+// Mock the recently-viewed store so trackView calls can be asserted in
+// isolation from the real zustand/persist implementation.
+const mockTrackView = jest.fn();
+jest.mock("@/lib/stores/recently-viewed-store", () => ({
+  useRecentlyViewedStore: (selector: (state: { trackView: typeof mockTrackView }) => unknown) =>
+    selector({ trackView: mockTrackView }),
+}));
+
 const mockApolloClient = getApolloClient() as any;
 
 describe("NFT Detail SEO & Server Wrapper", () => {
@@ -148,6 +156,12 @@ describe("NFT Detail SEO & Server Wrapper", () => {
       expect(screen.queryByTestId("skeleton")).not.toBeInTheDocument();
       expect(screen.getByText("Stellar Voyager")).toBeInTheDocument();
       expect(screen.getByText("An NFT of a voyager traveling the Stellar universe.")).toBeInTheDocument();
+    });
+
+    it("records the view in the recently-viewed store once the NFT has resolved", () => {
+      render(<NFTDetailClient nftId="nft-1" initialNft={mockNft} />);
+
+      expect(mockTrackView).toHaveBeenCalledWith("nft-1");
     });
   });
 });

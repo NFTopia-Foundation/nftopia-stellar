@@ -67,10 +67,23 @@ const businessTransactionsSettledTotal = new Counter({
   registers: [registry],
 });
 
+const transactionReconciliationCorrectionsTotal = new Counter({
+  name: 'transaction_reconciliation_corrections_total',
+  help: 'Total number of transaction reconciliation corrections applied',
+  labelNames: ['from_state', 'to_state'],
+  registers: [registry],
+});
+
 const aiModerationJobsProcessedTotal = new Counter({
   name: 'ai_moderation_jobs_processed_total',
   help: 'Total number of ai-moderation queue jobs processed, by outcome',
   labelNames: ['outcome'], // 'flagged' | 'clean' | 'skipped' | 'error'
+  registers: [registry],
+});
+
+const aiModerationJobsExhaustedTotal = new Counter({
+  name: 'ai_moderation_jobs_exhausted_total',
+  help: 'Total number of ai-moderation jobs that exhausted all retry attempts',
   registers: [registry],
 });
 
@@ -218,6 +231,22 @@ export class PrometheusService {
     }
   }
 
+  incrementTransactionReconciliationCorrection(
+    fromState: string,
+    toState: string,
+  ): void {
+    try {
+      transactionReconciliationCorrectionsTotal.inc({
+        from_state: fromState,
+        to_state: toState,
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Failed to increment transaction_reconciliation_corrections_total: ${error}`,
+      );
+    }
+  }
+
   incrementAiModerationJobProcessed(
     outcome: 'flagged' | 'clean' | 'skipped' | 'error',
   ): void {
@@ -226,6 +255,16 @@ export class PrometheusService {
     } catch (error) {
       this.logger.warn(
         `Failed to increment ai_moderation_jobs_processed_total: ${error}`,
+      );
+    }
+  }
+
+  incrementAiModerationJobsExhausted(): void {
+    try {
+      aiModerationJobsExhaustedTotal.inc();
+    } catch (error) {
+      this.logger.warn(
+        `Failed to increment ai_moderation_jobs_exhausted_total: ${error}`,
       );
     }
   }

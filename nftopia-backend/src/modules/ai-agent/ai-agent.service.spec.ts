@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   InternalServerErrorException,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 
 // Anthropic() reads ANTHROPIC_API_KEY at construction time. Without one it
@@ -26,6 +27,8 @@ import type { AiUsageService } from './ai-usage.service';
 import type { ChatSessionService } from './chat-session.service';
 import type { Repository } from 'typeorm';
 import type { AiToolCallLog } from './entities/ai-tool-call-log.entity';
+import type { AiAgentHealthService } from './ai-agent-health.service';
+import type { AiChatStreamRegistryService } from './ai-chat-stream-registry.service';
 
 describe('AiAgentService', () => {
   let service: AiAgentService;
@@ -40,6 +43,10 @@ describe('AiAgentService', () => {
     appendExchange: jest.fn(),
   };
 
+  const aiAgentHealthService = {
+    checkAnthropic: jest.fn(),
+  };
+
   const defaultLoadedSession = { session: { id: 'session-1' }, history: [] };
 
   beforeEach(() => {
@@ -50,6 +57,7 @@ describe('AiAgentService', () => {
       defaultLoadedSession,
     );
     chatSessionService.appendExchange.mockResolvedValue(undefined);
+    aiAgentHealthService.checkAnthropic.mockResolvedValue('up');
 
     service = new AiAgentService(
       {} as NftService,
@@ -64,6 +72,8 @@ describe('AiAgentService', () => {
         createQueryBuilder: jest.fn(),
       } as unknown as Repository<AiToolCallLog>,
       new PromptInjectionService(),
+      aiAgentHealthService as unknown as AiAgentHealthService,
+      {} as unknown as AiChatStreamRegistryService, // unused by chat()/draftListing() — see ai-agent.service.stream.spec.ts for chatStream()
     );
   });
 
@@ -113,6 +123,53 @@ describe('AiAgentService', () => {
       );
 
       expect(aiUsageService.assertWithinCap).toHaveBeenCalledWith('user-1');
+      expect(toolRunner).toHaveBeenCalled();
+      expect(result.reply).toBe('Here are the top listings.');
+    });
+  });
+
+  describe('model fallback when Anthropic is degraded (#643)', () => {
+    it.each(['down', 'unconfigured'] as const)(
+      'rejects with a distinct AI_ASSISTANT_UNAVAILABLE error when health is %s, without calling the cap check or the Anthropic API',
+      async (status) => {
+        aiAgentHealthService.checkAnthropic.mockResolvedValue(status);
+        const toolRunner = mockToolRunner(makeFinalMessage());
+
+        let caught: unknown;
+        try {
+          await service.chat(
+            'user-1',
+            'marketplace-assistant',
+            'What NFTs are trending?',
+          );
+        } catch (error) {
+          caught = error;
+        }
+
+        expect(caught).toBeInstanceOf(ServiceUnavailableException);
+        const response = (caught as ServiceUnavailableException).getResponse();
+        expect(response).toMatchObject({
+          statusCode: 503,
+          code: 'AI_ASSISTANT_UNAVAILABLE',
+          anthropicStatus: status,
+        });
+
+        expect(aiUsageService.assertWithinCap).not.toHaveBeenCalled();
+        expect(chatSessionService.loadOrCreateSession).not.toHaveBeenCalled();
+        expect(toolRunner).not.toHaveBeenCalled();
+      },
+    );
+
+    it('proceeds to call the Anthropic API when health is up', async () => {
+      aiAgentHealthService.checkAnthropic.mockResolvedValue('up');
+      const toolRunner = mockToolRunner(makeFinalMessage());
+
+      const result = await service.chat(
+        'user-1',
+        'marketplace-assistant',
+        'What NFTs are trending?',
+      );
+
       expect(toolRunner).toHaveBeenCalled();
       expect(result.reply).toBe('Here are the top listings.');
     });
@@ -553,6 +610,8 @@ describe('AiAgentService', () => {
           createQueryBuilder: jest.fn(),
         } as unknown as Repository<AiToolCallLog>,
         new PromptInjectionService(),
+        aiAgentHealthService as unknown as AiAgentHealthService,
+        {} as unknown as AiChatStreamRegistryService, // unused by draftListing()
       );
     });
 

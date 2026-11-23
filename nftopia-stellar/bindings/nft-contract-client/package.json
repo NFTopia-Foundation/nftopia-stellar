@@ -1,0 +1,22 @@
+{
+  "name": "@nftopia/nft-contract-client",
+  "version": "0.0.1",
+  "description": "Generated TypeScript bindings for the NFTopia Stellar NFT contract",
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "@stellar/stellar-sdk": "^16.3.1",
+    "buffer": "6.0.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

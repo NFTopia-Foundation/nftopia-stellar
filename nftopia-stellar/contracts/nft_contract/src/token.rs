@@ -2,7 +2,8 @@ use crate::access_control;
 use crate::error::ContractError;
 use crate::events;
 use crate::storage::{
-    DataKey, MAX_BATCH_SIZE, MAX_SUPPLY_HARD_CAP, validate_supply_cap, would_exceed_supply_cap,
+    DataKey, MAX_BATCH_SIZE, MAX_OWNER_TOKENS_PAGE, MAX_SUPPLY_HARD_CAP, validate_supply_cap,
+    would_exceed_supply_cap,
 };
 use crate::transfer;
 use crate::types::{CollectionConfig, RoyaltyInfo, TokenAttribute, TokenData};
@@ -18,6 +19,89 @@ fn next_token_id(env: &Env) -> u64 {
         .instance()
         .set(&DataKey::NextTokenId, &(id + 1));
     id
+}
+
+pub(crate) fn add_owner_token(env: &Env, owner: &Address, token_id: u64) {
+    let head: Option<u64> = env
+        .storage()
+        .persistent()
+        .get(&DataKey::OwnerTokenHead(owner.clone()));
+
+    if let Some(head_id) = head {
+        env.storage()
+            .persistent()
+            .set(&DataKey::OwnerTokenPrev(head_id), &token_id);
+        env.storage()
+            .persistent()
+            .set(&DataKey::OwnerTokenNext(token_id), &head_id);
+    } else {
+        env.storage()
+            .persistent()
+            .remove(&DataKey::OwnerTokenNext(token_id));
+    }
+
+    env.storage()
+        .persistent()
+        .remove(&DataKey::OwnerTokenPrev(token_id));
+    env.storage()
+        .persistent()
+        .set(&DataKey::OwnerTokenHead(owner.clone()), &token_id);
+}
+
+pub(crate) fn remove_owner_token(env: &Env, owner: &Address, token_id: u64) {
+    let prev: Option<u64> = env
+        .storage()
+        .persistent()
+        .get(&DataKey::OwnerTokenPrev(token_id));
+    let next: Option<u64> = env
+        .storage()
+        .persistent()
+        .get(&DataKey::OwnerTokenNext(token_id));
+    let head: Option<u64> = env
+        .storage()
+        .persistent()
+        .get(&DataKey::OwnerTokenHead(owner.clone()));
+
+    if let Some(prev_id) = prev {
+        if let Some(next_id) = next {
+            env.storage()
+                .persistent()
+                .set(&DataKey::OwnerTokenNext(prev_id), &next_id);
+        } else {
+            env.storage()
+                .persistent()
+                .remove(&DataKey::OwnerTokenNext(prev_id));
+        }
+    } else if head == Some(token_id) {
+        if let Some(next_id) = next {
+            env.storage()
+                .persistent()
+                .set(&DataKey::OwnerTokenHead(owner.clone()), &next_id);
+        } else {
+            env.storage()
+                .persistent()
+                .remove(&DataKey::OwnerTokenHead(owner.clone()));
+        }
+    }
+
+    if let Some(next_id) = next {
+        if let Some(prev_id) = prev {
+            env.storage()
+                .persistent()
+                .set(&DataKey::OwnerTokenPrev(next_id), &prev_id);
+        } else {
+            env.storage()
+                .persistent()
+                .remove(&DataKey::OwnerTokenPrev(next_id));
+        }
+    }
+
+    env.storage()
+        .persistent()
+        .remove(&DataKey::OwnerTokenPrev(token_id));
+    env.storage()
+        .persistent()
+        .remove(&DataKey::OwnerTokenNext(token_id));
 }
 
 /// Checks if minting is allowed based on the supply cap.
@@ -137,6 +221,7 @@ fn mint_one(
     env.storage()
         .persistent()
         .set(&DataKey::TokenOwner(token_id), to);
+    add_owner_token(env, to, token_id);
 
     let bal: u64 = env
         .storage()
@@ -246,9 +331,15 @@ pub fn batch_mint(
         let id = mint_one(
             env,
             caller,
-            &recipients.get(i).unwrap(),
-            metadata_uris.get(i).unwrap(),
-            attributes.get(i).unwrap(),
+            &recipients
+                .get(i)
+                .expect("recipient exists because batch lengths were validated"),
+            metadata_uris
+                .get(i)
+                .expect("metadata URI exists because batch lengths were validated"),
+            attributes
+                .get(i)
+                .expect("attributes exist because batch lengths were validated"),
             None,
             None,
             None,
@@ -275,6 +366,15 @@ pub fn batch_mint(
 /// - Emits Burn event on success
 /// - Emits BurnFailed event on failure
 pub fn burn(env: &Env, caller: &Address, token_id: u64) -> Result<(), ContractError> {
+    if env
+        .storage()
+        .instance()
+        .get::<_, bool>(&DataKey::IsPaused)
+        .unwrap_or(false)
+    {
+        return Err(ContractError::ContractPaused);
+    }
+
     // 1. Validate token exists
     let owner: Address = env
         .storage()
@@ -324,6 +424,8 @@ pub fn burn(env: &Env, caller: &Address, token_id: u64) -> Result<(), ContractEr
     env.storage()
         .persistent()
         .remove(&DataKey::TokenApproved(token_id));
+
+    remove_owner_token(env, &owner, token_id);
 
     // 5. Remove token data and ownership
     env.storage()
@@ -392,7 +494,9 @@ pub fn batch_burn(env: &Env, caller: &Address, token_ids: Vec<u64>) -> Result<()
     // 3. If caller doesn't have burner role, verify they own ALL tokens
     if !has_burner_role {
         for i in 0..n {
-            let token_id = token_ids.get(i).unwrap();
+            let token_id = token_ids
+                .get(i)
+                .expect("token ID exists because the loop is bounded by the vector length");
             let owner: Address = env
                 .storage()
                 .persistent()
@@ -407,7 +511,9 @@ pub fn batch_burn(env: &Env, caller: &Address, token_ids: Vec<u64>) -> Result<()
 
     // 4. Burn each token
     for i in 0..n {
-        let token_id = token_ids.get(i).unwrap();
+        let token_id = token_ids
+            .get(i)
+            .expect("token ID exists because the loop is bounded by the vector length");
         // Use the single burn function for each token
         // This ensures consistent validation and cleanup
         burn(env, caller, token_id)?;
@@ -455,7 +561,9 @@ pub fn batch_transfer(
     }
 
     for i in 0..n {
-        let token_id = token_ids.get(i).unwrap();
+        let token_id = token_ids
+            .get(i)
+            .expect("token ID exists because the loop is bounded by the vector length");
         if !transfer::is_approved_or_owner(env, caller, token_id) {
             return Err(ContractError::NotApproved);
         }
@@ -476,6 +584,66 @@ pub fn balance_of(env: &Env, owner: &Address) -> u64 {
         .persistent()
         .get(&DataKey::Balance(owner.clone()))
         .unwrap_or(0)
+}
+
+/// Returns one page of token IDs owned by `owner` and the cursor for the next page.
+/// The cursor is exclusive and should be passed back unchanged; limits are 1..=50.
+pub fn tokens_of_owner(
+    env: &Env,
+    owner: &Address,
+    cursor: Option<u64>,
+    limit: u32,
+) -> Result<(Vec<u64>, Option<u64>), ContractError> {
+    if limit == 0 || limit > MAX_OWNER_TOKENS_PAGE {
+        return Err(ContractError::InvalidPaginationLimit);
+    }
+
+    let mut current = if let Some(cursor_id) = cursor {
+        let cursor_owner: Option<Address> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::TokenOwner(cursor_id));
+        if cursor_owner.as_ref() != Some(owner) {
+            return Err(ContractError::InvalidPaginationCursor);
+        }
+        env.storage()
+            .persistent()
+            .get(&DataKey::OwnerTokenNext(cursor_id))
+    } else {
+        env.storage()
+            .persistent()
+            .get(&DataKey::OwnerTokenHead(owner.clone()))
+    };
+
+    let mut token_ids = Vec::new(env);
+    let mut last_token_id = None;
+    for _ in 0..limit {
+        let Some(token_id) = current else {
+            break;
+        };
+
+        let token_owner: Option<Address> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::TokenOwner(token_id));
+        if token_owner.as_ref() != Some(owner) {
+            return Err(ContractError::InvalidPaginationCursor);
+        }
+
+        token_ids.push_back(token_id);
+        last_token_id = Some(token_id);
+        current = env
+            .storage()
+            .persistent()
+            .get(&DataKey::OwnerTokenNext(token_id));
+    }
+
+    let next_cursor = if current.is_some() {
+        last_token_id
+    } else {
+        None
+    };
+    Ok((token_ids, next_cursor))
 }
 
 pub fn total_supply(env: &Env) -> u64 {

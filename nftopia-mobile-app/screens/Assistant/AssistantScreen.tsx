@@ -14,6 +14,7 @@ import {
 import { useRoute, RouteProp } from '@react-navigation/native';
 import { MainStackParamList } from '@/navigation/MainNavigator';
 import { useAssistantStore, ChatMessage } from '@/stores/assistantStore';
+import type { AIUsage } from '@/stores/assistantStore';
 
 function MessageBubble({ item }: { item: ChatMessage }) {
   const isUser = item.role === 'user';
@@ -35,12 +36,47 @@ function MessageBubble({ item }: { item: ChatMessage }) {
   );
 }
 
+function QuotaIndicator({ usage }: { usage: AIUsage | null }) {
+  if (!usage) return null;
+
+  const dailyPercent = usage.daily.percentUsed;
+  const monthlyPercent = usage.monthly.percentUsed;
+  const isNearLimit = usage.daily.approachingCap || usage.monthly.approachingCap;
+  const isExhausted = usage.daily.remaining === 0 || usage.monthly.remaining === 0;
+
+  return (
+    <View
+      style={[
+        styles.quotaContainer,
+        isExhausted && styles.quotaExhausted,
+        isNearLimit && !isExhausted && styles.quotaWarning,
+      ]}
+      accessibilityRole="text"
+      accessibilityLabel={`Daily quota: ${dailyPercent}% used, Monthly quota: ${monthlyPercent}% used`}
+    >
+      <Text style={[styles.quotaText, isExhausted && styles.quotaTextExhausted]}>
+        {isExhausted
+          ? 'Quota exhausted'
+          : isNearLimit
+          ? 'Quota low'
+          : 'Quota'}
+        : {dailyPercent}% daily, {monthlyPercent}% monthly
+      </Text>
+    </View>
+  );
+}
+
 export default function AssistantScreen({ navigation }: any) {
   const route = useRoute<RouteProp<MainStackParamList, 'Assistant'>>();
-  const { messages, isStreaming, error, sendMessage, cancelStream, clearConversation } =
+  const { messages, isStreaming, error, sendMessage, cancelStream, clearConversation, usage, fetchUsage, isQuotaExhausted } =
     useAssistantStore();
   const [input, setInput] = useState('');
   const listRef = useRef<FlatList>(null);
+
+  // Fetch usage data on mount
+  useEffect(() => {
+    fetchUsage();
+  }, [fetchUsage]);
 
   // Context-aware initialization for future use
   useEffect(() => {
@@ -69,6 +105,9 @@ export default function AssistantScreen({ navigation }: any) {
   const onSend = () => {
     const text = input.trim();
     if (!text) return;
+    if (isQuotaExhausted) {
+      return;
+    }
     setInput('');
     void sendMessage(text);
   };
@@ -87,9 +126,12 @@ export default function AssistantScreen({ navigation }: any) {
         >
           <Text style={styles.back}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.title} accessibilityRole="header">
-          AI Assistant
-        </Text>
+        <View style={styles.headerCenter}>
+          <Text style={styles.title} accessibilityRole="header">
+            AI Assistant
+          </Text>
+          <QuotaIndicator usage={usage} />
+        </View>
         <TouchableOpacity
           onPress={clearConversation}
           accessibilityRole="button"
@@ -142,9 +184,9 @@ export default function AssistantScreen({ navigation }: any) {
           accessibilityLabel="Message input"
         />
         <TouchableOpacity
-          style={[styles.sendBtn, (!input.trim() || isStreaming) && styles.sendDisabled]}
+          style={[styles.sendBtn, (!input.trim() || isStreaming || isQuotaExhausted) && styles.sendDisabled]}
           onPress={onSend}
-          disabled={!input.trim() || isStreaming}
+          disabled={!input.trim() || isStreaming || isQuotaExhausted}
           accessibilityRole="button"
           accessibilityLabel="Send message"
         >
@@ -167,9 +209,37 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#2a2a35',
   },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+  },
   back: { color: '#6C5CE7', fontSize: 22, width: 40 },
   title: { color: '#fff', fontSize: 17, fontWeight: '600' },
   clear: { color: '#aaa', fontSize: 14 },
+  quotaContainer: {
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    backgroundColor: '#1e1e28',
+  },
+  quotaWarning: {
+    backgroundColor: '#ffa5001a',
+    borderWidth: 1,
+    borderColor: '#ffa500',
+  },
+  quotaExhausted: {
+    backgroundColor: '#ff6b6b1a',
+    borderWidth: 1,
+    borderColor: '#ff6b6b',
+  },
+  quotaText: {
+    color: '#999',
+    fontSize: 11,
+  },
+  quotaTextExhausted: {
+    color: '#ff6b6b',
+  },
   empty: { flex: 1, justifyContent: 'center', padding: 32 },
   emptyTitle: { color: '#fff', fontSize: 20, fontWeight: '700', marginBottom: 8, textAlign: 'center' },
   emptyBody: { color: '#999', fontSize: 15, textAlign: 'center', lineHeight: 22 },

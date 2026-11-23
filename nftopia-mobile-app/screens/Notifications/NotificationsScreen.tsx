@@ -148,7 +148,7 @@ export default function NotificationsScreen({ navigation }: any) {
           error ? (
             <View style={styles.errorContainer}>
               <Text style={styles.errorText}>{error}</Text>
-              <TouchableOpacity style={styles.retryButton} onPress={fetchNotifications}>
+              <TouchableOpacity style={styles.retryButton} onPress={() => fetchNotifications()}>
                 <Text style={styles.retryText}>Retry</Text>
               </TouchableOpacity>
             </View>

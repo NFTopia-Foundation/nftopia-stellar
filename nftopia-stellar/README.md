@@ -63,6 +63,8 @@ NFTopia Soroban Contracts is the on-chain workspace for collection creation, mar
 | `transaction_contract` | Transaction core, execution engine, dependency resolution, signature management, recovery, storage, and security helpers |
 | `nft_contract` | Present in the workspace but currently scaffolded compared with the other packages |
 
+The NFT contract's paginated `tokens_of_owner` query and cursor semantics are documented in [`docs/nft-owner-query.md`](docs/nft-owner-query.md).
+
 ## 🧰 Prerequisites
 
 - Rust toolchain

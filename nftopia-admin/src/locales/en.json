@@ -68,7 +68,8 @@
     "collections": "Collections",
     "settings": "Settings",
     "contentFlags": "Content Flags",
-    "transactionRetry": "Transaction Retries"
+    "transactionRetry": "Transaction Retries",
+    "collectionVerification": "Collection Verification"
   },
   "shell": {
     "openSidebar": "Open sidebar",
@@ -197,6 +198,58 @@
       "previous": "Previous",
       "next": "Next",
       "page": "Page {{page}} of {{pages}}"
+    }
+  },
+  "collections": {
+    "title": "Collection Verification",
+    "description": "Review and verify NFT collections awaiting publication.",
+    "empty": "No collections match these filters.",
+    "error": {
+      "load": "Unable to load collections.",
+      "approve": "Unable to approve the collection. Please try again.",
+      "reject": "Unable to reject the collection. Please try again."
+    },
+    "confirm": {
+      "approve": "Approve collection {{collectionName}} for publication?",
+      "reject": "Reject collection {{collectionName}}?"
+    },
+    "columns": {
+      "select": "Select",
+      "item": "Item",
+      "reason": "Reason",
+      "severity": "Severity",
+      "status": "Status",
+      "created": "Created",
+      "actions": "Actions"
+    },
+    "actions": {
+      "bulkApproveReject": "Approve/reject selected"
+    },
+    "status": {
+      "pending": "Pending",
+      "approved": "Approved",
+      "rejected": "Rejected"
+    },
+    "severity": {
+      "low": "Low severity",
+      "medium": "Medium severity",
+      "high": "High severity",
+      "critical": "Critical severity"
+    },
+    "results": "{{count}} matching collections (showing up to 50).",
+    "pagination": {
+      "label": "Collection verification pages",
+      "previous": "Previous",
+      "next": "Next",
+      "page": "Page {{page}} of {{pages}}"
+    },
+    "success": {
+      "approve": "Collection approved.",
+      "reject": "Collection rejected."
+    },
+    "notice": {
+      "approve": "Collection successfully approved.",
+      "reject": "Collection successfully rejected."
     }
   },
   "dlq": {

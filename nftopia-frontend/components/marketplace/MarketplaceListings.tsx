@@ -56,7 +56,8 @@ export function MarketplaceListings() {
   const minPrice = searchParams.get("minPrice") ?? "";
   const maxPrice = searchParams.get("maxPrice") ?? "";
   const sortBy = searchParams.get("sortBy") ?? "newest";
-  const filterKey = `${search}|${minPrice}|${maxPrice}|${sortBy}`;
+  const category = searchParams.get("category") ?? "";
+  const filterKey = `${search}|${minPrice}|${maxPrice}|${sortBy}|${category}`;
 
   // Only the *first* load honours `?cursor=`; after a filter change the old
   // cursor belongs to a result set that no longer exists.
@@ -71,8 +72,9 @@ export function MarketplaceListings() {
       maxPrice: parseNumberParam(maxPrice),
       sortBy: sortBy || undefined,
       status: ListingStatus.Active,
+      category: category || undefined,
     }),
-    [search, minPrice, maxPrice, sortBy],
+    [search, minPrice, maxPrice, sortBy, category],
   );
 
   // Register the transport once; the store itself stays transport-agnostic.

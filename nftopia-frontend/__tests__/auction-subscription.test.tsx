@@ -173,8 +173,10 @@ describe("Real-time Auction Bid Subscription & Outbid Notifications (#538)", () 
   it("updates UI in real-time when a new bid event is received", async () => {
     render(<AuctionDetailClient initialAuction={initialAuction} locale="en" />);
 
-    // Verify initial current bid
-    expect(screen.getAllByText(/150\.0000000/)[0]).toBeInTheDocument();
+    // Verify initial current bid (rendered via the shared display-currency
+    // formatter, #660 — 2 decimal places for XLM, not the raw 7-decimal
+    // on-chain string).
+    expect(screen.getAllByText(/150\.00/)[0]).toBeInTheDocument();
 
     const newBidEvent = {
       id: "bid-2",
@@ -224,9 +226,10 @@ describe("Real-time Auction Bid Subscription & Outbid Notifications (#538)", () 
       }
     });
 
-    // Verify toast notification called
+    // Verify toast notification called (formatted via the shared
+    // display-currency formatter, #660).
     expect(mockShowWarning).toHaveBeenCalledWith(
-      expect.stringContaining("You've been outbid! New highest bid: 250.0000000 XLM")
+      expect.stringContaining("You've been outbid! New highest bid: 250.00 XLM")
     );
 
     // Verify visual outbid notification banner is displayed

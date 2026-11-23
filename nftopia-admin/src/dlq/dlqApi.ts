@@ -107,9 +107,10 @@ export function unwrapPayload<T>(body: unknown, key: string): T {
 async function errorFrom(response: Response): Promise<DlqApiError> {
   let message = `Request failed (${response.status})`
   try {
-    const body = (await response.json()) as { message?: unknown }
+    const body = (await response.json()) as { message?: unknown; error?: unknown }
     if (typeof body.message === 'string' && body.message) message = body.message
     else if (Array.isArray(body.message) && body.message.length > 0) message = body.message.join(', ')
+    else if (typeof body.error === 'string' && body.error) message = body.error
   } catch {
     // Non-JSON error body: keep the status-only message.
   }

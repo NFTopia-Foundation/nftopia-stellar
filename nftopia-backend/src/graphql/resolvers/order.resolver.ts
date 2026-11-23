@@ -32,6 +32,11 @@ import type { OrderPaginatedResponseDto } from '../../modules/order/dto/order-pa
 import type { OrderInterface } from '../../modules/order/interfaces/order.interface';
 import type { User } from '../../users/user.entity';
 import type { Nft } from '../../modules/nft/entities/nft.entity';
+import {
+  DATALOADER_LIST_RELATION_COMPLEXITY,
+  DATALOADER_RELATION_COMPLEXITY,
+  paginatedComplexity,
+} from '../complexity';
 
 @Resolver(() => GraphqlOrder)
 export class OrderResolver {
@@ -53,6 +58,7 @@ export class OrderResolver {
   @Query(() => OrderConnection, {
     name: 'myOrders',
     description: "Fetch current user's orders (authenticated)",
+    complexity: paginatedComplexity(),
   })
   @UseGuards(GqlAuthGuard)
   async myOrders(
@@ -114,6 +120,7 @@ export class OrderResolver {
   @Query(() => OrderConnection, {
     name: 'userOrders',
     description: 'Fetch orders for specific user',
+    complexity: paginatedComplexity(),
   })
   @UseGuards(GqlAuthGuard)
   async userOrders(
@@ -133,6 +140,7 @@ export class OrderResolver {
   @Query(() => [GraphqlOrder], {
     name: 'nftOrders',
     description: 'Fetch order history for NFT',
+    complexity: DATALOADER_LIST_RELATION_COMPLEXITY,
   })
   @UseGuards(GqlAuthGuard)
   async nftOrders(
@@ -180,6 +188,7 @@ export class OrderResolver {
     name: 'buyer',
     nullable: true,
     description: 'Resolve order buyer using request-scoped DataLoader',
+    complexity: DATALOADER_RELATION_COMPLEXITY,
   })
   async buyer(
     @Parent() order: GraphqlOrder,
@@ -197,6 +206,7 @@ export class OrderResolver {
     name: 'seller',
     nullable: true,
     description: 'Resolve order seller using request-scoped DataLoader',
+    complexity: DATALOADER_RELATION_COMPLEXITY,
   })
   async seller(
     @Parent() order: GraphqlOrder,
@@ -214,6 +224,7 @@ export class OrderResolver {
     name: 'nft',
     nullable: true,
     description: 'Resolve order NFT using request-scoped DataLoader',
+    complexity: DATALOADER_RELATION_COMPLEXITY,
   })
   async nft(
     @Parent() order: GraphqlOrder,

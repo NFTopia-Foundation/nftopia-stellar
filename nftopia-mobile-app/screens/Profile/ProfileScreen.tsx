@@ -296,6 +296,21 @@ function ProfileContent({ navigation }: Props) {
           <Text style={styles.linkText}>Address Book</Text>
           <Text style={styles.arrow} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">→</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.linkRow}
+          onPress={() => {
+            const userId = user?.id;
+            if (userId) {
+              navigation.navigate('CreatorProfile', { userId });
+            }
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Creator profile"
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Text style={styles.linkText}>Creator profile</Text>
+          <Text style={styles.arrow} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">→</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.card}>
