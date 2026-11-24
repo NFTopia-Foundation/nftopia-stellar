@@ -3,6 +3,29 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { streamChatMessage, sendChatMessage } from '@/src/services/ai/aiChat.service';
 import apiClient from '@/lib/api/sample';
+import { analyticsService } from '@/src/analytics/analytics.service';
+
+// AI chat analytics must never include message content, wallet addresses, or
+// other user text. Only coarse length buckets and operational categories are sent.
+function messageLengthBucket(length: number): '1-20' | '21-100' | '101-500' | '501+' {
+  if (length <= 20) return '1-20';
+  if (length <= 100) return '21-100';
+  if (length <= 500) return '101-500';
+  return '501+';
+}
+
+function aiErrorCategory(error: Error): 'quota' | 'rate_limit' | 'session_expired' | 'other' {
+  const text = error.message.toLowerCase();
+  if (/ai_.*(daily|monthly).*cap|quota/.test(text)) return 'quota';
+  if (/rate.?limit|429|too many requests/.test(text)) return 'rate_limit';
+  if (/session.*(expired|not found)|chat.*404/.test(text)) return 'session_expired';
+  return 'other';
+}
+
+function trackAiChat(eventName: string, properties: Record<string, unknown> = {}) {
+  // analyticsService.track already enforces the existing analytics consent opt-out.
+  analyticsService.track(eventName, properties);
+}
 
 export const ASSISTANT_STORAGE_KEY = 'assistant-storage';
 export const ASSISTANT_STORE_VERSION = 1;
@@ -35,6 +58,8 @@ export interface AIUsage {
   hasOverride: boolean;
 }
 
+export type AIHealthStatus = 'unknown' | 'up' | 'down' | 'unconfigured';
+
 interface AssistantState {
   messages: ChatMessage[];
   sessionId: string | null;
@@ -43,6 +68,8 @@ interface AssistantState {
   abortController: AbortController | null;
   usage: AIUsage | null;
   isQuotaExhausted: boolean;
+  health: AIHealthStatus;
+  fetchHealth: () => Promise<void>;
   fetchUsage: () => Promise<void>;
   sendMessage: (text: string) => Promise<void>;
   cancelStream: () => void;
@@ -63,6 +90,18 @@ export const useAssistantStore = create<AssistantState>()(
       abortController: null,
       usage: null,
       isQuotaExhausted: false,
+      health: 'unknown',
+
+      fetchHealth: async () => {
+        try {
+          const health = await apiClient.getAIHealth();
+          set({ health: health.status });
+        } catch (err) {
+          // A transport failure is unknown, so it doesn't falsely block chat.
+          console.error('Failed to fetch AI health:', err);
+          set({ health: 'unknown' });
+        }
+      },
 
       fetchUsage: async () => {
         try {
@@ -76,19 +115,23 @@ export const useAssistantStore = create<AssistantState>()(
       },
 
       cancelStream: () => {
-        const { abortController } = get();
+        const { abortController, isStreaming } = get();
         abortController?.abort();
+        if (isStreaming) trackAiChat('ai_chat_stream_cancelled');
         set({ abortController: null, isStreaming: false });
       },
 
       clearConversation: () => {
         get().cancelStream();
+        trackAiChat('ai_chat_cleared');
         set({ messages: [], sessionId: null, error: null });
       },
 
       sendMessage: async (text: string) => {
         const trimmed = text.trim();
         if (!trimmed || get().isStreaming) return;
+        const sentAt = Date.now();
+        trackAiChat('ai_chat_message_sent', { message_length_bucket: messageLengthBucket(trimmed.length) });
 
         const userMsg: ChatMessage = {
           id: uid(),
@@ -112,6 +155,7 @@ export const useAssistantStore = create<AssistantState>()(
         }));
 
         let controller: AbortController | null = null;
+        let replyCompletedTracked = false;
         controller = streamChatMessage(trimmed, get().sessionId, {
           onToken: (token) => {
             if (controller?.signal.aborted) return;
@@ -127,6 +171,10 @@ export const useAssistantStore = create<AssistantState>()(
           },
           onDone: () => {
             if (controller?.signal.aborted) return;
+            if (!replyCompletedTracked) {
+              replyCompletedTracked = true;
+              trackAiChat('ai_chat_reply_completed', { latency_ms: Date.now() - sentAt });
+            }
             set((s) => ({
               isStreaming: false,
               abortController: null,
@@ -139,6 +187,7 @@ export const useAssistantStore = create<AssistantState>()(
           },
           onError: (error) => {
             if (controller?.signal.aborted) return;
+            trackAiChat('ai_chat_error', { error_category: aiErrorCategory(error) });
             // Check if the backend session has expired or is missing (404 / not found)
             const isSessionNotFound =
               Boolean(get().sessionId) &&
@@ -175,8 +224,9 @@ export const useAssistantStore = create<AssistantState>()(
                   : m,
               ),
             }));
-            // Refresh usage on error to show updated quota
+            // Refresh usage and availability after a failed send.
             get().fetchUsage();
+            get().fetchHealth();
           },
         });
 
