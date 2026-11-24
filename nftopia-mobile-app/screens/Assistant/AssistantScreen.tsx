@@ -16,6 +16,7 @@ import { useRoute, RouteProp } from '@react-navigation/native';
 import { MainStackParamList } from '@/navigation/MainNavigator';
 import { useAssistantStore, ChatMessage } from '@/stores/assistantStore';
 import type { AIUsage } from '@/stores/assistantStore';
+import { useAnalytics } from '@/src/hooks/useAnalytics';
 
 function MessageBubble({ item }: { item: ChatMessage }) {
   const isUser = item.role === 'user';
@@ -69,6 +70,7 @@ function QuotaIndicator({ usage }: { usage: AIUsage | null }) {
 
 export default function AssistantScreen({ navigation }: any) {
   const route = useRoute<RouteProp<MainStackParamList, 'Assistant'>>();
+  const { track } = useAnalytics();
   const { messages, isStreaming, error, sendMessage, cancelStream, clearConversation, usage, fetchUsage, fetchHealth, health, isQuotaExhausted } =
     useAssistantStore();
   const [input, setInput] = useState('');
@@ -81,6 +83,10 @@ export default function AssistantScreen({ navigation }: any) {
     lastHealthCheck.current = now;
     void fetchHealth();
   };
+
+  useEffect(() => {
+    track('ai_chat_opened');
+  }, [track]);
 
   // Fetch usage and availability on mount.
   useEffect(() => {
