@@ -10,6 +10,7 @@ import { Collection } from '../modules/collection/entities/collection.entity';
 import { AuditService, AuditAction } from '../common/audit/audit.service';
 
 import { ListUsersQueryDto } from './dto/list-users-query.dto';
+import { AuditLogsQueryDto } from './dto/audit-logs-query.dto';
 
 @Injectable()
 export class AdminService {
@@ -60,6 +61,22 @@ export class AdminService {
     });
 
     return { users, total };
+  }
+
+  async listAuditLogs(query: AuditLogsQueryDto) {
+    const limit = query.limit ?? 50;
+    const offset = query.offset ?? 0;
+    const result = await this.auditService.findAuditLogs({
+      adminId: query.adminId,
+      action: query.action,
+      entityType: query.entityType,
+      entityId: query.entityId,
+      startDate: query.startDate ? new Date(query.startDate) : undefined,
+      endDate: query.endDate ? new Date(query.endDate) : undefined,
+      limit,
+      offset,
+    });
+    return { logs: result.logs, total: result.total, limit, offset };
   }
 
   async getUserDetails(userId: string) {

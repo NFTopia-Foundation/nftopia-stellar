@@ -6,6 +6,24 @@
 import { config } from '@/src/config';
 import apiClient from '@/lib/api/sample';
 
+export class ChatRequestError extends Error {
+  status: number;
+  retryAfterSeconds: number | null;
+  rateLimitRemaining: number | null;
+
+  constructor(message: string, status: number, headers?: Headers) {
+    super(message);
+    this.name = 'ChatRequestError';
+    this.status = status;
+    const retryAfter = headers?.get('retry-after');
+    const parsedRetry = retryAfter ? Number(retryAfter) : NaN;
+    this.retryAfterSeconds = Number.isFinite(parsedRetry) && parsedRetry >= 0 ? parsedRetry : null;
+    const remaining = headers?.get('x-ratelimit-remaining');
+    const parsedRemaining = remaining ? Number(remaining) : NaN;
+    this.rateLimitRemaining = Number.isFinite(parsedRemaining) ? parsedRemaining : null;
+  }
+}
+
 export interface ChatReply {
   reply: string;
   sessionId: string;
@@ -50,7 +68,7 @@ export async function sendChatMessage(
   });
   if (!response.ok) {
     const err = await response.json().catch(() => ({ message: `HTTP ${response.status}` }));
-    throw new Error(err.message || `Chat failed (${response.status})`);
+    throw new ChatRequestError(err.message || `Chat failed (${response.status})`, response.status, response.headers);
   }
   return response.json();
 }
@@ -77,7 +95,7 @@ export function streamChatMessage(
       });
 
       if (!response.ok || !response.body) {
-        throw new Error(`Stream unavailable (${response.status})`);
+        throw new ChatRequestError(`Too many AI chat requests (${response.status})`, response.status, response.headers);
       }
 
       const reader = response.body.getReader();

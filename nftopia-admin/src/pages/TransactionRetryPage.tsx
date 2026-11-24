@@ -14,6 +14,8 @@ import {
   type RetryMetrics,
 } from '../dlq/dlqApi'
 import { bucketByDay, bulkRetryPhrase, cleanupPhrase, recentActivity } from '../dlq/dlqStats'
+import { formatUtc } from '../dlq/format'
+import { explorerUrl } from '../utils/explorerUrl'
 
 const PAGE_SIZE = 20
 const DEFAULT_BULK_LIMIT = 50
@@ -50,6 +52,10 @@ export default function TransactionRetryPage() {
   const [reason, setReason] = useState('')
   const [bulkLimit, setBulkLimit] = useState(DEFAULT_BULK_LIMIT)
   const [cleanupDays, setCleanupDays] = useState(DEFAULT_CLEANUP_DAYS)
+  const [lookupId, setLookupId] = useState('')
+  const [lookupEntry, setLookupEntry] = useState<DlqEntry | null>(null)
+  const [lookupLoading, setLookupLoading] = useState(false)
+  const [lookupError, setLookupError] = useState<string | null>(null)
 
   const describe = useCallback(
     (error: unknown) => (error instanceof DlqApiError ? error.message : t('dlq.error.network')),
@@ -83,6 +89,25 @@ export default function TransactionRetryPage() {
   useEffect(() => {
     if (allowed) void load(page)
   }, [allowed, load, page])
+
+  const lookupTransaction = async (event?: React.FormEvent) => {
+    event?.preventDefault()
+    if (!/^\d+$/.test(lookupId.trim())) {
+      setLookupError(t('dlq.lookup.invalid'))
+      return
+    }
+    setLookupLoading(true)
+    setLookupError(null)
+    try {
+      const entries = await api.getByTransactionId(lookupId.trim())
+      setLookupEntry(entries[0] ?? null)
+      if (entries.length === 0) setLookupError(t('dlq.lookup.notFound'))
+    } catch (error) {
+      setLookupError(error instanceof DlqApiError && error.status === 404 ? t('dlq.lookup.notFound') : describe(error))
+    } finally {
+      setLookupLoading(false)
+    }
+  }
 
   const refreshMetrics = useCallback(async () => {
     try {
@@ -216,6 +241,51 @@ export default function TransactionRetryPage() {
         <p role="alert" className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
           {loadError}
         </p>
+      ) : null}
+      <form onSubmit={lookupTransaction} className="flex flex-wrap items-end gap-2 rounded-xl border border-white/10 bg-slate-900/40 p-4">
+        <label className="flex-1 text-sm text-slate-300">
+          {t('dlq.lookup.label')}
+          <input
+            value={lookupId}
+            onChange={(event) => setLookupId(event.target.value)}
+            inputMode="numeric"
+            placeholder="12345"
+            className="mt-1 w-full max-w-sm rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+          />
+        </label>
+        <button type="submit" disabled={lookupLoading} className="rounded-lg bg-cyan-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50">
+          {lookupLoading ? t('dlq.lookup.loading') : t('dlq.lookup.submit')}
+        </button>
+      </form>
+      {lookupError ? <p role="alert" className="text-sm text-red-300">{lookupError}</p> : null}
+      {lookupEntry ? (
+        <article className="rounded-xl border border-cyan-500/30 bg-slate-900/40 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-white">{t('dlq.detail.title', { tx: lookupEntry.transactionId })}</h2>
+              <p className="mt-1 text-sm text-slate-400">{lookupEntry.status} · {lookupEntry.attemptCount}/{lookupEntry.maxAttempts}</p>
+            </div>
+            <a href={explorerUrl(lookupEntry.contractTxId, 'tx')} target="_blank" rel="noreferrer" className="text-sm text-cyan-300 hover:underline">{t('dlq.detail.explorer')}</a>
+          </div>
+          <p className="mt-3 whitespace-pre-wrap break-words text-sm text-slate-300">{lookupEntry.lastError || t('dlq.noError')}</p>
+          <dl className="mt-3 grid gap-2 text-sm text-slate-400 sm:grid-cols-2">
+            <div><dt>{t('dlq.detail.entered')}</dt><dd>{formatUtc(lookupEntry.createdAt)}</dd></div>
+            <div><dt>{t('dlq.detail.nextRetry')}</dt><dd>{lookupEntry.nextRetryAt ? formatUtc(lookupEntry.nextRetryAt) : '—'}</dd></div>
+          </dl>
+          {lookupEntry.errorHistory?.length ? (
+            <ol className="mt-3 flex flex-col gap-2">
+              {lookupEntry.errorHistory.map((error, index) => (
+                <li key={`${error.attempt}-${index}`} className="rounded-lg border border-white/10 p-2 text-xs text-slate-400">
+                  {t('dlq.detail.attempt', { attempt: error.attempt })}: {error.error} · {formatUtc(error.timestamp)}
+                </li>
+              ))}
+            </ol>
+          ) : null}
+          <div className="mt-3 flex gap-2">
+            {lookupEntry.status === 'dlq' ? <button type="button" onClick={() => open({ kind: 'retry', entry: lookupEntry })} className="rounded-md border border-white/10 px-3 py-1.5 text-sm">{t('dlq.actions.retry')}</button> : null}
+            {lookupEntry.status === 'pending' || lookupEntry.status === 'processing' ? <button type="button" onClick={() => open({ kind: 'cancel', entry: lookupEntry })} className="rounded-md border border-red-500/30 px-3 py-1.5 text-sm text-red-300">{t('dlq.actions.cancel')}</button> : null}
+          </div>
+        </article>
       ) : null}
       {notice ? (
         <p role="status" className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">

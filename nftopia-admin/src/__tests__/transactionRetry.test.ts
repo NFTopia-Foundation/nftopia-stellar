@@ -365,6 +365,24 @@ describe('cleanup', () => {
 
 // ── Errors and envelopes ──────────────────────────────────────────────────────
 
+describe('transaction lookup', () => {
+  it('calls the transaction lookup endpoint and unwraps retry rows', async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(Response.json({ ok: true, data: [entry(7)] }))
+    const api = createDlqApi(fetchImpl as unknown as typeof fetch, BASE)
+
+    await expect(api.getByTransactionId(42)).resolves.toEqual([entry(7)])
+    expect(fetchImpl).toHaveBeenCalledWith(`${BASE}/transaction-retry/transaction/42`, expect.anything())
+  })
+
+  it('rejects invalid transaction IDs and maps not-found responses', async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ message: 'Not found' }), { status: 404 }))
+    const api = createDlqApi(fetchImpl as unknown as typeof fetch, BASE)
+
+    await expect(api.getByTransactionId('abc')).rejects.toBeInstanceOf(DlqApiError)
+    await expect(api.getByTransactionId(99)).rejects.toMatchObject({ status: 404 })
+  })
+})
+
 describe('errors', () => {
   let fetchImpl: ReturnType<typeof vi.fn>
 

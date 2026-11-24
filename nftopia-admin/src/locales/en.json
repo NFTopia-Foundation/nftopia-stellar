@@ -69,6 +69,7 @@
     "settings": "Settings",
     "contentFlags": "Content Flags",
     "transactionRetry": "Transaction Retries",
+    "auditLog": "Audit Log",
     "collectionVerification": "Collection Verification"
   },
   "shell": {
@@ -260,6 +261,14 @@
       "reject": "Collection successfully rejected."
     }
   },
+  "auditLog": {
+    "title": "Audit log",
+    "description": "Platform-wide review of administrative actions.",
+    "empty": "No audit entries found.",
+    "columns": { "created": "Created", "actor": "Actor", "action": "Action", "entity": "Target entity", "ip": "IP address", "userAgent": "User agent" },
+    "pagination": { "label": "Audit log pages", "previous": "Previous", "next": "Next", "status": "Page {{page}} of {{pages}}" },
+    "error": { "load": "Unable to load audit logs." }
+  },
   "dlq": {
     "title": "Transaction retries",
     "description": "Failed settlements that exhausted their retries land in the dead-letter queue (DLQ). Inspect them, retry them, or cancel a retry that was re-queued.",
@@ -268,6 +277,8 @@
     "forbidden": "You don't have access to transaction retry operations.",
     "noError": "No error recorded",
     "listTitle": "Dead-letter queue ({{count}})",
+    "lookup": { "label": "Look up transaction ID", "submit": "Look up", "loading": "Looking up…", "invalid": "Transaction ID must be numeric.", "notFound": "No retry record found for that transaction ID." },
+    "detail": { "title": "Retry details for transaction #{{tx}}", "explorer": "View transaction in Stellar Expert", "entered": "Entered", "nextRetry": "Next retry", "attempt": "Attempt {{attempt}}" },
     "metrics": {
       "title": "Retry metrics",
       "dlqSize": "In DLQ",

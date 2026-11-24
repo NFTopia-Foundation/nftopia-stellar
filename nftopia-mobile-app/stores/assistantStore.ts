@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { streamChatMessage, sendChatMessage } from '@/src/services/ai/aiChat.service';
+import { streamChatMessage, sendChatMessage, ChatRequestError } from '@/src/services/ai/aiChat.service';
 import apiClient from '@/lib/api/sample';
 
 export const ASSISTANT_STORAGE_KEY = 'assistant-storage';
@@ -43,6 +43,8 @@ interface AssistantState {
   abortController: AbortController | null;
   usage: AIUsage | null;
   isQuotaExhausted: boolean;
+  rateLimitRetryAt: number | null;
+  rateLimitRemaining: number | null;
   fetchUsage: () => Promise<void>;
   sendMessage: (text: string) => Promise<void>;
   cancelStream: () => void;
@@ -63,6 +65,8 @@ export const useAssistantStore = create<AssistantState>()(
       abortController: null,
       usage: null,
       isQuotaExhausted: false,
+      rateLimitRetryAt: null,
+      rateLimitRemaining: null,
 
       fetchUsage: async () => {
         try {
@@ -89,6 +93,7 @@ export const useAssistantStore = create<AssistantState>()(
       sendMessage: async (text: string) => {
         const trimmed = text.trim();
         if (!trimmed || get().isStreaming) return;
+        if (get().rateLimitRetryAt && get().rateLimitRetryAt > Date.now()) return;
 
         const userMsg: ChatMessage = {
           id: uid(),
@@ -139,6 +144,15 @@ export const useAssistantStore = create<AssistantState>()(
           },
           onError: (error) => {
             if (controller?.signal.aborted) return;
+            const rateLimitError = error instanceof ChatRequestError && error.status === 429;
+            if (rateLimitError) {
+              const seconds = error.retryAfterSeconds ?? 60;
+              set({
+                rateLimitRetryAt: Date.now() + seconds * 1000,
+                rateLimitRemaining: error.rateLimitRemaining,
+                error: `Too many AI chat requests. Try again in ${seconds} second${seconds === 1 ? '' : 's'}.`,
+              });
+            }
             // Check if the backend session has expired or is missing (404 / not found)
             const isSessionNotFound =
               Boolean(get().sessionId) &&
@@ -221,6 +235,8 @@ export const useAssistantStore = create<AssistantState>()(
           abortController: null,
           usage: null,
           isQuotaExhausted: false,
+          rateLimitRetryAt: null,
+          rateLimitRemaining: null,
         };
       },
     },

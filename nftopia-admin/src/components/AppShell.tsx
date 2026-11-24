@@ -108,6 +108,10 @@ function RetryIcon() {
   )
 }
 
+function AuditIcon() {
+  return <svg aria-hidden="true" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 3.75h9m-9 0v16.5h9V3.75m-6 4.5h3m-3 3h3m-3 3h3" /></svg>
+}
+
 function MenuIcon() {
   return (
     <svg
@@ -194,6 +198,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/collections', labelKey: 'nav.collections', icon: <CollectionsIcon /> },
   { to: '/content-flags', labelKey: 'nav.contentFlags', icon: <FlagIcon /> },
   { to: '/transaction-retry', labelKey: 'nav.transactionRetry', icon: <RetryIcon />, visibleTo: canManageDlq },
+  { to: '/audit-log', labelKey: 'nav.auditLog', icon: <AuditIcon /> },
   { to: '/settings', labelKey: 'nav.settings', icon: <SettingsIcon /> },
 ]
 

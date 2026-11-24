@@ -10,6 +10,7 @@ describe('AdminController', () => {
     unbanUser: jest.fn(),
     hideCollection: jest.fn(),
     verifyCollection: jest.fn(),
+    listAuditLogs: jest.fn(),
   };
 
   const user = { userId: 'admin-1', username: 'superadmin' };
@@ -33,6 +34,16 @@ describe('AdminController', () => {
 
       expect(adminService.listUsers).toHaveBeenCalledWith(query);
       expect(result).toEqual(mockResult);
+    });
+  });
+
+  describe('listAuditLogs', () => {
+    it('delegates paging and filters to AdminService', async () => {
+      const query = { adminId: '11111111-1111-1111-1111-111111111111', action: 'BAN_USER', limit: 50, offset: 0 };
+      const result = { logs: [], total: 0, limit: 50, offset: 0 };
+      adminService.listAuditLogs.mockResolvedValue(result);
+      await expect(controller.listAuditLogs(query)).resolves.toEqual(result);
+      expect(adminService.listAuditLogs).toHaveBeenCalledWith(query);
     });
   });
 

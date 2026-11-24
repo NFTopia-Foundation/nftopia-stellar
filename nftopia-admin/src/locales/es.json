@@ -69,6 +69,7 @@
     "settings": "Configuración",
     "contentFlags": "Contenido marcado",
     "transactionRetry": "Reintentos",
+    "auditLog": "Registro de auditoría",
     "collectionVerification": "Verificación de colecciones"
   },
   "shell": {
@@ -245,6 +246,14 @@
       "reject": "Colección rechazada con éxito."
     }
   },
+  "auditLog": {
+    "title": "Registro de auditoría",
+    "description": "Revisión global de acciones administrativas.",
+    "empty": "No se encontraron entradas de auditoría.",
+    "columns": { "created": "Creado", "actor": "Actor", "action": "Acción", "entity": "Entidad objetivo", "ip": "Dirección IP", "userAgent": "Agente de usuario" },
+    "pagination": { "label": "Páginas del registro de auditoría", "previous": "Anterior", "next": "Siguiente", "status": "Página {{page}} de {{pages}}" },
+    "error": { "load": "No se pudieron cargar los registros de auditoría." }
+  },
   "dlq": {
     "title": "Reintentos de transacciones",
     "description": "Las liquidaciones fallidas que agotaron sus reintentos llegan a la cola de mensajes fallidos (DLQ). Revísalas, reinténtalas o cancela un reintento que se volvió a encolar.",
@@ -253,6 +262,8 @@
     "forbidden": "No tienes acceso a las operaciones de reintento de transacciones.",
     "noError": "Sin error registrado",
     "listTitle": "Cola de mensajes fallidos ({{count}})",
+    "lookup": { "label": "Buscar ID de transacción", "submit": "Buscar", "loading": "Buscando…", "invalid": "El ID de transacción debe ser numérico.", "notFound": "No se encontró ningún reintento para ese ID de transacción." },
+    "detail": { "title": "Detalles de reintento para la transacción #{{tx}}", "explorer": "Ver transacción en Stellar Expert", "entered": "Ingresó", "nextRetry": "Próximo reintento", "attempt": "Intento {{attempt}}" },
     "metrics": {
       "title": "Métricas de reintentos",
       "dlqSize": "En la DLQ",

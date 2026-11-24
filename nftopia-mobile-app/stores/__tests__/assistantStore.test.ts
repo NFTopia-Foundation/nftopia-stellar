@@ -25,10 +25,24 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
   multiRemove: jest.fn(),
 }));
 
-jest.mock('@/src/services/ai/aiChat.service', () => ({
-  streamChatMessage: jest.fn(),
-  sendChatMessage: jest.fn(),
-}));
+jest.mock('@/src/services/ai/aiChat.service', () => {
+  class MockChatRequestError extends Error {
+    status: number;
+    retryAfterSeconds: number | null;
+    rateLimitRemaining: number | null;
+    constructor(message: string, status: number, headers?: Headers) {
+      super(message);
+      this.status = status;
+      this.retryAfterSeconds = Number(headers?.get('Retry-After') ?? 'NaN') || null;
+      this.rateLimitRemaining = Number(headers?.get('X-RateLimit-Remaining') ?? 'NaN') || null;
+    }
+  }
+  return {
+    ChatRequestError: MockChatRequestError,
+    streamChatMessage: jest.fn(),
+    sendChatMessage: jest.fn(),
+  };
+});
 
 
 jest.mock('@/lib/api/sample', () => ({
@@ -44,7 +58,7 @@ jest.mock('@/lib/api/sample', () => ({
 // ── Imports (after mocks) ─────────────────────────────────────────────────────
 
 import { useAssistantStore, ASSISTANT_STORAGE_KEY } from '../assistantStore';
-import { streamChatMessage, sendChatMessage } from '@/src/services/ai/aiChat.service';
+import { streamChatMessage, sendChatMessage, ChatRequestError } from '@/src/services/ai/aiChat.service';
 
 const mockedStreamChatMessage = streamChatMessage as jest.MockedFunction<typeof streamChatMessage>;
 const mockedSendChatMessage = sendChatMessage as jest.MockedFunction<typeof sendChatMessage>;
@@ -67,6 +81,31 @@ describe('assistantStore persistence and lifecycle', () => {
       abortController: null,
     });
     await flushPromises();
+  });
+
+  describe('AI 429 handling', () => {
+    it('parses a 429 error into retry state and blocks sends until expiry', async () => {
+      let capturedHandlers: any;
+      mockedStreamChatMessage.mockImplementation((_message, _sessionId, handlers) => {
+        capturedHandlers = handlers;
+        return new AbortController();
+      });
+
+      useAssistantStore.setState({ rateLimitRetryAt: null, rateLimitRemaining: null, isStreaming: false });
+      await getStore().sendMessage('Hello');
+      capturedHandlers.onError(new ChatRequestError('Too many AI chat requests', 429, new Headers({ 'Retry-After': '30', 'X-RateLimit-Remaining': '2' })));
+
+      expect(getStore().rateLimitRemaining).toBe(2);
+      expect(getStore().rateLimitRetryAt).toBeGreaterThan(Date.now());
+
+      const callsBefore = mockedStreamChatMessage.mock.calls.length;
+      await getStore().sendMessage('Do not send');
+      expect(mockedStreamChatMessage.mock.calls.length).toBe(callsBefore);
+
+      useAssistantStore.setState({ rateLimitRetryAt: Date.now() - 1 });
+      await getStore().sendMessage('Send again');
+      expect(mockedStreamChatMessage.mock.calls.length).toBe(callsBefore + 1);
+    });
   });
 
   describe('message sending and persistence', () => {
