@@ -32,6 +32,10 @@ import type { Listing } from '../../modules/listing/entities/listing.entity';
 import { ListingStatus } from '../../modules/listing/interfaces/listing.interface';
 import type { User } from '../../users/user.entity';
 import type { Nft } from '../../modules/nft/entities/nft.entity';
+import {
+  DATALOADER_RELATION_COMPLEXITY,
+  paginatedComplexity,
+} from '../complexity';
 
 type CursorPayload = {
   createdAt: string;
@@ -56,6 +60,7 @@ export class ListingResolver {
   @Query(() => ListingConnection, {
     name: 'listings',
     description: 'Fetch listings with cursor pagination and optional filters',
+    complexity: paginatedComplexity(),
   })
   async listings(
     @Args('pagination', { type: () => PaginationInput, nullable: true })
@@ -151,6 +156,7 @@ export class ListingResolver {
     name: 'seller',
     nullable: true,
     description: 'Resolve listing seller using request-scoped DataLoader',
+    complexity: DATALOADER_RELATION_COMPLEXITY,
   })
   async seller(
     @Parent() listing: GraphqlListing,
@@ -168,6 +174,7 @@ export class ListingResolver {
     name: 'nft',
     nullable: true,
     description: 'Resolve listing NFT using request-scoped DataLoader',
+    complexity: DATALOADER_RELATION_COMPLEXITY,
   })
   async nft(
     @Parent() listing: GraphqlListing,

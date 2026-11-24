@@ -23,6 +23,7 @@ import {
 import { CreatorFollowButton } from "./creator-follow-button";
 import { CreatorShareButton } from "./creator-share-button";
 import { ReportButton } from "@/src/components/ReportButton";
+import { useDisplayCurrency } from "@/lib/stores/preferences-store";
 
 type CreatorProfileHeaderProps = {
   creator: {
@@ -36,6 +37,7 @@ type CreatorProfileHeaderProps = {
     instagramHandle?: string | null;
     isVerified: boolean;
     followerCount: number;
+    followingCount: number;
     totalNftsCreated: number;
     totalSalesVolume: string;
     createdAt: string;
@@ -62,6 +64,7 @@ export function CreatorProfileHeader({
   locale,
 }: CreatorProfileHeaderProps) {
   const { t } = useTranslation();
+  const { format: formatDisplayCurrency } = useDisplayCurrency();
 
   const displayName = getCreatorDisplayName(creator.username, creator.id);
   const avatarUrl = getCreatorAvatarUrl(creator.id, creator.avatarUrl);
@@ -144,11 +147,15 @@ export function CreatorProfileHeader({
                   {t("creatorProfile.followers")}
                 </span>
                 <span>
+                  {creator.followingCount.toLocaleString()}{" "}
+                  {t("creatorProfile.following")}
+                </span>
+                <span>
                   {creator.totalNftsCreated.toLocaleString()}{" "}
                   {t("creatorProfile.nftsCreated")}
                 </span>
                 <span>
-                  {Number(creator.totalSalesVolume).toFixed(2)} XLM{" "}
+                  {formatDisplayCurrency(creator.totalSalesVolume)}{" "}
                   {t("creatorProfile.volume")}
                 </span>
               </div>

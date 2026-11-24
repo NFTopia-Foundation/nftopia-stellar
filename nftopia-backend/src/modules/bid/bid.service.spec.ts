@@ -215,6 +215,48 @@ describe('BidService', () => {
         extensionCount: 1,
       });
     });
+
+    it('emits BID_PLACED_EVENT so the GraphQL mutation path feeds the same cache/notification/subscription pipeline as placeBid (#650)', async () => {
+      const auction = makeAuction();
+      const persisted = makeBid({ amount: 15, amountXlm: '15.0000000' });
+
+      mockAuctionRepo.findOne.mockResolvedValue(auction);
+      mockAuctionRepo.save.mockResolvedValue(auction);
+      mockBidRepo.create.mockReturnValue(persisted);
+      mockBidRepo.save.mockResolvedValue(persisted);
+
+      await service.create({
+        auctionId: auction.id,
+        bidderId: 'bidder-uuid',
+        amount: 15,
+      });
+
+      expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+        BID_PLACED_EVENT,
+        expect.objectContaining({
+          bidId: persisted.id,
+          auctionId: auction.id,
+          sellerId: auction.sellerId,
+          bidderId: 'bidder-uuid',
+          amount: 15,
+          amountXlm: '15.0000000',
+        }),
+      );
+    });
+
+    it('throws BadRequestException when the auction has no seller', async () => {
+      const auction = makeAuction({ sellerId: null });
+      mockAuctionRepo.findOne.mockResolvedValue(auction);
+
+      await expect(
+        service.create({
+          auctionId: auction.id,
+          bidderId: 'bidder-uuid',
+          amount: 15,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(mockEventEmitter.emit).not.toHaveBeenCalled();
+    });
   });
 
   // ── placeBid ────────────────────────────────────────────────────────────────
@@ -344,6 +386,93 @@ describe('BidService', () => {
       mockCache.get.mockResolvedValue(null);
       mockAuctionRepo.findOne.mockResolvedValue(auction);
       // Highest bid in DB is 100 XLM
+      mockBidRepo.findOne.mockResolvedValue(makeBid({ amount: 100 }));
+
+      await expect(service.placeBid(auctionId, bidderId, dto2)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('allows a bid that exactly meets the minimum increment (#652)', async () => {
+      const auction = makeAuction({ currentPrice: 100 });
+      const sufficientAmount = '105.0000000'; // exactly 5% above the 100 highest
+      const dto2: PlaceBidDto = {
+        amount: sufficientAmount,
+        publicKey: testKeypair.publicKey(),
+        signature: signBidMessage(testKeypair, auctionId, sufficientAmount),
+      };
+      const persisted = makeBid({ amount: 105, amountXlm: sufficientAmount });
+
+      mockCache.get.mockResolvedValue(null);
+      mockAuctionRepo.findOne.mockResolvedValue(auction);
+      mockBidRepo.findOne.mockResolvedValue(makeBid({ amount: 100 }));
+      mockBidRepo.create.mockReturnValue(persisted);
+      mockBidRepo.save.mockResolvedValue(persisted);
+      mockAuctionRepo.save.mockResolvedValue(auction);
+
+      await expect(
+        service.placeBid(auctionId, bidderId, dto2),
+      ).resolves.toBeDefined();
+    });
+
+    it("respects an auction's own minimum-increment override (#652)", async () => {
+      // A 20% override means a bid only 5% above the highest must still fail...
+      const strictAuction = makeAuction({
+        currentPrice: 100,
+        minBidIncrementPct: 0.2,
+      });
+      const amount = '105.0000000';
+      const dto2: PlaceBidDto = {
+        amount,
+        publicKey: testKeypair.publicKey(),
+        signature: signBidMessage(testKeypair, auctionId, amount),
+      };
+
+      mockCache.get.mockResolvedValue(null);
+      mockAuctionRepo.findOne.mockResolvedValue(strictAuction);
+      mockBidRepo.findOne.mockResolvedValue(makeBid({ amount: 100 }));
+
+      await expect(service.placeBid(auctionId, bidderId, dto2)).rejects.toThrow(
+        BadRequestException,
+      );
+
+      // ...but it succeeds once the bid actually clears that 20% override.
+      const sufficientAmount = '120.0000000';
+      const dto3: PlaceBidDto = {
+        amount: sufficientAmount,
+        publicKey: testKeypair.publicKey(),
+        signature: signBidMessage(testKeypair, auctionId, sufficientAmount),
+      };
+      const persisted = makeBid({ amount: 120, amountXlm: sufficientAmount });
+      mockBidRepo.create.mockReturnValue(persisted);
+      mockBidRepo.save.mockResolvedValue(persisted);
+      mockAuctionRepo.save.mockResolvedValue(strictAuction);
+
+      await expect(
+        service.placeBid(auctionId, bidderId, dto3),
+      ).resolves.toBeDefined();
+    });
+
+    it('falls back to a configured platform default when the auction has no override (#652)', async () => {
+      mockConfig.get.mockImplementation((key: string) => {
+        const cfg: Record<string, string | boolean | undefined> = {
+          ENABLE_ONCHAIN_SETTLEMENT: false,
+          BID_MIN_INCREMENT_PCT_DEFAULT: '0.1', // 10%, stricter than the 5% hardcoded fallback
+        };
+        return cfg[key];
+      });
+
+      const auction = makeAuction({ currentPrice: 100 });
+      // 6% above the highest clears the 5% hardcoded default but not a 10% platform default.
+      const amount = '106.0000000';
+      const dto2: PlaceBidDto = {
+        amount,
+        publicKey: testKeypair.publicKey(),
+        signature: signBidMessage(testKeypair, auctionId, amount),
+      };
+
+      mockCache.get.mockResolvedValue(null);
+      mockAuctionRepo.findOne.mockResolvedValue(auction);
       mockBidRepo.findOne.mockResolvedValue(makeBid({ amount: 100 }));
 
       await expect(service.placeBid(auctionId, bidderId, dto2)).rejects.toThrow(

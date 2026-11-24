@@ -23,6 +23,7 @@ import CreateAuctionScreen from '@/screens/Auctions/CreateAuctionScreen';
 
 // Collection & Search Screens
 import CollectionsScreen from '@/screens/Collections/CollectionsScreen';
+import CollectionDetailScreen from '@/screens/Collections/CollectionDetailScreen';
 import SearchResultsScreen from '@/screens/Search/SearchResultsScreen';
 
 // AI Assistant
@@ -44,6 +45,7 @@ import { SendScreen } from '@/screens/Wallet/SendScreen';
 import { QRScannerScreen } from '@/screens/Wallet/QRScannerScreen';
 import { ReceiveScreen } from '@/screens/Wallet/ReceiveScreen';
 import { AddressBookScreen } from '@/screens/Wallet/AddressBookScreen';
+import { TransactionHistoryScreen } from '@/screens/Wallet/TransactionHistoryScreen';
 
 // Backup Reminder Screen
 import BackupReminderScreen from '@/screens/BackupReminder/BackupReminderScreen';
@@ -178,6 +180,13 @@ export default function MainNavigator() {
           {(props) => (
             <ScreenErrorBoundary name="AddressBookScreen">
               <AddressBookScreen {...props} />
+            </ScreenErrorBoundary>
+          )}
+        </Stack.Screen>
+        <Stack.Screen name="Transactions" options={getTransitionConfig('detail')}>
+          {(props) => (
+            <ScreenErrorBoundary name="TransactionHistoryScreen">
+              <TransactionHistoryScreen {...props} />
             </ScreenErrorBoundary>
           )}
         </Stack.Screen>
@@ -344,6 +353,13 @@ export default function MainNavigator() {
           {(props) => (
             <ScreenErrorBoundary name="CollectionsScreen">
               <CollectionsScreen {...props} />
+            </ScreenErrorBoundary>
+          )}
+        </Stack.Screen>
+        <Stack.Screen name="CollectionDetail" options={getTransitionConfig('detail')}>
+          {(props) => (
+            <ScreenErrorBoundary name="CollectionDetailScreen">
+              <CollectionDetailScreen {...props} />
             </ScreenErrorBoundary>
           )}
         </Stack.Screen>

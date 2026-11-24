@@ -67,4 +67,10 @@ pub enum ContractError {
 
     /// max_supply exceeds MAX_SUPPLY_HARD_CAP during initialization.
     MaxSupplyExceedsHardCap = 34,
+
+    /// Pagination limit must be between 1 and MAX_OWNER_TOKENS_PAGE.
+    InvalidPaginationLimit = 35,
+
+    /// Pagination cursor does not identify a token currently owned by the queried address.
+    InvalidPaginationCursor = 36,
 }

@@ -191,13 +191,15 @@ export interface NotificationSettings {
   auctions: boolean;
 }
 
+export type DisplayCurrency = 'XLM' | 'USD';
+
 export interface DisplaySettings {
   gridView: 'grid' | 'list';
   itemsPerPage: number;
   showPrice: boolean;
   showCreator: boolean;
   showLikes: boolean;
-  currency: 'ETH' | 'STRK' | 'USD';
+  currency: DisplayCurrency;
 }
 
 export interface PreferencesState {

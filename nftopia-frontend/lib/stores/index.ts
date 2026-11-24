@@ -9,6 +9,7 @@ export { useCollections, useCollectionStore } from "./collection-store";
 
 // Preferences Store
 export {
+  useDisplayCurrency,
   useDisplaySettings,
   useFavorites,
   useNotifications,

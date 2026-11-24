@@ -40,6 +40,10 @@ import { GraphqlNft, NFTConnection } from '../types/nft.types';
 import { GraphqlUserType } from '../types/user.types';
 import type { CollectionCursorPayload } from '../../modules/collection/interfaces/collection.interface';
 import type { User } from '../../users/user.entity';
+import {
+  DATALOADER_RELATION_COMPLEXITY,
+  paginatedComplexity,
+} from '../complexity';
 
 @Resolver(() => GraphqlCollection)
 export class CollectionResolver {
@@ -68,6 +72,7 @@ export class CollectionResolver {
     name: 'collections',
     description:
       'Fetch collections with cursor pagination and optional filters',
+    complexity: paginatedComplexity(),
   })
   async collections(
     @Args('pagination', { type: () => PaginationInput, nullable: true })
@@ -94,6 +99,7 @@ export class CollectionResolver {
   @Query(() => [GraphqlCollection], {
     name: 'topCollections',
     description: 'Fetch top collections ordered by total volume',
+    complexity: paginatedComplexity(10),
   })
   async topCollections(
     @Args('limit', { type: () => Int, nullable: true, defaultValue: 10 })
@@ -149,6 +155,7 @@ export class CollectionResolver {
     name: 'creator',
     nullable: true,
     description: 'Resolve collection creator using request-scoped DataLoader',
+    complexity: DATALOADER_RELATION_COMPLEXITY,
   })
   async creator(
     @Parent() collection: GraphqlCollection,
@@ -166,6 +173,7 @@ export class CollectionResolver {
   @ResolveField(() => NFTConnection, {
     name: 'nfts',
     description: 'Fetch NFTs belonging to a collection',
+    complexity: paginatedComplexity(),
   })
   async nfts(
     @Parent() collection: GraphqlCollection,

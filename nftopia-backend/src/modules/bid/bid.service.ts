@@ -93,6 +93,10 @@ export class BidService {
       throw new NotFoundException('Auction not found');
     }
 
+    if (!auction.sellerId) {
+      throw new BadRequestException('Auction seller is no longer available');
+    }
+
     // Create the bid
     const bid = this.bidRepo.create({
       auctionId,
@@ -103,10 +107,7 @@ export class BidService {
     const savedBid = await this.bidRepo.save(bid);
 
     auction.currentPrice = amount;
-    const extended = extendAuctionForLastMinuteBid(
-      auction,
-      this.configService,
-    );
+    const extended = extendAuctionForLastMinuteBid(auction, this.configService);
     await this.auctionRepo.save(auction);
     if (extended) {
       this.notificationsService.broadcastAuctionExtended(auctionId, {
@@ -114,6 +115,26 @@ export class BidService {
         extensionCount: auction.extensionCount,
       });
     }
+
+    // This path (the GraphQL `placeBid` mutation) previously skipped
+    // BID_PLACED_EVENT entirely, so GraphQL-originated bids never refreshed
+    // the highest-bid cache, notified the seller, or reached the Socket.IO
+    // bid feed — only bids placed through the on-chain placeBid() path did.
+    // Emitting it here also feeds the auctionBidPlaced GraphQL subscription
+    // (#650), since every listener (including the subscription publisher)
+    // now fires for both bid-placement paths.
+    const event: BidPlacedEvent = {
+      bidId: savedBid.id,
+      auctionId,
+      sellerId: auction.sellerId,
+      bidderId,
+      stellarPublicKey: '',
+      amount,
+      amountXlm: savedBid.amountXlm ?? amount.toFixed(7),
+      sorobanStatus: BidSorobanStatus.SKIPPED,
+      timestamp: new Date(),
+    };
+    this.eventEmitter.emit(BID_PLACED_EVENT, event);
 
     return savedBid;
   }
@@ -152,7 +173,7 @@ export class BidService {
     const amountXlm = parseFloat(dto.amount);
     const amountInStroops = Math.round(amountXlm * STROOPS_PER_XLM);
 
-    await this.validateBidAmount(auctionId, amountXlm);
+    await this.validateBidAmount(auction, amountXlm);
     await this.verifyBalance(dto.publicKey, amountXlm);
 
     // Submit to Soroban if contract is configured; otherwise fall back to DB-only
@@ -178,10 +199,7 @@ export class BidService {
 
     // Update auction current price in DB
     auction.currentPrice = amountXlm;
-    const extended = extendAuctionForLastMinuteBid(
-      auction,
-      this.configService,
-    );
+    const extended = extendAuctionForLastMinuteBid(auction, this.configService);
     await this.auctionRepo.save(auction);
     if (extended) {
       this.notificationsService.broadcastAuctionExtended(auctionId, {
@@ -194,6 +212,7 @@ export class BidService {
     await this.cacheManager.del(`${BID_CACHE_PREFIX}${auctionId}`);
 
     const event: BidPlacedEvent = {
+      bidId: bid.id,
       auctionId,
       sellerId: auction.sellerId,
       bidderId,
@@ -344,22 +363,21 @@ export class BidService {
   }
 
   private async validateBidAmount(
-    auctionId: string,
+    auction: Auction,
     amountXlm: number,
   ): Promise<void> {
     const highest = await this.bidRepo.findOne({
-      where: { auctionId },
+      where: { auctionId: auction.id },
       order: { amount: 'DESC' },
     });
 
     const currentHighest = highest
       ? Number(highest.amount)
-      : Number(
-          (await this.auctionRepo.findOne({ where: { id: auctionId } }))
-            ?.currentPrice ?? 0,
-        );
+      : Number(auction.currentPrice ?? 0);
 
-    const minRequired = currentHighest + currentHighest * BID_MIN_INCREMENT_PCT;
+    const incrementPct = this.resolveMinBidIncrementPct(auction);
+
+    const minRequired = currentHighest + currentHighest * incrementPct;
     const absoluteMin = currentHighest + 0.0000001; // at least 1 stroop above
 
     const threshold = Math.max(minRequired, absoluteMin);
@@ -367,9 +385,35 @@ export class BidService {
     if (amountXlm < threshold) {
       throw new BadRequestException(
         `Bid must be at least ${threshold.toFixed(7)} XLM ` +
-          `(5% above current highest bid of ${currentHighest.toFixed(7)} XLM)`,
+          `(${(incrementPct * 100).toFixed(2)}% above current highest bid of ${currentHighest.toFixed(7)} XLM)`,
       );
     }
+  }
+
+  /**
+   * The minimum bid increment for one auction (#652): the auction's own
+   * override when it has one, else the platform-wide default — which is
+   * itself configurable via BID_MIN_INCREMENT_PCT_DEFAULT, falling back to
+   * BID_MIN_INCREMENT_PCT when that env var isn't set.
+   */
+  private resolveMinBidIncrementPct(auction: Auction): number {
+    const override = Number(auction.minBidIncrementPct);
+    if (
+      auction.minBidIncrementPct != null &&
+      Number.isFinite(override) &&
+      override > 0
+    ) {
+      return override;
+    }
+
+    const configured = Number(
+      this.configService.get<number | string>('BID_MIN_INCREMENT_PCT_DEFAULT'),
+    );
+    if (Number.isFinite(configured) && configured > 0) {
+      return configured;
+    }
+
+    return BID_MIN_INCREMENT_PCT;
   }
 
   private async verifyBalance(

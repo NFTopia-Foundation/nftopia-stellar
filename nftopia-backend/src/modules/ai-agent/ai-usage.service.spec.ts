@@ -428,6 +428,140 @@ describe('AiUsageService', () => {
     });
   });
 
+  describe('per-user chat rate-limit overrides (#751)', () => {
+    it('setCapOverride persists rateLimitPoints, dropping invalid entries', async () => {
+      await service.setCapOverride('user-1', {
+        rateLimitPoints: {
+          'marketplace-assistant': 60,
+          'creator-copilot': 0,
+        },
+      });
+
+      expect(overrideRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          rateLimitPoints: { 'marketplace-assistant': 60 },
+        }),
+      );
+    });
+
+    it('setCapOverride stores null rateLimitPoints when none are given', async () => {
+      await service.setCapOverride('user-1', { dailyTokenCap: 5 });
+
+      expect(overrideRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ rateLimitPoints: null }),
+      );
+    });
+
+    it('returns null for a user with no override (env default applies)', async () => {
+      await expect(
+        service.getRateLimitPointsOverride('user-1', 'marketplace-assistant'),
+      ).resolves.toBeNull();
+    });
+
+    it('returns the overridden points for the matching tool set only', async () => {
+      overrideRepo.findOne.mockResolvedValue({
+        userId: 'user-1',
+        rateLimitPoints: { 'marketplace-assistant': 60 },
+        expiresAt: null,
+      });
+
+      await expect(
+        service.getRateLimitPointsOverride('user-1', 'marketplace-assistant'),
+      ).resolves.toBe(60);
+      await expect(
+        service.getRateLimitPointsOverride('user-1', 'creator-copilot'),
+      ).resolves.toBeNull();
+    });
+
+    it('ignores the rate-limit override of an expired override', async () => {
+      overrideRepo.findOne.mockResolvedValue({
+        userId: 'user-1',
+        rateLimitPoints: { 'marketplace-assistant': 60 },
+        expiresAt: new Date(Date.now() - 1000),
+      });
+
+      await expect(
+        service.getRateLimitPointsOverride('user-1', 'marketplace-assistant'),
+      ).resolves.toBeNull();
+    });
+
+    it('caches lookups briefly instead of querying on every request', async () => {
+      overrideRepo.findOne.mockResolvedValue({
+        userId: 'user-1',
+        rateLimitPoints: { 'marketplace-assistant': 60 },
+        expiresAt: null,
+      });
+
+      await service.getRateLimitPointsOverride(
+        'user-1',
+        'marketplace-assistant',
+      );
+      await service.getRateLimitPointsOverride(
+        'user-1',
+        'marketplace-assistant',
+      );
+      await service.getRateLimitPointsOverride('user-1', 'creator-copilot');
+
+      expect(overrideRepo.findOne).toHaveBeenCalledTimes(1);
+    });
+
+    it('re-reads after the cache TTL elapses', async () => {
+      const nowSpy = jest.spyOn(Date, 'now');
+      try {
+        nowSpy.mockReturnValue(1_000_000);
+        await service.getRateLimitPointsOverride(
+          'user-1',
+          'marketplace-assistant',
+        );
+        nowSpy.mockReturnValue(1_000_000 + 30_001);
+        await service.getRateLimitPointsOverride(
+          'user-1',
+          'marketplace-assistant',
+        );
+        expect(overrideRepo.findOne).toHaveBeenCalledTimes(2);
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+
+    it('clearing the override invalidates the cache so the default is restored immediately', async () => {
+      overrideRepo.findOne.mockResolvedValue({
+        userId: 'user-1',
+        rateLimitPoints: { 'marketplace-assistant': 60 },
+        expiresAt: null,
+      });
+      await expect(
+        service.getRateLimitPointsOverride('user-1', 'marketplace-assistant'),
+      ).resolves.toBe(60);
+
+      await service.clearCapOverride('user-1');
+      overrideRepo.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.getRateLimitPointsOverride('user-1', 'marketplace-assistant'),
+      ).resolves.toBeNull();
+    });
+
+    it('setting a new override invalidates the cache', async () => {
+      await expect(
+        service.getRateLimitPointsOverride('user-1', 'marketplace-assistant'),
+      ).resolves.toBeNull();
+
+      await service.setCapOverride('user-1', {
+        rateLimitPoints: { 'marketplace-assistant': 80 },
+      });
+      overrideRepo.findOne.mockResolvedValue({
+        userId: 'user-1',
+        rateLimitPoints: { 'marketplace-assistant': 80 },
+        expiresAt: null,
+      });
+
+      await expect(
+        service.getRateLimitPointsOverride('user-1', 'marketplace-assistant'),
+      ).resolves.toBe(80);
+    });
+  });
+
   describe('default caps', () => {
     it('falls back to sane defaults when env vars are not configured', async () => {
       config.get.mockReturnValue(undefined);
