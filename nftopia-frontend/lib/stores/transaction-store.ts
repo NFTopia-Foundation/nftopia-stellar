@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { StellarNetwork } from "@/types/stellar";
+import type { PurchaseReceiptData } from "@/components/marketplace/PurchaseReceipt";
 
 export type TransactionStatus = "pending" | "processing" | "confirmed" | "failed";
 export type TrackedTransactionType = "mint" | "list" | "bid" | "buy" | "cancel" | "other";
@@ -14,6 +15,9 @@ export interface TrackedTransaction {
   updatedAt: string;
   error?: string;
   signedXdr?: string;
+  /** Purchase receipt (#757) — present for completed purchases so it can be
+   * re-opened from the transactions page. */
+  receipt?: PurchaseReceiptData;
 }
 
 interface TransactionStore {
