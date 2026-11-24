@@ -46,6 +46,10 @@ export class Auction {
   @Column({ name: 'extension_count', default: 0 })
   extensionCount: number;
 
+  /** Override of the platform-wide minimum bid increment (#652), as a fraction of the current highest bid (e.g. 0.05 = 5%). Null falls back to the platform default. */
+  @Column({ type: 'decimal', precision: 5, scale: 4, nullable: true })
+  minBidIncrementPct?: number | null;
+
   @Column({ default: AuctionStatus.ACTIVE })
   status: AuctionStatus;
 

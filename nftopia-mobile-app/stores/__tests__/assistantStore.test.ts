@@ -30,6 +30,17 @@ jest.mock('@/src/services/ai/aiChat.service', () => ({
   sendChatMessage: jest.fn(),
 }));
 
+
+jest.mock('@/lib/api/sample', () => ({
+  __esModule: true,
+  default: {
+    getAIUsage: jest.fn().mockResolvedValue({
+      daily: { remaining: 100 },
+      monthly: { remaining: 100 },
+    }),
+  },
+}));
+
 // ── Imports (after mocks) ─────────────────────────────────────────────────────
 
 import { useAssistantStore, ASSISTANT_STORAGE_KEY } from '../assistantStore';

@@ -9,6 +9,13 @@ import type { ContentFlagEntityType } from '../entities/content-flag.entity';
  */
 export const MODERATION_TOOL_NAMES = ['flag_content'] as const;
 
+/**
+ * Sane default confidence threshold (#642) when a caller doesn't resolve
+ * one from config — see AiModerationProcessor, the only production caller,
+ * for where AI_MODERATION_CONFIDENCE_THRESHOLD is actually read.
+ */
+export const DEFAULT_MODERATION_CONFIDENCE_THRESHOLD = 0.5;
+
 export interface ModerationToolsDeps {
   contentFlagService: ContentFlagService;
   /**
@@ -19,6 +26,14 @@ export interface ModerationToolsDeps {
    * input" pattern as creator-copilot.tools.ts's expectedNftId (#528).
    */
   expectedEntity: { entityType: ContentFlagEntityType; entityId: string };
+  /**
+   * Minimum model confidence (#642) for flag_content to actually persist a
+   * reviewable flag. Below this, the call is a no-op from the DB's
+   * perspective — logged as auto-cleared rather than silently dropped, but
+   * never inserted into content_flags, so it can't dilute reviewer queue
+   * attention on genuinely risky content.
+   */
+  confidenceThreshold?: number;
   toolLogger?: import('./tool-set.types').ToolLogger;
 }
 
@@ -30,6 +45,8 @@ export interface ModerationToolsDeps {
  */
 export function buildModerationTools(deps: ModerationToolsDeps) {
   const { contentFlagService } = deps;
+  const confidenceThreshold =
+    deps.confidenceThreshold ?? DEFAULT_MODERATION_CONFIDENCE_THRESHOLD;
 
   const createTool = <T extends z.ZodTypeAny>(config: {
     name: string;
@@ -101,6 +118,14 @@ export function buildModerationTools(deps: ModerationToolsDeps) {
           `Flagged content (${input.entityType}:${input.entityId}) does not match ` +
             `the entity under review (${deps.expectedEntity.entityType}:${deps.expectedEntity.entityId}).`,
         );
+      }
+
+      if (input.confidence < confidenceThreshold) {
+        return JSON.stringify({
+          flagged: false,
+          confidence: input.confidence,
+          threshold: confidenceThreshold,
+        });
       }
 
       const flag = await contentFlagService.createFlag(input);

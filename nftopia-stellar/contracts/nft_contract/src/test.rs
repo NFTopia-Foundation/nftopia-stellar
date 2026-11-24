@@ -166,6 +166,136 @@ fn test_batch_mint() {
 }
 
 #[test]
+fn test_batch_mint_rejects_mismatched_arrays() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+    let recipients = Vec::from_array(&env, [Address::generate(&env)]);
+
+    let result = client.try_batch_mint(&admin, &recipients, &Vec::new(&env), &Vec::new(&env));
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_tokens_of_owner_empty_and_single_page() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+    let owner = Address::generate(&env);
+
+    let (empty, empty_cursor) = client.tokens_of_owner(&owner, &None, &10);
+    assert_eq!(empty.len(), 0);
+    assert_eq!(empty_cursor, None);
+
+    let first_id = client.mint(
+        &admin,
+        &owner,
+        &String::from_str(&env, "uri1"),
+        &Vec::new(&env),
+        &None,
+    );
+    let second_id = client.mint(
+        &admin,
+        &owner,
+        &String::from_str(&env, "uri2"),
+        &Vec::new(&env),
+        &None,
+    );
+
+    let (ids, next_cursor) = client.tokens_of_owner(&owner, &None, &10);
+    assert_eq!(ids.len(), 2);
+    assert_eq!(ids.get(0), Some(second_id));
+    assert_eq!(ids.get(1), Some(first_id));
+    assert_eq!(next_cursor, None);
+}
+
+#[test]
+fn test_tokens_of_owner_paginates_with_exclusive_cursor() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+    let owner = Address::generate(&env);
+    let mut minted_ids = Vec::new(&env);
+
+    for _ in 0..5 {
+        minted_ids.push_back(client.mint(
+            &admin,
+            &owner,
+            &String::from_str(&env, "uri"),
+            &Vec::new(&env),
+            &None,
+        ));
+    }
+
+    let (first_page, first_cursor) = client.tokens_of_owner(&owner, &None, &2);
+    assert_eq!(first_page.len(), 2);
+    assert_eq!(first_page.get(0), Some(minted_ids.get(4).unwrap()));
+    assert_eq!(first_page.get(1), Some(minted_ids.get(3).unwrap()));
+    assert_eq!(first_cursor, first_page.get(1));
+
+    let (second_page, second_cursor) = client.tokens_of_owner(&owner, &first_cursor, &2);
+    assert_eq!(second_page.len(), 2);
+    assert_eq!(second_page.get(0), Some(minted_ids.get(2).unwrap()));
+    assert_eq!(second_page.get(1), Some(minted_ids.get(1).unwrap()));
+    assert_eq!(second_cursor, second_page.get(1));
+
+    let (last_page, last_cursor) = client.tokens_of_owner(&owner, &second_cursor, &2);
+    assert_eq!(last_page.len(), 1);
+    assert_eq!(last_page.get(0), Some(minted_ids.get(0).unwrap()));
+    assert_eq!(last_cursor, None);
+}
+
+#[test]
+fn test_tokens_of_owner_rejects_invalid_limit_and_cursor() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+    let owner = Address::generate(&env);
+    let other_owner = Address::generate(&env);
+    let token_id = client.mint(
+        &admin,
+        &owner,
+        &String::from_str(&env, "uri"),
+        &Vec::new(&env),
+        &None,
+    );
+
+    assert!(client.try_tokens_of_owner(&owner, &None, &0).is_err());
+    assert!(client.try_tokens_of_owner(&owner, &None, &51).is_err());
+    assert!(
+        client
+            .try_tokens_of_owner(&other_owner, &Some(token_id), &1)
+            .is_err()
+    );
+}
+
+#[test]
+fn test_owner_token_index_tracks_transfer_and_burn() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+    let owner = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let token_id = client.mint(
+        &admin,
+        &owner,
+        &String::from_str(&env, "uri"),
+        &Vec::new(&env),
+        &None,
+    );
+
+    client.transfer(&owner, &owner, &recipient, &token_id);
+    assert_eq!(client.tokens_of_owner(&owner, &None, &10).0.len(), 0);
+    assert_eq!(
+        client.tokens_of_owner(&recipient, &None, &10).0.get(0),
+        Some(token_id)
+    );
+
+    client.burn(&recipient, &token_id);
+    assert_eq!(client.tokens_of_owner(&recipient, &None, &10).0.len(), 0);
+}
+
+#[test]
 fn test_batch_transfer() {
     let env = Env::default();
     env.mock_all_auths();
@@ -209,6 +339,163 @@ fn test_royalty_info() {
     let (recipient, amount) = client.get_royalty_info(&token_id, &10_000i128);
     assert_eq!(recipient, admin);
     assert_eq!(amount, 500i128); // 5% of 10_000
+}
+
+#[test]
+fn test_mint_royalty_override_at_exact_cap_succeeds() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let user = Address::generate(&env);
+    let override_royalty = RoyaltyInfo {
+        recipient: admin.clone(), // matches DefaultRoyalty's own recipient
+        percentage: crate::storage::MAX_ROYALTY_BPS,
+    };
+    let token_id = client.mint(
+        &admin,
+        &user,
+        &String::from_str(&env, "ipfs://hash"),
+        &Vec::new(&env),
+        &Some(override_royalty),
+    );
+
+    let (recipient, amount) = client.get_royalty_info(&token_id, &10_000i128);
+    assert_eq!(recipient, admin);
+    assert_eq!(amount, 10_000i128); // 100% of 10_000
+}
+
+#[test]
+fn test_mint_royalty_override_exceeding_cap_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let user = Address::generate(&env);
+    let override_royalty = RoyaltyInfo {
+        recipient: admin.clone(),
+        percentage: crate::storage::MAX_ROYALTY_BPS + 1,
+    };
+
+    match client.try_mint(
+        &admin,
+        &user,
+        &String::from_str(&env, "ipfs://hash"),
+        &Vec::new(&env),
+        &Some(override_royalty),
+    ) {
+        Err(Ok(error)) => assert_eq!(error, crate::error::ContractError::InvalidRoyalty),
+        other => panic!("Expected InvalidRoyalty, got: {:?}", other),
+    }
+    assert_eq!(client.total_supply(), 0); // rejected mint must not have persisted a token
+}
+
+#[test]
+fn test_mint_without_override_falls_back_to_default_royalty() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let user = Address::generate(&env);
+    let token_id = client.mint(
+        &admin,
+        &user,
+        &String::from_str(&env, "ipfs://hash"),
+        &Vec::new(&env),
+        &None,
+    );
+
+    // setup()'s DefaultRoyalty is {recipient: admin, percentage: 500} (5%).
+    let (recipient, amount) = client.get_royalty_info(&token_id, &10_000i128);
+    assert_eq!(recipient, admin);
+    assert_eq!(amount, 500i128);
+}
+
+#[test]
+fn test_mint_royalty_override_rejects_mismatched_recipient_from_plain_minter() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let minter = Address::generate(&env);
+    client.grant_role(&admin, &minter, &crate::types::role::MINTER);
+
+    let user = Address::generate(&env);
+    let attacker_payout = Address::generate(&env);
+    let override_royalty = RoyaltyInfo {
+        recipient: attacker_payout, // diverges from DefaultRoyalty's recipient (admin)
+        percentage: 100,
+    };
+
+    match client.try_mint(
+        &minter,
+        &user,
+        &String::from_str(&env, "ipfs://hash"),
+        &Vec::new(&env),
+        &Some(override_royalty),
+    ) {
+        Err(Ok(error)) => assert_eq!(error, crate::error::ContractError::NotAuthorized),
+        other => panic!("Expected NotAuthorized, got: {:?}", other),
+    }
+    assert_eq!(client.total_supply(), 0);
+}
+
+#[test]
+fn test_mint_royalty_override_allows_matching_recipient_from_plain_minter() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let minter = Address::generate(&env);
+    client.grant_role(&admin, &minter, &crate::types::role::MINTER);
+
+    let user = Address::generate(&env);
+    // A plain minter may still tune the percentage per token, as long as the
+    // recipient matches DefaultRoyalty's own recipient.
+    let override_royalty = RoyaltyInfo {
+        recipient: admin.clone(),
+        percentage: 1_000, // 10%, different from setup()'s 5% default
+    };
+
+    let token_id = client.mint(
+        &minter,
+        &user,
+        &String::from_str(&env, "ipfs://hash"),
+        &Vec::new(&env),
+        &Some(override_royalty),
+    );
+
+    let (recipient, amount) = client.get_royalty_info(&token_id, &10_000i128);
+    assert_eq!(recipient, admin);
+    assert_eq!(amount, 1_000i128);
+}
+
+#[test]
+fn test_mint_royalty_override_allows_mismatched_recipient_from_admin() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let user = Address::generate(&env);
+    let new_recipient = Address::generate(&env);
+    let override_royalty = RoyaltyInfo {
+        recipient: new_recipient.clone(),
+        percentage: 250,
+    };
+
+    // admin has OWNER/ADMIN role from initialize(), so a mismatched
+    // recipient is allowed.
+    let token_id = client.mint(
+        &admin,
+        &user,
+        &String::from_str(&env, "ipfs://hash"),
+        &Vec::new(&env),
+        &Some(override_royalty),
+    );
+
+    let (recipient, amount) = client.get_royalty_info(&token_id, &10_000i128);
+    assert_eq!(recipient, new_recipient);
+    assert_eq!(amount, 250i128);
 }
 
 #[test]
@@ -459,6 +746,29 @@ fn test_burn_by_owner_succeeds() {
     client.burn(&owner, &token_id);
     assert_eq!(client.total_supply(), 0);
     assert!(client.try_owner_of(&token_id).is_err());
+}
+
+#[test]
+fn test_burn_rejected_while_paused() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+    let owner = Address::generate(&env);
+    let token_id = client.mint(
+        &admin,
+        &owner,
+        &String::from_str(&env, "ipfs://hash"),
+        &Vec::new(&env),
+        &None,
+    );
+
+    client.set_pause(&admin, &true);
+    match client.try_burn(&owner, &token_id) {
+        Err(Ok(error)) => assert_eq!(error, crate::error::ContractError::ContractPaused),
+        other => panic!("Expected ContractPaused, got: {:?}", other),
+    }
+    assert_eq!(client.total_supply(), 1);
+    assert_eq!(client.owner_of(&token_id), owner);
 }
 
 #[test]

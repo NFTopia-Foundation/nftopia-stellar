@@ -7,6 +7,11 @@ import { SorobanService } from './soroban.service';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { ConfigService } from '@nestjs/config';
 
+const mockOwnerOf = jest.fn();
+jest.mock('@nftopia/nft-contract-client', () => ({
+  Client: jest.fn().mockImplementation(() => ({ owner_of: mockOwnerOf })),
+}));
+
 const mockRepository = {
   find: jest.fn(),
   findOne: jest.fn(),
@@ -94,5 +99,14 @@ describe('NftService', () => {
     expect(result).toEqual([{ id: 2 }]);
     expect(mockRepository.find).toHaveBeenCalled();
     expect(mockCacheManager.set).toHaveBeenCalled();
+  });
+
+  it('uses the generated NFT contract client for on-chain owner lookups', async () => {
+    mockOwnerOf.mockResolvedValueOnce({ result: { unwrap: () => 'GOWNER' } });
+
+    await expect(service.getOnChainOwner('CNFTCONTRACT', '42')).resolves.toBe(
+      'GOWNER',
+    );
+    expect(mockOwnerOf).toHaveBeenCalledWith({ token_id: 42n });
   });
 });

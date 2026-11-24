@@ -3,8 +3,22 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { AiUsageRecord } from './entities/ai-usage-record.entity';
-import { UserAiCapOverride } from './entities/user-ai-cap-override.entity';
+import {
+  UserAiCapOverride,
+  type RateLimitPointsOverride,
+} from './entities/user-ai-cap-override.entity';
 import { estimateCostUsd } from './ai-usage-pricing';
+import type { ToolSetName } from './tools/tool-set.types';
+import type { AiChatRateLimitOverrideLookup } from '../../common/guards/ai-chat-rate-limit.guard';
+
+/** Default lifetime of a cached per-user rate-limit override lookup (#751). */
+const DEFAULT_RATE_LIMIT_OVERRIDE_CACHE_TTL_MS = 30_000;
+
+interface CachedRateLimitOverride {
+  points: RateLimitPointsOverride | null;
+  /** Epoch ms after which this entry must be re-read from the database. */
+  cachedUntil: number;
+}
 
 export interface UsageWindow {
   totalTokens: number;
@@ -35,6 +49,8 @@ export interface SetCapOverrideParams {
   monthlyTokenCap?: number | null;
   dailySpendCapUsd?: number | null;
   monthlySpendCapUsd?: number | null;
+  /** Per-tool-set AI chat rate-limit budgets (#751). */
+  rateLimitPoints?: RateLimitPointsOverride | null;
   reason?: string;
   grantedBy?: string;
   expiresAt?: Date | null;
@@ -71,8 +87,19 @@ const MONTHLY_SPEND_CAP_REACHED = 'AI_MONTHLY_SPEND_CAP_REACHED';
  * one and forgotten on the other.
  */
 @Injectable()
-export class AiUsageService {
+export class AiUsageService implements AiChatRateLimitOverrideLookup {
   private readonly logger = new Logger(AiUsageService.name);
+  /**
+   * Short-lived per-user cache of rate-limit overrides (#751). The chat
+   * rate-limit guard runs on every chat request, so it must not hit the
+   * database each time; admin set/clear calls invalidate the entry directly,
+   * and the TTL bounds staleness across multiple API instances.
+   */
+  private readonly rateLimitOverrideCache = new Map<
+    string,
+    CachedRateLimitOverride
+  >();
+  private readonly rateLimitOverrideCacheTtlMs: number;
   private readonly dailyCap: number;
   private readonly monthlyCap: number;
   /** Optional — unset means spend (USD) is tracked for reporting only, and only the token caps are enforced. */
@@ -109,6 +136,14 @@ export class AiUsageService {
       configuredThreshold < 1
         ? configuredThreshold
         : 0.8;
+    const configuredCacheTtl = Number(
+      this.config.get('AI_CHAT_RATE_LIMIT_OVERRIDE_CACHE_TTL_MS') ??
+        DEFAULT_RATE_LIMIT_OVERRIDE_CACHE_TTL_MS,
+    );
+    this.rateLimitOverrideCacheTtlMs =
+      Number.isFinite(configuredCacheTtl) && configuredCacheTtl >= 0
+        ? configuredCacheTtl
+        : DEFAULT_RATE_LIMIT_OVERRIDE_CACHE_TTL_MS;
   }
 
   /**
@@ -255,12 +290,14 @@ export class AiUsageService {
         params.monthlySpendCapUsd != null
           ? params.monthlySpendCapUsd.toFixed(6)
           : null,
+      rateLimitPoints: this.normalizeRateLimitPoints(params.rateLimitPoints),
       reason: params.reason ?? null,
       grantedBy: params.grantedBy ?? null,
       expiresAt: params.expiresAt ?? null,
     });
 
     const saved = await this.overrideRepo.save(entity);
+    this.rateLimitOverrideCache.delete(userId);
     this.logger.log(
       `AI cap override set for user ${userId} by ${params.grantedBy ?? 'unknown'}: ${JSON.stringify(params)}`,
     );
@@ -270,12 +307,44 @@ export class AiUsageService {
   /** Clears a user's override, reverting them to the env-configured default caps. */
   async clearCapOverride(userId: string): Promise<void> {
     await this.overrideRepo.delete({ userId });
+    this.rateLimitOverrideCache.delete(userId);
     this.logger.log(`AI cap override cleared for user ${userId}`);
   }
 
   async getCapOverride(userId: string): Promise<UserAiCapOverride | null> {
     const override = await this.overrideRepo.findOne({ where: { userId } });
     return this.isActive(override) ? override : null;
+  }
+
+  /**
+   * The admin-set chat rate-limit budget for this user and tool set (#751),
+   * or null when no active override sets one (the caller then uses the env
+   * default). Cached briefly per user — see `rateLimitOverrideCache`.
+   */
+  async getRateLimitPointsOverride(
+    userId: string,
+    toolSet: ToolSetName,
+  ): Promise<number | null> {
+    const now = Date.now();
+    let cached = this.rateLimitOverrideCache.get(userId);
+
+    if (!cached || cached.cachedUntil <= now) {
+      const override = await this.getCapOverride(userId);
+      const expiresAtMs = override?.expiresAt
+        ? new Date(override.expiresAt).getTime()
+        : Number.POSITIVE_INFINITY;
+      cached = {
+        points: this.normalizeRateLimitPoints(override?.rateLimitPoints),
+        // Never serve an override past its own expiry just because it's cached.
+        cachedUntil: Math.min(
+          now + this.rateLimitOverrideCacheTtlMs,
+          expiresAtMs,
+        ),
+      };
+      this.rateLimitOverrideCache.set(userId, cached);
+    }
+
+    return cached.points?.[toolSet] ?? null;
   }
 
   // ── Internals ─────────────────────────────────────────────────────────
@@ -351,6 +420,21 @@ export class AiUsageService {
 
   private remaining(used: number, cap: number): number {
     return Math.max(0, cap - used);
+  }
+
+  /** Drops non-positive / non-integer entries; returns null when nothing valid remains. */
+  private normalizeRateLimitPoints(
+    value: RateLimitPointsOverride | null | undefined,
+  ): RateLimitPointsOverride | null {
+    if (!value || typeof value !== 'object') return null;
+    const normalized: RateLimitPointsOverride = {};
+    for (const [toolSet, points] of Object.entries(value)) {
+      const parsed = Number(points);
+      if (Number.isInteger(parsed) && parsed > 0) {
+        normalized[toolSet as ToolSetName] = parsed;
+      }
+    }
+    return Object.keys(normalized).length > 0 ? normalized : null;
   }
 
   private parseOptionalPositiveNumber(value: unknown): number | null {

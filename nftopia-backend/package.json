@@ -39,6 +39,7 @@
     "@nestjs/swagger": "^11.2.5",
     "@nestjs/typeorm": "^11.0.0",
     "@nestjs/websockets": "^11.1.17",
+    "@nftopia/nft-contract-client": "file:../nftopia-stellar/bindings/nft-contract-client",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/context-async-hooks": "^2.11.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.222.0",

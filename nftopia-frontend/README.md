@@ -191,6 +191,63 @@ Useful companion docs in this workspace:
 - The active wallet, network, and backend integration code is aligned around Stellar and Soroban. Translation strings and UI copy reflect Stellar branding throughout.
 - The project supports four locale folders: EN, FR, ES, and DE.
 
+## 📦 Bundle Size Budgets
+
+`.size-limit.js` configures automated bundle size budget enforcement using `size-limit` to prevent JavaScript and CSS regressions from landing unnoticed. Budgets are evaluated on every PR touching frontend code via the `.github/workflows/nftopia-frontend-bundle-size.yml` CI workflow and during the frontend build-and-verify pipeline.
+
+All sizes are measured with **Brotli compression**, matching production CDN edge delivery to end-user browsers. Thresholds sit comfortably (~15–30%) above current baselines to prevent build flapping on routine copy or layout updates while promptly blocking unintentional heavy dependency inclusions.
+
+| Chunk / Route Area | Target Pattern | Baseline (Brotli) | Budget Limit | Rationale |
+| --- | --- | --- | --- | --- |
+| Framework & Next.js Runtime | `framework-*.js`, `main-app-*.js`, `webpack-*.js` | ~40.3 kB | **55 kB** | Core React & Next.js runtime. Should remain lean and only change on framework upgrades. |
+| Global Polyfills | `polyfills-*.js` | ~27.3 kB | **35 kB** | Browser backward-compatibility polyfill bundle. |
+| Global Stylesheets (CSS) | `css/*.css` | ~14.4 kB | **25 kB** | Global Tailwind styles; guards against accidental inline assets or runaway utility bloat. |
+| App Layouts (Root & Shared) | `app/**/layout-*.js` | ~18.9 kB | **28 kB** | Root and locale shells, common navigation, and context providers. |
+| Landing / Home Page Route | `app/*/page-*.js`, `app/page-*.js` | ~14.1 kB | **22 kB** | Highest-traffic acquisition funnel landing surface. |
+| Marketplace Browse Page | `app/*/marketplace/page-*.js` | ~13.2 kB | **20 kB** | Primary NFT marketplace browsing and catalog discovery interface. |
+| Marketplace NFT Detail Page | `app/*/marketplace/*/page-*.js` | ~8.7 kB | **15 kB** | Item detail chunk; heavy media handling should be lazy-loaded. |
+| Marketplace Auction Detail | `app/*/marketplace/auction/*/page-*.js` | ~8.7 kB | **15 kB** | Live auction detail chunk. |
+| Marketplace Auctions List | `app/*/marketplace/auctions/page-*.js` | ~8.4 kB | **15 kB** | Auctions catalog chunk. |
+| Collection Detail Page | `app/*/collection/*/page-*.js` | ~11.0 kB | **18 kB** | Creator collection galleries. |
+| Creator Profile Page | `app/*/creator/*/page-*.js` | ~10.3 kB | **16 kB** | Public artist and creator profile pages. |
+| Creator Dashboard Pages | `app/*/creator-dashboard/**/page-*.js` | ~52.7 kB | **75 kB** | Combined suite of creator tools (minting, collection creation, settings, sales). |
+| Authentication Pages | `app/*/auth/**/page-*.js` | ~17.5 kB | **28 kB** | Stellar wallet authentication and login callbacks. |
+| Account & Settings Pages | `app/*/account/**/page-*.js` | ~11.5 kB | **20 kB** | User privacy, wallet connections, and account preferences. |
+| Total Client Static JavaScript | `chunks/**/*.js` | ~1.09 MB | **1.35 MB** | Hard ceiling on cumulative client-shipped JavaScript across all lazy chunks and vendor dependencies. |
+
+### Running Locally
+
+```bash
+# Build production assets first
+npm run build
+
+# Run budget verification
+npm run size-limit
+# or
+npm run check-bundle-size
+```
+
+### How to Adjust Budgets When Legitimate Increases Are Needed
+
+When a new feature or dependency genuinely requires expanding a bundle size budget:
+
+1. **Analyze the bundle composition**:
+   ```bash
+   npm run analyze
+   ```
+   This generates an interactive visual dependency treemap at `nftopia-frontend/.next/analyze/client.html`. Open this file in your browser to inspect exact package footprints.
+
+2. **Verify optimization best practices before raising limits**:
+   - **Tree shaking**: Ensure packages support ESM tree-shaking and use named imports (e.g., `import { format } from 'date-fns'` or subpath imports rather than monolithic barrel imports).
+   - **Code splitting**: Lazy-load heavy dependencies, dialog modals, or charts using `next/dynamic` with `ssr: false` if not needed during initial paint.
+   - **Redundant dependencies**: Check for duplicate packages (e.g., multiple UUID or date libraries).
+
+3. **Update the budget in `.size-limit.js`**:
+   Adjust the specific route or chunk `limit` in `nftopia-frontend/.size-limit.js` to accommodate the measured baseline plus appropriate headroom (~15–20%).
+
+4. **Document the change in your PR**:
+   Reference the specific route budget adjusted, include the before/after bundle size, and explain why the dependency or code addition is required.
+
 ## 🚦 Lighthouse Budgets
 
 `lighthouserc.js` turns Lighthouse into a merge gate for the three highest-traffic

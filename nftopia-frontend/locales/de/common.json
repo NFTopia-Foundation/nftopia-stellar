@@ -106,6 +106,31 @@
         "createdBy": "Erstellt von",
         "ownedBy": "Im Besitz von",
         "viewDetails": "Details anzeigen"
+      },
+      "presets": {
+        "nameLabel": "Name der Vorlage",
+        "namePlaceholder": "Diese Filter benennen",
+        "save": "Aktuelle Filter speichern",
+        "listLabel": "Gespeicherte Filtervorlagen",
+        "choose": "Gespeicherte Vorlage wählen",
+        "none": "Keine gespeicherten Vorlagen",
+        "apply": "Vorlage anwenden",
+        "delete": "Vorlage löschen",
+        "saved": "„{{name}}“ gespeichert",
+        "applied": "„{{name}}“ angewendet",
+        "deleted": "„{{name}}“ gelöscht",
+        "errors": {
+          "emptyName": "Gib einen Namen für diese Vorlage ein.",
+          "noFilters": "Lege mindestens einen Filter fest, bevor du eine Vorlage speicherst.",
+          "limitReached": "Du kannst bis zu {{max}} Vorlagen speichern. Lösche eine, um eine neue zu speichern.",
+          "storageUnavailable": "Vorlagen können in diesem Browser gerade nicht gespeichert werden. Das Filtern funktioniert weiterhin."
+        }
+      },
+      "priceRange": {
+        "group": "Preisspanne",
+        "minThumb": "Schieberegler für Mindestpreis",
+        "maxThumb": "Schieberegler für Höchstpreis",
+        "invalid": "Der Mindestpreis darf nicht über dem Höchstpreis liegen."
       }
     },
     "profile": {

@@ -1,25 +1,69 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ConfigService } from '@nestjs/config';
+import { Horizon } from 'stellar-sdk';
 import { User } from '../users/user.entity';
 import { Collection } from '../modules/collection/entities/collection.entity';
 import { AuditService, AuditAction } from '../common/audit/audit.service';
+import { UserWallet } from '../auth/entities/user-wallet.entity';
 
 import { ListUsersQueryDto } from './dto/list-users-query.dto';
 
 @Injectable()
 export class AdminService {
+  private readonly logger = new Logger(AdminService.name);
+
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     @InjectRepository(Collection)
     private readonly collectionRepository: Repository<Collection>,
     private readonly auditService: AuditService,
+    private readonly configService: ConfigService,
   ) {}
+
+  /**
+   * Native XLM balance for one wallet (#695), for the admin user-detail
+   * view. Best-effort: an unfunded or unreachable account must not break
+   * the rest of the user-detail response, so this returns null on any
+   * failure rather than throwing.
+   */
+  private async fetchWalletBalance(address: string): Promise<string | null> {
+    try {
+      const horizonUrl =
+        this.configService.get<string>('STELLAR_HORIZON_URL') ??
+        'https://horizon-testnet.stellar.org';
+      const server = new Horizon.Server(horizonUrl);
+      const account = await server.loadAccount(address);
+      const native = account.balances.find(
+        (b): b is Horizon.HorizonApi.BalanceLineNative =>
+          b.asset_type === 'native',
+      );
+      return native?.balance ?? null;
+    } catch (error) {
+      this.logger.warn(
+        `Could not fetch balance for wallet ${address}: ${(error as Error).message}`,
+      );
+      return null;
+    }
+  }
+
+  private async attachWalletBalances(
+    wallets: UserWallet[],
+  ): Promise<Array<UserWallet & { balance: string | null }>> {
+    return Promise.all(
+      wallets.map(async (wallet) => ({
+        ...wallet,
+        balance: await this.fetchWalletBalance(wallet.walletAddress),
+      })),
+    );
+  }
 
   async listUsers(
     query: ListUsersQueryDto,
@@ -77,14 +121,16 @@ export class AdminService {
     delete sanitizedUser.twoFactorSecret;
     delete sanitizedUser.twoFactorBackupCodes;
 
-    const [collectionsCount, auditLogsResult] = await Promise.all([
-      this.collectionRepository.count({ where: { creatorId: userId } }),
-      this.auditService.findAuditLogs({
-        entityType: 'User',
-        entityId: userId,
-        limit: 50,
-      }),
-    ]);
+    const [collectionsCount, auditLogsResult, walletsWithBalance] =
+      await Promise.all([
+        this.collectionRepository.count({ where: { creatorId: userId } }),
+        this.auditService.findAuditLogs({
+          entityType: 'User',
+          entityId: userId,
+          limit: 50,
+        }),
+        this.attachWalletBalances(user.wallets ?? []),
+      ]);
 
     let nftsOwned = 0;
     let nftsCreated = 0;
@@ -102,7 +148,7 @@ export class AdminService {
 
     return {
       user: sanitizedUser,
-      wallets: user.wallets ?? [],
+      wallets: walletsWithBalance,
       activitySummary: {
         collectionsCount,
         nftsOwned,
