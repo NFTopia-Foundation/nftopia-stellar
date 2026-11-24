@@ -69,6 +69,8 @@
     "settings": "Configuración",
     "contentFlags": "Contenido marcado",
     "transactionRetry": "Reintentos",
+    "aiUsage": "Uso de IA",
+    "auditLogs": "Registros de auditoría",
     "collectionVerification": "Verificación de colecciones"
   },
   "shell": {
@@ -245,6 +247,25 @@
       "reject": "Colección rechazada con éxito."
     }
   },
+  "auditLogs": {
+    "title": "Registros de auditoría",
+    "description": "Filtra acciones administrativas por actor, acción, entidad y rango de fechas.",
+    "empty": "No hay entradas de auditoría que coincidan con estos filtros.",
+    "filters": { "admin": "Usuario administrador", "action": "Tipo de acción", "allActions": "Todas las acciones", "entityType": "Tipo de entidad", "entityId": "ID de entidad", "startDate": "Fecha inicial", "endDate": "Fecha final" },
+    "columns": { "created": "Creado", "admin": "Administrador", "action": "Acción", "entityType": "Tipo de entidad", "entityId": "ID de entidad" },
+    "pagination": { "label": "Páginas de auditoría", "previous": "Anterior", "next": "Siguiente", "status": "Página {{page}} de {{pages}}" },
+    "error": { "load": "No se pudieron cargar los registros de auditoría." }
+  },
+  "aiUsage": {
+    "title": "Uso y coste de IA",
+    "description": "Consulta el consumo de IA por usuario, administra límites y revisa llamadas a herramientas.",
+    "health": { "loading": "Comprobando salud de IA", "up": "IA saludable", "down": "IA no disponible", "unconfigured": "IA no configurada" },
+    "lookup": { "title": "Uso por usuario", "userId": "ID de usuario", "submit": "Buscar", "loading": "Cargando…", "daily": "Diario", "monthly": "Mensual", "tokens": "Tokens", "cap": "Límite", "cost": "Coste estimado", "remaining": "Restante" },
+    "override": { "set": "Establecer límite", "setTitle": "Establecer límite personalizado de IA", "setDescription": "Reemplaza los límites seleccionados para este usuario.", "clear": "Eliminar límite", "clearTitle": "Eliminar límite personalizado de IA", "clearDescription": "Esto restaura los límites configurados por el entorno.", "daily": "Límite diario de tokens", "monthly": "Límite mensual de tokens" },
+    "aggregate": { "title": "Uso de toda la plataforma", "dependency": "La agregación global aún no está disponible. Requiere un endpoint del backend que agregue los registros de uso de IA." },
+    "logs": { "title": "Registro de llamadas a herramientas", "empty": "No se encontraron llamadas a herramientas de IA.", "success": "Éxito", "failed": "Falló", "columns": { "tool": "Herramienta", "user": "Usuario", "session": "Sesión", "status": "Estado", "created": "Creado" } },
+    "error": { "usage": "No se pudo cargar el uso de IA de este usuario.", "logs": "No se pudo cargar el registro de herramientas de IA.", "override": "No se pudo actualizar el límite personalizado de IA." }
+  },
   "dlq": {
     "title": "Reintentos de transacciones",
     "description": "Las liquidaciones fallidas que agotaron sus reintentos llegan a la cola de mensajes fallidos (DLQ). Revísalas, reinténtalas o cancela un reintento que se volvió a encolar.",
@@ -261,8 +282,16 @@
       "total": "Todos los reintentos",
       "trendTitle": "Entradas a la DLQ, últimos 7 días (UTC)",
       "trendNote": "Basado en las {{count}} entradas más recientes de la DLQ.",
+      "reasonsTitle": "Principales motivos de fallo",
       "recentTitle": "Actividad reciente de la DLQ",
       "recentItem": "Transacción #{{tx}} · reintento {{id}}"
+    },
+    "reasons": {
+      "timeout": "Tiempo de espera",
+      "insufficient_balance": "Saldo insuficiente",
+      "contract_error": "Error de contrato",
+      "rpc_unavailable": "RPC no disponible",
+      "other": "Otro"
     },
     "status": {
       "pending": "Pendiente",

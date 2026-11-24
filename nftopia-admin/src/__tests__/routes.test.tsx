@@ -75,7 +75,7 @@ describe('admin app routing (#559)', () => {
 
     const nav = screen.getByRole('navigation', { name: 'Main navigation' })
     const links = within(nav).getAllByRole('link')
-    const expectedPaths = ['/dashboard', '/users', '/collections', '/content-flags', '/transaction-retry', '/settings']
+    const expectedPaths = ['/dashboard', '/users', '/collections', '/content-flags', '/transaction-retry', '/ai-usage', '/audit-logs', '/settings']
 
     expect(links.map((link) => link.getAttribute('href'))).toEqual(expectedPaths)
 
