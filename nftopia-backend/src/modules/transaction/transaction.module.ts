@@ -10,6 +10,10 @@ import { AuctionModule } from '../auction/auction.module';
 import { NftModule } from '../nft/nft.module';
 import { StorageModule } from '../../storage/storage.module';
 import { UsersModule } from '../../users/users.module';
+import { AuditModule } from '../../common/audit/audit.module';
+import { DistributedLockService } from '../../common/locks/distributed-lock.service';
+import { TransactionReconciliationJob } from './transaction-reconciliation.job';
+import { PrometheusService } from '../../common/metrics/prometheus';
 
 @Module({
   imports: [
@@ -21,9 +25,19 @@ import { UsersModule } from '../../users/users.module';
     NftModule,
     StorageModule,
     UsersModule,
+    AuditModule,
   ],
   controllers: [TransactionController],
-  providers: [TransactionService],
-  exports: [TransactionService],
+  providers: [
+    TransactionService,
+    DistributedLockService,
+    TransactionReconciliationJob,
+    PrometheusService,
+  ],
+  exports: [
+    TransactionService,
+    DistributedLockService,
+    TransactionReconciliationJob,
+  ],
 })
 export class TransactionModule {}

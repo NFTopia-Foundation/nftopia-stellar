@@ -359,3 +359,5 @@ impl NftContract {
 
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod test_access_control;

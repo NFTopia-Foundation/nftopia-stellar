@@ -35,6 +35,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { UserRole } from '../../common/enums/user-role.enum';
 import { ToolSet } from '../../common/decorators/tool-set.decorator';
+import { AiModerationProcessor } from './ai-moderation.processor';
 
 type RequestWithUser = Request & {
   user?: { userId: string; role?: string };
@@ -54,6 +55,7 @@ export class AiAgentController {
     private readonly aiAgentService: AiAgentService,
     private readonly aiUsageService: AiUsageService,
     private readonly aiAgentHealthService: AiAgentHealthService,
+    private readonly aiModerationProcessor: AiModerationProcessor,
   ) {}
 
   // Unauthenticated on purpose: an ops/uptime probe for /ai/health can't
@@ -208,6 +210,21 @@ export class AiAgentController {
     });
   }
 
+  // ── Admin: moderation config visibility (#642) ───────────────────────
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @Get('admin/moderation/config')
+  @ApiOperation({
+    summary:
+      'Inspect the AI moderation confidence threshold currently in effect',
+  })
+  getModerationConfig(): { confidenceThreshold: number } {
+    return {
+      confidenceThreshold: this.aiModerationProcessor.getConfidenceThreshold(),
+    };
+  }
+
   // ── Admin: AI chat spend cap overrides (#529) ────────────────────────
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -228,7 +245,7 @@ export class AiAgentController {
   @Post('admin/usage/:userId/override')
   @ApiOperation({
     summary:
-      "Set (replacing any existing) an override of a user's AI chat spend caps",
+      "Set (replacing any existing) an override of a user's AI chat spend caps and per-tool-set chat rate limits",
   })
   async setCapOverride(
     @Param('userId') userId: string,
@@ -240,6 +257,7 @@ export class AiAgentController {
       monthlyTokenCap: dto.monthlyTokenCap,
       dailySpendCapUsd: dto.dailySpendCapUsd,
       monthlySpendCapUsd: dto.monthlySpendCapUsd,
+      rateLimitPoints: dto.rateLimitPoints,
       reason: dto.reason,
       grantedBy: req.user?.userId,
       expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : undefined,

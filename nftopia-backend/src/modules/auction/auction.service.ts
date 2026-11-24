@@ -6,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, In, Repository } from 'typeorm';
+import { Brackets, In, Repository, DataSource } from 'typeorm';
 import { Auction } from './entities/auction.entity';
 import { Bid } from './entities/bid.entity';
 import { CreateAuctionDto } from './dto/create-auction.dto';
@@ -40,6 +40,7 @@ export class AuctionService {
     private readonly settlementClient: MarketplaceSettlementClient,
     private readonly transactionService: TransactionService,
     private readonly notificationsService: NotificationsService,
+    private readonly dataSource: DataSource,
   ) {}
 
   async create(createDto: CreateAuctionDto, sellerId: string) {
@@ -79,6 +80,7 @@ export class AuctionService {
       reservePrice,
       startTime,
       endTime,
+      minBidIncrementPct,
     } = createDto;
 
     // Prevent duplicate active auctions for same NFT
@@ -105,6 +107,7 @@ export class AuctionService {
       startTime: startTime ? new Date(startTime) : now,
       endTime: new Date(endTime),
       status: AuctionStatus.ACTIVE,
+      minBidIncrementPct: minBidIncrementPct ?? null,
     });
 
     return this.auctionRepo.save(auction);
@@ -204,6 +207,24 @@ export class AuctionService {
     });
   }
 
+  /**
+   * Concurrency & Locking Strategy for `placeBid`:
+   *
+   * To prevent the classic read-then-write race condition when multiple bidders submit
+   * bids simultaneously, the off-chain bidding path executes within an atomic database
+   * transaction managed via `this.dataSource.transaction`.
+   *
+   * 1. A row-level pessimistic write lock (`SELECT ... FOR UPDATE` via `{ mode: 'pessimistic_write' }`)
+   *    is acquired on the target `Auction` row.
+   * 2. Any concurrent bidders attempting to bid on the same auction will block waiting for the lock.
+   * 3. Once acquired, the locked auction row is re-read with the latest committed `currentPrice`
+   *    and auction status/expiry.
+   * 4. Validation verifies that the auction is ACTIVE, not expired, and that `dto.amount > Number(auction.currentPrice)`.
+   * 5. The new `Bid` record is created and persisted, and the `Auction` entity's `currentPrice`
+   *    (and any last-minute anti-sniping extension) are updated atomically in the same transaction.
+   * 6. Upon transaction commit, the lock is released, allowing subsequent bids to evaluate against
+   *    the updated `currentPrice` and fail if their bid is now lower than or equal to the accepted bid.
+   */
   async placeBid(auctionId: string, bidderId: string, dto: PlaceBidDto) {
     const enableOnchain = this.configService.get<boolean>(
       'ENABLE_ONCHAIN_SETTLEMENT',
@@ -218,41 +239,49 @@ export class AuctionService {
       return { success: true, result };
     }
 
-    // Legacy DB logic
-    const auction = await this.auctionRepo.findOne({
-      where: { id: auctionId },
+    let extended = false;
+    let savedAuction: Auction | undefined;
+
+    const bid = await this.dataSource.transaction(async (manager) => {
+      // Row-level pessimistic write lock on the target auction row
+      const auction = await manager.findOne(Auction, {
+        where: { id: auctionId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!auction) throw new NotFoundException('Auction not found');
+      if (auction.status !== AuctionStatus.ACTIVE)
+        throw new BadRequestException('Auction is not active');
+      const now = Date.now();
+      const endTime = new Date(auction.endTime).getTime();
+      if (endTime <= now) {
+        throw new BadRequestException('Auction expired');
+      }
+      if (!auction.sellerId) {
+        throw new BadRequestException('Auction seller is no longer available');
+      }
+
+      const amount = dto.amount;
+      if (amount <= Number(auction.currentPrice))
+        throw new BadRequestException('Bid must be greater than current price');
+
+      const newBid = manager.create(Bid, { auctionId, bidderId, amount });
+      const persistedBid = await manager.save(Bid, newBid);
+
+      auction.currentPrice = amount;
+      extended = extendAuctionForLastMinuteBid(
+        auction,
+        this.configService,
+        now,
+      );
+      savedAuction = await manager.save(Auction, auction);
+
+      return persistedBid;
     });
-    if (!auction) throw new NotFoundException('Auction not found');
-    if (auction.status !== AuctionStatus.ACTIVE)
-      throw new BadRequestException('Auction is not active');
-    const now = Date.now();
-    const endTime = new Date(auction.endTime).getTime();
-    if (endTime <= now)
-      throw new BadRequestException('Auction expired');
-    if (!auction.sellerId) {
-      throw new BadRequestException('Auction seller is no longer available');
-    }
 
-    const amount = dto.amount;
-    if (amount <= Number(auction.currentPrice))
-      throw new BadRequestException('Bid must be greater than current price');
-
-    const bid = this.bidRepo.create({ auctionId, bidderId, amount });
-
-    await this.bidRepo.save(bid);
-
-    auction.currentPrice = amount;
-    const extended = extendAuctionForLastMinuteBid(
-      auction,
-      this.configService,
-      now,
-    );
-    await this.auctionRepo.save(auction);
-
-    if (extended) {
+    if (extended && savedAuction) {
       this.notificationsService.broadcastAuctionExtended(auctionId, {
-        endTime: auction.endTime.toISOString(),
-        extensionCount: auction.extensionCount,
+        endTime: savedAuction.endTime.toISOString(),
+        extensionCount: savedAuction.extensionCount,
       });
     }
 

@@ -217,4 +217,27 @@ describe('EmailService', () => {
       ).resolves.toBeUndefined();
     });
   });
+  describe('sendModerationExhaustedAlertEmail', () => {
+    it('renders the alert template and enqueues a send job', async () => {
+      await service.sendModerationExhaustedAlertEmail(
+        'ops@x.test',
+        'l1',
+        'boom',
+        4,
+      );
+
+      expect(templateService.render).toHaveBeenCalledWith(
+        'moderation-exhausted-alert',
+        { listingId: 'l1', errorMessage: 'boom', suppressedCount: 4 },
+      );
+      expect(emailQueue.add).toHaveBeenCalledWith(
+        SEND_EMAIL_JOB,
+        expect.objectContaining({
+          to: 'ops@x.test',
+          type: EmailType.MODERATION_EXHAUSTED_ALERT,
+        }),
+        expect.any(Object),
+      );
+    });
+  });
 });

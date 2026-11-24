@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 import { useCreatorSales } from "@/hooks/useCreatorSales";
+import { SalesCsvExport } from "@/components/creator/SalesCsvExport";
 import { formatAmount, formatDate } from "@/components/marketplace/format";
 import type { MarketplaceActivity, SalesSummary } from "@/types/marketplace";
 
@@ -100,7 +101,8 @@ function LoadingState() {
  * recent-activity feed, so it stays consistent with the List-for-Sale page.
  */
 export default function SalesPage() {
-  const { summary, activity, loading, error, refetch } = useCreatorSales();
+  const { summary, activity, sales = [], loading, error, refetch } =
+    useCreatorSales();
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-8">
@@ -128,6 +130,8 @@ export default function SalesPage() {
       ) : (
         <div className="space-y-8">
           {summary && <SummaryTiles summary={summary} />}
+
+          <SalesCsvExport sales={sales} />
 
           <section>
             <h2 className="mb-3 text-lg font-semibold text-nftopia-text">

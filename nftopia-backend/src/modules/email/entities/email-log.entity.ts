@@ -14,6 +14,7 @@ export enum EmailType {
   ACCOUNT_DELETION_VERIFICATION = 'account_deletion_verification',
   BID_NOTIFICATION = 'bid_notification',
   AUCTION_WON = 'auction_won',
+  MODERATION_EXHAUSTED_ALERT = 'moderation_exhausted_alert',
 }
 
 export enum EmailStatus {

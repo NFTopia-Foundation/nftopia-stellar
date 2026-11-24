@@ -10,11 +10,14 @@ import {
   buildActivityFeed,
   deriveSalesSummary,
 } from "@/lib/services/marketplace-mapper";
+import { buildSaleRecords, type SaleRecord } from "@/lib/sales-export";
 import type { MarketplaceActivity, SalesSummary } from "@/types/marketplace";
 
 interface UseCreatorSalesResult {
   summary: SalesSummary | null;
   activity: MarketplaceActivity[];
+  /** Every realized sale (not just the visible feed), for the CSV export (#758). */
+  sales: SaleRecord[];
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
@@ -34,6 +37,7 @@ export function useCreatorSales(): UseCreatorSalesResult {
 
   const [summary, setSummary] = useState<SalesSummary | null>(null);
   const [activity, setActivity] = useState<MarketplaceActivity[]>([]);
+  const [sales, setSales] = useState<SaleRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,6 +52,7 @@ export function useCreatorSales(): UseCreatorSalesResult {
       ]);
       setSummary(deriveSalesSummary(listings, auctions, creatorId));
       setActivity(buildActivityFeed(listings, auctions, creatorId));
+      setSales(buildSaleRecords(listings, auctions, creatorId));
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to load sales data.",
@@ -63,5 +68,5 @@ export function useCreatorSales(): UseCreatorSalesResult {
     }
   }, [creatorId, load]);
 
-  return { summary, activity, loading, error, refetch: load };
+  return { summary, activity, sales, loading, error, refetch: load };
 }
