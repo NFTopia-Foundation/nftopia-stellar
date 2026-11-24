@@ -2,10 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { Wifi, WifiOff, RefreshCw } from 'lucide-react';
+import {
+  selectPendingCount,
+  useOfflineActionQueue,
+} from '@/lib/offline-queue/store';
 
 export default function OfflinePage() {
   const [isOnline, setIsOnline] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
+  const pendingCount = useOfflineActionQueue(selectPendingCount);
 
   useEffect(() => {
     setIsOnline(navigator.onLine);
@@ -77,6 +82,13 @@ export default function OfflinePage() {
             {isRetrying ? 'Retrying...' : 'Try Again'}
           </button>
           
+          {pendingCount > 0 && (
+            <p className="rounded-lg bg-amber-500/15 px-3 py-2 text-sm text-amber-200">
+              {pendingCount} action{pendingCount === 1 ? '' : 's'} saved and will sync
+              automatically when you reconnect.
+            </p>
+          )}
+
           <div className="text-sm text-gray-400">
             <p>While offline, you can still:</p>
             <ul className="mt-2 space-y-1">

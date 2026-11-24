@@ -44,6 +44,14 @@ export {
 // Recently Viewed NFTs Store
 export { useRecentlyViewedStore } from "./recently-viewed-store";
 
+// Offline write queue (queued favorites / follows) — see lib/offline-queue.
+export {
+  selectConflicts,
+  selectPendingActions,
+  selectPendingCount,
+  useOfflineActionQueue,
+} from "../offline-queue/store";
+
 
 export { useMarketplace } from "../../features/marketplace/store/marketplaceStore";
 export { useNFTs } from "../../features/nft/store/nftStore";
