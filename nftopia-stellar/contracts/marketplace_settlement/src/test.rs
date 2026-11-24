@@ -2765,6 +2765,83 @@ fn test_execute_sale_with_native_xlm_distributes_proceeds_and_fees() {
     assert_eq!(balances.balance(&admin), 25_000);
 }
 
+// ─── Platform fee withdrawal (#736) ─────────────────────────────────────────
+
+fn setup_accumulated_native_fees(
+    env: &Env,
+    cid: &Address,
+    client: &MarketplaceSettlementClient<'static>,
+    admin: &Address,
+) -> (Asset, token::Client<'static>, i128) {
+    let asset = Asset::NativeXLM;
+    let seller = Address::generate(env);
+    let buyer = Address::generate(env);
+    let creator = Address::generate(env);
+    let nft = env.register(MockNft, ());
+    reg(env, cid, &nft, &creator, admin, &asset);
+    MockNftClient::new(env, &nft).set_owner(&seller);
+
+    let sac = client.get_native_xlm_sac().unwrap();
+    token::StellarAssetClient::new(env, &sac).mint(&buyer, &1_000_000i128);
+    let balances: token::Client<'static> =
+        unsafe { core::mem::transmute(token::Client::new(env, &sac)) };
+
+    let id = client.create_sale(&seller, &nft, &1u64, &1_000_000i128, &asset, &86400u64);
+    client.execute_sale(&id, &buyer, &1_000_000i128);
+    let accumulated = client.get_accumulated_fees(&asset);
+    assert!(accumulated > 0);
+
+    (asset, balances, accumulated)
+}
+
+#[test]
+fn test_withdraw_platform_fees_succeeds_when_admin_and_recipient_differ() {
+    let (env, cid, client, admin) = new_env();
+    let treasury = Address::generate(&env);
+    let (asset, balances, accumulated) = setup_accumulated_native_fees(&env, &cid, &client, &admin);
+
+    // admin (the caller) withdraws to `treasury`, an address distinct from
+    // both admin and fee_config.fee_recipient — the old inner check
+    // (`fee_recipient != admin`) would have rejected this combination
+    // outright, since it required the caller itself to equal fee_recipient.
+    assert_eq!(
+        client.withdraw_platform_fees(&asset, &treasury, &admin),
+        accumulated
+    );
+    assert_eq!(balances.balance(&treasury), accumulated);
+    assert_eq!(client.get_accumulated_fees(&asset), 0);
+}
+
+#[test]
+fn test_withdraw_platform_fees_twice_in_a_row_fails_the_second_time() {
+    let (env, cid, client, admin) = new_env();
+    let (asset, _balances, _accumulated) =
+        setup_accumulated_native_fees(&env, &cid, &client, &admin);
+
+    client.withdraw_platform_fees(&asset, &admin, &admin);
+    // The balance was zeroed by the first withdrawal; an immediate second
+    // call has nothing left to withdraw.
+    assert_eq!(
+        client.try_withdraw_platform_fees(&asset, &admin, &admin),
+        Err(Ok(SettlementError::InsufficientFunds))
+    );
+}
+
+#[test]
+fn test_withdraw_platform_fees_rejects_non_admin_caller() {
+    let (env, cid, client, admin) = new_env();
+    let impostor = Address::generate(&env);
+    let (asset, _balances, _accumulated) =
+        setup_accumulated_native_fees(&env, &cid, &client, &admin);
+
+    assert_eq!(
+        client.try_withdraw_platform_fees(&asset, &impostor, &impostor),
+        Err(Ok(SettlementError::Unauthorized))
+    );
+    // Rejected before touching the balance.
+    assert!(client.get_accumulated_fees(&asset) > 0);
+}
+
 #[test]
 fn test_native_xlm_auction_refunds_outbid_bidder_and_settles() {
     let (env, cid, client, admin) = new_env();
