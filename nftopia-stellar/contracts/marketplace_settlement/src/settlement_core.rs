@@ -836,8 +836,69 @@ impl MarketplaceSettlement {
                 return Err(SettlementError::InvalidState);
             }
 
-            // Execute NFT swaps
-            // This is a simplified implementation
+            let counterparty = trade
+                .counterparty
+                .clone()
+                .ok_or(SettlementError::InvalidState)?;
+
+            // Verify the initiator actually owns each NFT before attempting the
+            // cross-contract transfer. This makes the authorization/ownership
+            // pre-condition explicit and fails fast with `Unauthorized` rather
+            // than relying on the NFT contract to reject the call.
+            for i in 0..trade.initiator_nfts.len() {
+                let item = trade.initiator_nfts.get(i).unwrap();
+                if !asset_utils::check_nft_ownership(
+                    &item.nft_address,
+                    item.token_id,
+                    &trade.initiator,
+                    &env,
+                )? {
+                    return Err(SettlementError::Unauthorized);
+                }
+            }
+
+            for i in 0..trade.counterparty_nfts.len() {
+                let item = trade.counterparty_nfts.get(i).unwrap();
+                if !asset_utils::check_nft_ownership(
+                    &item.nft_address,
+                    item.token_id,
+                    &counterparty,
+                    &env,
+                )? {
+                    return Err(SettlementError::Unauthorized);
+                }
+            }
+
+            // Transfer initiator's NFTs to the counterparty, and the
+            // counterparty's NFTs to the initiator. `transfer_nft` invokes the
+            // NFT contract's own `transfer` entrypoint; a failed cross-contract
+            // call propagates through `?` and Soroban rolls back the whole
+            // invocation, so a failed transfer can never leave the trade
+            // marked `Executed` without the asset actually having moved.
+            for i in 0..trade.initiator_nfts.len() {
+                let item = trade.initiator_nfts.get(i).unwrap();
+                asset_utils::transfer_nft(
+                    &item.nft_address,
+                    &trade.initiator,
+                    &counterparty,
+                    item.token_id,
+                    &env,
+                )?;
+            }
+
+            for i in 0..trade.counterparty_nfts.len() {
+                let item = trade.counterparty_nfts.get(i).unwrap();
+                asset_utils::transfer_nft(
+                    &item.nft_address,
+                    &counterparty,
+                    &trade.initiator,
+                    item.token_id,
+                    &env,
+                )?;
+            }
+
+            // Only mark the trade as Executed after every cross-contract
+            // transfer above has actually succeeded.
             trade.state = crate::types::TransactionState::Executed;
             TradeTransactionStore::update(&env, &trade)?;
 

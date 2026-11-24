@@ -129,7 +129,12 @@ export default function TransactionRetryPage() {
       case 'retry':
         return run(async () => {
           const updated = await api.retryEntry(dialog.entry.retryId, reason)
-          replaceRow(dialog.entry.retryId, { ...updated, status: updated?.status ?? 'pending' })
+          replaceRow(dialog.entry.retryId, {
+            ...updated,
+            status: updated?.status ?? 'pending',
+            attemptCount: updated?.attemptCount ?? 0,
+            lastError: updated?.lastError ?? null,
+          })
           await refreshMetrics()
           return t('dlq.notice.retried', { tx: dialog.entry.transactionId })
         })
@@ -270,9 +275,10 @@ export default function TransactionRetryPage() {
         onConfirm={confirm}
         onClose={close}
       >
-        <label className="block text-sm text-slate-300">
+        <label htmlFor="retry-reason" className="block text-sm text-slate-300">
           {t('dlq.confirm.reason')}
           <textarea
+            id="retry-reason"
             value={reason}
             onChange={(event) => setReason(event.target.value)}
             rows={2}

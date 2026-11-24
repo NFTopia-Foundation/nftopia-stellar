@@ -54,6 +54,22 @@ type ContractExecutionResult = {
   error?: unknown;
 };
 
+export const DEFAULT_GAS_ESTIMATE_TTL_SECONDS = 30;
+
+export interface CachedGasEstimate {
+  estimatedGas: number;
+  cachedAt: string;
+  expiresAt: string;
+}
+
+export interface GasEstimateResult {
+  id: number;
+  contractTxId: string;
+  estimatedGas: number;
+  cachedAt: string;
+  expiresAt: string;
+}
+
 @Injectable()
 export class TransactionService {
   private readonly logger = new Logger(TransactionService.name);
@@ -565,16 +581,59 @@ export class TransactionService {
     return saved;
   }
 
-  async estimateGas(id: number, callerId: string) {
+  getGasEstimateCacheKey(
+    id: number | string,
+    contractTxId: number | string,
+  ): string {
+    return `tx-gas-estimate:${id}:${contractTxId}`;
+  }
+
+  async estimateGas(id: number, callerId: string): Promise<GasEstimateResult> {
     const transaction = await this.findById(id, callerId);
+    const cacheKey = this.getGasEstimateCacheKey(
+      transaction.id,
+      transaction.contractTxId,
+    );
+
+    const cached = await this.cacheManager.get<CachedGasEstimate>(cacheKey);
+    if (cached && typeof cached.estimatedGas === 'number') {
+      return {
+        id: transaction.id,
+        contractTxId: transaction.contractTxId,
+        estimatedGas: cached.estimatedGas,
+        cachedAt: cached.cachedAt,
+        expiresAt: cached.expiresAt,
+      };
+    }
+
     const estimate = await this.txContract.estimateTransactionGas(
       Number(transaction.contractTxId),
     );
+
+    const ttlSeconds = Number(
+      this.configService.get<string | number>(
+        'TRANSACTION_GAS_ESTIMATE_TTL_SECONDS',
+      ) ?? DEFAULT_GAS_ESTIMATE_TTL_SECONDS,
+    );
+    const now = Date.now();
+    const ttlMs = ttlSeconds * 1000;
+    const cachedAt = new Date(now).toISOString();
+    const expiresAt = new Date(now + ttlMs).toISOString();
+
+    const payload: CachedGasEstimate = {
+      estimatedGas: estimate,
+      cachedAt,
+      expiresAt,
+    };
+
+    await this.cacheManager.set(cacheKey, payload, ttlMs);
 
     return {
       id: transaction.id,
       contractTxId: transaction.contractTxId,
       estimatedGas: estimate,
+      cachedAt,
+      expiresAt,
     };
   }
 
@@ -940,7 +999,7 @@ export class TransactionService {
     }
   }
 
-  private async applySettlement(transaction: Transaction): Promise<void> {
+  async applySettlement(transaction: Transaction): Promise<void> {
     const listingId = this.readStringMetadata(transaction, 'listingId');
     if (listingId) {
       const listing = await this.listingRepo.findOne({
@@ -1168,16 +1227,21 @@ export class TransactionService {
     return `tx-history:user:${userId}:${JSON.stringify(query || {})}`;
   }
 
-  private async invalidateCaches(transaction: Transaction): Promise<void> {
+  async invalidateCaches(transaction: Transaction): Promise<void> {
     const userHistoryKeys = [transaction.buyerId, transaction.sellerId]
       .filter((userId): userId is string => Boolean(userId))
       .map((userId) => this.getUserHistoryCacheKey(userId, {}));
+    const gasCacheKey = this.getGasEstimateCacheKey(
+      transaction.id,
+      transaction.contractTxId,
+    );
     await Promise.all([
       ...userHistoryKeys.map((key) => this.cacheManager.del(key)),
       this.cacheManager.del(`tx-history:nft:${transaction.nftId || ''}`),
       this.cacheManager.del(
         `tx-history:nft:${transaction.nftContractId}:${transaction.nftTokenId}`,
       ),
+      this.cacheManager.del(gasCacheKey),
     ]);
   }
 
