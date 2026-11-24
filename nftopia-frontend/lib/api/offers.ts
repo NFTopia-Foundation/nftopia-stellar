@@ -15,6 +15,12 @@ export type MarketplaceOffer = {
   status: "active" | "accepted" | "rejected" | "expired" | string;
 };
 
+export type AcceptOfferResult = {
+  offer: MarketplaceOffer;
+  /** Unsigned Soroban XDR to sign + broadcast when on-chain settlement is on. */
+  transactionXdr?: string;
+};
+
 const baseUrl = () =>
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "http://localhost:3001";
 
@@ -40,10 +46,19 @@ export async function fetchNftOffers(nftId: string): Promise<MarketplaceOffer[]>
   return Array.isArray(data) ? data : data.offers ?? [];
 }
 
-export async function acceptOffer(offerId: string): Promise<MarketplaceOffer> {
-  return jsonFetch(`/marketplace/offers/${encodeURIComponent(offerId)}/accept`, {
+export async function acceptOffer(offerId: string): Promise<AcceptOfferResult> {
+  const data = await jsonFetch<
+    { offer?: MarketplaceOffer; transactionXdr?: string } | MarketplaceOffer
+  >(`/marketplace/offers/${encodeURIComponent(offerId)}/accept`, {
     method: "PUT",
   });
+  // Backend returns `{ offer, transactionXdr? }` when on-chain settlement is
+  // enabled; tolerate a bare offer payload for backward compatibility.
+  if (data && typeof data === "object" && "offer" in data) {
+    const payload = data as { offer: MarketplaceOffer; transactionXdr?: string };
+    return { offer: payload.offer, transactionXdr: payload.transactionXdr };
+  }
+  return { offer: data as MarketplaceOffer };
 }
 
 export async function createOffer(input: {

@@ -2,12 +2,18 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { acceptOffer, fetchNftOffers, type MarketplaceOffer } from "@/lib/api/offers";
+import { useStellarTransaction } from "@/components/wallet/hooks/useStellarTransaction";
+import { useWalletStore } from "@/stores/walletStore";
 
 export function useNftOffers(nftId: string | null | undefined) {
   const [offers, setOffers] = useState<MarketplaceOffer[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
+
+  const provider = useWalletStore((state) => state.provider);
+  const network = useWalletStore((state) => state.network);
+  const { signAndSubmit } = useStellarTransaction(provider, network, "other");
 
   const refresh = useCallback(async () => {
     if (!nftId) return;
@@ -33,7 +39,13 @@ export function useNftOffers(nftId: string | null | undefined) {
       setAcceptingId(offerId);
       setError(null);
       try {
-        await acceptOffer(offerId);
+        const { transactionXdr } = await acceptOffer(offerId);
+        // When on-chain settlement is enabled the backend returns an unsigned
+        // Soroban XDR; route it through the wallet signing flow (the same path
+        // used for mint/list/buy) before refreshing the offer list.
+        if (transactionXdr) {
+          await signAndSubmit(transactionXdr);
+        }
         await refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Accept failed");
@@ -42,7 +54,7 @@ export function useNftOffers(nftId: string | null | undefined) {
         setAcceptingId(null);
       }
     },
-    [refresh],
+    [refresh, signAndSubmit],
   );
 
   return { offers, loading, error, refresh, accept, acceptingId };

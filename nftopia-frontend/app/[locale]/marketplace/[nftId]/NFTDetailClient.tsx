@@ -27,6 +27,7 @@ import TransferHistory from "@/components/nft/TransferHistory";
 import { FavoriteButton } from "@/components/ui/FavoriteButton";
 import { ReportButton } from "@/src/components/ReportButton";
 import { useRecentlyViewedStore } from "@/lib/stores/recently-viewed-store";
+import { useWalletStore } from "@/stores/walletStore";
 
 // Helper function to format address
 function formatAddress(address: string | null | undefined): string {
@@ -130,6 +131,7 @@ export default function NFTDetailClient({
   initialNft: any;
 }) {
   const t = useTranslations("common");
+  const walletAddress = useWalletStore((state) => state.address);
 
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
   const [transferHistoryPage, setTransferHistoryPage] = useState(1);
@@ -239,6 +241,11 @@ export default function NFTDetailClient({
   const creatorProfileSlug =
     nft.creator?.username || nft.creator?.id || creatorAddress;
   const ownerAddress = nft.owner?.walletAddress || nft.owner?.id || "Unknown";
+
+  // The connected wallet can manage incoming offers only when it is the owner.
+  const isOwner =
+    !!walletAddress &&
+    (walletAddress === nft.owner?.walletAddress || walletAddress === nft.owner?.id);
 
   return (
     <main className="min-h-screen relative text-white overflow-hidden">
@@ -449,6 +456,9 @@ export default function NFTDetailClient({
             showHeader={true}
           />
         </div>
+
+        {/* Incoming offers (#756) — visible to all, actionable by the owner. */}
+        <IncomingOffersPanel nftId={nftId} isOwner={isOwner} />
       </div>
     </main>
   );

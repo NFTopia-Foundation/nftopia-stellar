@@ -9,6 +9,7 @@ import {
   useTransactionStore,
 } from "@/lib/stores/transaction-store";
 import { retryTrackedTransaction } from "@/lib/hooks/useTransactionTracker";
+import { PurchaseReceipt } from "@/components/marketplace/PurchaseReceipt";
 
 const FILTERS: Array<{ value: "all" | TransactionStatus; label: string }> = [
   { value: "all", label: "All" },
@@ -24,10 +25,15 @@ const STATUS_LABELS: Record<TransactionStatus, string> = {
   failed: "Failed",
 };
 
+// A real Stellar transaction hash is 64 hex chars. Locally recorded purchases
+// without an on-chain hash keep a reference id instead of an explorer link.
+const isExplorerHash = (hash: string) => /^[0-9a-f]{64}$/i.test(hash);
+
 export default function TransactionsPage() {
   const transactions = useTransactionStore((state) => state.transactions);
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["value"]>("all");
   const [retrying, setRetrying] = useState<string | null>(null);
+  const [openReceipt, setOpenReceipt] = useState<string | null>(null);
   const visibleTransactions = transactions.filter((transaction) => {
     if (filter === "all") return true;
     if (filter === "pending") {
@@ -88,16 +94,42 @@ export default function TransactionsPage() {
                 <time className="mt-1 block text-xs text-slate-400" dateTime={transaction.submittedAt}>
                   {new Date(transaction.submittedAt).toLocaleString()}
                 </time>
-                <Link
-                  href={getExplorerUrl(transaction.network, transaction.hash)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-2 inline-flex max-w-full items-center gap-1 truncate font-mono text-xs text-cyan-200 hover:text-cyan-100"
-                >
-                  <span className="truncate">{transaction.hash}</span>
-                  <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
-                  <span className="sr-only">View on Stellar Expert</span>
-                </Link>
+                {isExplorerHash(transaction.hash) && (
+                  <Link
+                    href={getExplorerUrl(transaction.network, transaction.hash)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 inline-flex max-w-full items-center gap-1 truncate font-mono text-xs text-cyan-200 hover:text-cyan-100"
+                  >
+                    <span className="truncate">{transaction.hash}</span>
+                    <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
+                    <span className="sr-only">View on Stellar Expert</span>
+                  </Link>
+                )}
+                {transaction.receipt && (
+                  <div className="mt-2">
+                    <button
+                      type="button"
+                      data-testid={`view-receipt-${transaction.hash}`}
+                      onClick={() =>
+                        setOpenReceipt((current) =>
+                          current === transaction.hash ? null : transaction.hash,
+                        )
+                      }
+                      className="text-xs font-medium text-purple-200 underline hover:text-purple-100"
+                    >
+                      {openReceipt === transaction.hash ? "Hide receipt" : "View receipt"}
+                    </button>
+                    {openReceipt === transaction.hash && (
+                      <div
+                        className="mt-3"
+                        data-testid={`transaction-receipt-${transaction.hash}`}
+                      >
+                        <PurchaseReceipt receipt={transaction.receipt} />
+                      </div>
+                    )}
+                  </div>
+                )}
                 {transaction.error && <p className="mt-1 text-xs text-red-200">{transaction.error}</p>}
               </div>
               {transaction.status === "failed" && transaction.signedXdr && (

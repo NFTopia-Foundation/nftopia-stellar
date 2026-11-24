@@ -4,6 +4,7 @@ import { PurchaseModal } from "../PurchaseModal";
 
 const mockPush = jest.fn();
 const mockBuyNFT = jest.fn();
+let mockBalance = 1000;
 
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
@@ -27,7 +28,7 @@ jest.mock("@/lib/stores", () => ({
 
 jest.mock("@/hooks/useWalletBalance", () => ({
   useWalletBalance: () => ({
-    getBalance: () => 1000,
+    getBalance: () => mockBalance,
     loading: false,
     error: null,
     balances: [],
@@ -46,6 +47,7 @@ jest.mock("@/components/wallet/TransactionFeePreview", () => ({
 describe("PurchaseModal (#754 #755 #757)", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockBalance = 1000;
   });
 
   it("renders checkout stepper stages", () => {
@@ -109,21 +111,28 @@ describe("PurchaseModal (#754 #755 #757)", () => {
 
 describe("PurchaseModal insufficient balance (#755)", () => {
   beforeEach(() => {
-    jest.resetModules();
+    jest.clearAllMocks();
+    mockBalance = 1000;
   });
 
-  it("blocks purchase when underfunded", async () => {
-    jest.doMock("@/hooks/useWalletBalance", () => ({
-      useWalletBalance: () => ({
-        getBalance: () => 0.01,
-        loading: false,
-        error: null,
-        balances: [],
-        refresh: jest.fn(),
-      }),
-    }));
-    // Re-require with mock is heavy in jest without isolate; assert via precheck message by re-render pattern:
-    // Primary suite uses rich balance; underfunded covered in useWalletBalance unit tests.
-    expect(true).toBe(true);
+  it("blocks purchase when underfunded", () => {
+    // Price 10 + default XLM reserve 1 => required 11, wallet holds 0.01.
+    mockBalance = 0.01;
+    render(
+      <PurchaseModal
+        isOpen
+        onClose={jest.fn()}
+        listingId="l1"
+        nftName="Orb"
+        nftImage="/o.png"
+        price="10"
+        currency="XLM"
+      />,
+    );
+
+    const precheck = screen.getByTestId("balance-precheck");
+    expect(precheck).toHaveTextContent(/insufficient balance/i);
+    expect(precheck).toHaveTextContent(/10\.99/);
+    expect(screen.getByTestId("confirm-purchase-btn")).toBeDisabled();
   });
 });

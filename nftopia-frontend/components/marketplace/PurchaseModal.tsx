@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import { TransactionFeePreview } from "@/components/wallet/TransactionFeePreview";
 import { useWalletBalance } from "@/hooks/useWalletBalance";
 import { PurchaseReceipt, type PurchaseReceiptData } from "@/components/marketplace/PurchaseReceipt";
+import { useTransactionStore } from "@/lib/stores/transaction-store";
 import type { StellarNetwork } from "@/types/stellar";
 
 export type CheckoutStep = "review" | "sign" | "submit" | "confirmed" | "failed";
@@ -122,6 +123,18 @@ export function PurchaseModal({
           txHash,
         };
         setReceipt(receiptData);
+        // Track the purchase so its receipt stays viewable from the
+        // transactions page (#757). Fall back to a local reference when the
+        // API does not surface an on-chain hash.
+        useTransactionStore.getState().addTransaction({
+          hash: txHash ?? `purchase-${listingId}-${Date.now()}`,
+          type: "buy",
+          network: network ?? "testnet",
+          status: "confirmed",
+          submittedAt: receiptData.timestamp,
+          updatedAt: receiptData.timestamp,
+          receipt: receiptData,
+        });
         showSuccess(`You have successfully purchased ${nftName}!`);
       } else {
         setStep("failed");
