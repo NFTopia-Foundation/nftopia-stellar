@@ -13,6 +13,8 @@ const UsersPage = lazy(() => import('./pages/UsersPage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 const ContentFlagsQueuePage = lazy(() => import('./pages/ContentFlagsQueuePage'))
 const TransactionRetryPage = lazy(() => import('./pages/TransactionRetryPage'))
+const AiUsagePage = lazy(() => import('./pages/AiUsagePage'))
+const AuditLogsPage = lazy(() => import('./pages/AuditLogsPage'))
 
 /** Minimal loading indicator shown during lazy-page suspense. */
 function PageSpinner() {
@@ -68,6 +70,8 @@ function App() {
             {dlqAllowed ? (
               <Route path="/transaction-retry" element={<TransactionRetryPage />} />
             ) : null}
+            <Route path="/ai-usage" element={<AiUsagePage />} />
+            <Route path="/audit-logs" element={<AuditLogsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             {/* Catch-all: redirect unknown paths back to dashboard */}
             <Route path="*" element={<Navigate to="/dashboard" replace />} />

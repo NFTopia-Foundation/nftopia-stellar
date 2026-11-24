@@ -69,6 +69,8 @@
     "settings": "Settings",
     "contentFlags": "Content Flags",
     "transactionRetry": "Transaction Retries",
+    "aiUsage": "AI Usage",
+    "auditLogs": "Audit Logs",
     "collectionVerification": "Collection Verification"
   },
   "shell": {
@@ -260,6 +262,25 @@
       "reject": "Collection successfully rejected."
     }
   },
+  "auditLogs": {
+    "title": "Audit logs",
+    "description": "Filter administrative actions by actor, action, entity, and date range.",
+    "empty": "No audit entries match these filters.",
+    "filters": { "admin": "Admin user", "action": "Action type", "allActions": "All actions", "entityType": "Entity type", "entityId": "Entity ID", "startDate": "Start date", "endDate": "End date" },
+    "columns": { "created": "Created", "admin": "Admin", "action": "Action", "entityType": "Entity type", "entityId": "Entity ID" },
+    "pagination": { "label": "Audit log pages", "previous": "Previous", "next": "Next", "status": "Page {{page}} of {{pages}}" },
+    "error": { "load": "Unable to load audit logs." }
+  },
+  "aiUsage": {
+    "title": "AI usage and cost",
+    "description": "Inspect per-user AI consumption, manage cap overrides, and review tool calls.",
+    "health": { "loading": "Checking AI health", "up": "AI healthy", "down": "AI unavailable", "unconfigured": "AI not configured" },
+    "lookup": { "title": "Per-user usage", "userId": "User ID", "submit": "Look up", "loading": "Loading…", "daily": "Daily", "monthly": "Monthly", "tokens": "Tokens", "cap": "Cap", "cost": "Estimated cost", "remaining": "Remaining" },
+    "override": { "set": "Set override", "setTitle": "Set AI cap override", "setDescription": "Replace the selected cap values for this user.", "clear": "Clear override", "clearTitle": "Clear AI cap override", "clearDescription": "This restores the environment-configured caps for the user.", "daily": "Daily token cap", "monthly": "Monthly token cap" },
+    "aggregate": { "title": "Platform-wide usage", "dependency": "Platform-wide aggregation is not available yet. It requires a backend aggregate endpoint over AI usage records." },
+    "logs": { "title": "Tool call log", "empty": "No AI tool calls found.", "success": "Success", "failed": "Failed", "columns": { "tool": "Tool", "user": "User", "session": "Session", "status": "Status", "created": "Created" } },
+    "error": { "usage": "Unable to load AI usage for this user.", "logs": "Unable to load AI tool logs.", "override": "Unable to update the AI cap override." }
+  },
   "dlq": {
     "title": "Transaction retries",
     "description": "Failed settlements that exhausted their retries land in the dead-letter queue (DLQ). Inspect them, retry them, or cancel a retry that was re-queued.",
@@ -276,8 +297,16 @@
       "total": "All retries",
       "trendTitle": "Entries into the DLQ, last 7 days (UTC)",
       "trendNote": "Based on the newest {{count}} DLQ entries.",
+      "reasonsTitle": "Top failure reasons",
       "recentTitle": "Recent DLQ activity",
       "recentItem": "Transaction #{{tx}} · retry {{id}}"
+    },
+    "reasons": {
+      "timeout": "Timeout",
+      "insufficient_balance": "Insufficient balance",
+      "contract_error": "Contract error",
+      "rpc_unavailable": "RPC unavailable",
+      "other": "Other"
     },
     "status": {
       "pending": "Pending",

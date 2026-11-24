@@ -17,6 +17,7 @@ import { RequestUser } from '../common/audit/audit.decorator';
 import type { Request } from 'express';
 import { ListUsersQueryDto } from './dto/list-users-query.dto';
 import { BanUserDto } from './dto/ban-user.dto';
+import { AuditLogsQueryDto } from './dto/audit-logs-query.dto';
 
 interface AuthUser {
   userId: string;
@@ -32,6 +33,12 @@ export class AdminController {
   @Roles(UserRole.ADMIN, UserRole.MODERATOR)
   async listUsers(@Query() query: ListUsersQueryDto) {
     return this.adminService.listUsers(query);
+  }
+
+  @Get('audit-logs')
+  @Roles(UserRole.ADMIN, UserRole.MODERATOR)
+  async listAuditLogs(@Query() query: AuditLogsQueryDto) {
+    return this.adminService.listAuditLogs(query);
   }
 
   @Get('users/:id')

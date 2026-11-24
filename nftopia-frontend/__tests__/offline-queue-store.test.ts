@@ -102,13 +102,20 @@ describe("offline action queue store", () => {
     configureOfflineQueue({ dispatcher, scheduler });
     useOfflineActionQueue.getState().enqueue(favoriteInput("retry-me"));
 
+    const before = Date.now();
     await useOfflineActionQueue.getState().replay();
 
     expect(dispatcher).toHaveBeenCalledTimes(1);
     const failedOnce = useOfflineActionQueue.getState().actions[0];
     expect(failedOnce.status).toBe("pending");
     expect(failedOnce.attempts).toBe(1);
-    expect(failedOnce.nextAttemptAt).toBeGreaterThan(Date.now() - 1);
+    // nextAttemptAt is computed as Date.now() + retryDelay() (1ms here)
+    // partway through replay(), so it's always >= `before`. Comparing
+    // against a fresh Date.now() taken after replay() resolves is a race:
+    // on a slow run, enough real wall-clock time can pass between that
+    // internal computation and this assertion to make nextAttemptAt look
+    // like it's already in the past.
+    expect(failedOnce.nextAttemptAt).toBeGreaterThanOrEqual(before);
     expect(failedOnce.lastError).toBeTruthy();
     expect(scheduler).toHaveBeenCalled();
 
