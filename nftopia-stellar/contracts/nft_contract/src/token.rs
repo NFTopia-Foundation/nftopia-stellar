@@ -189,6 +189,7 @@ fn mint_one(
     total_editions: Option<u32>,
 ) -> Result<u64, ContractError> {
     check_supply(env)?;
+    crate::royalty::validate_royalty_override(env, caller, &royalty_override)?;
 
     let token_id = next_token_id(env);
     let default_royalty: RoyaltyInfo = env

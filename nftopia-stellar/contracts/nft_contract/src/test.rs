@@ -342,6 +342,163 @@ fn test_royalty_info() {
 }
 
 #[test]
+fn test_mint_royalty_override_at_exact_cap_succeeds() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let user = Address::generate(&env);
+    let override_royalty = RoyaltyInfo {
+        recipient: admin.clone(), // matches DefaultRoyalty's own recipient
+        percentage: crate::storage::MAX_ROYALTY_BPS,
+    };
+    let token_id = client.mint(
+        &admin,
+        &user,
+        &String::from_str(&env, "ipfs://hash"),
+        &Vec::new(&env),
+        &Some(override_royalty),
+    );
+
+    let (recipient, amount) = client.get_royalty_info(&token_id, &10_000i128);
+    assert_eq!(recipient, admin);
+    assert_eq!(amount, 10_000i128); // 100% of 10_000
+}
+
+#[test]
+fn test_mint_royalty_override_exceeding_cap_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let user = Address::generate(&env);
+    let override_royalty = RoyaltyInfo {
+        recipient: admin.clone(),
+        percentage: crate::storage::MAX_ROYALTY_BPS + 1,
+    };
+
+    match client.try_mint(
+        &admin,
+        &user,
+        &String::from_str(&env, "ipfs://hash"),
+        &Vec::new(&env),
+        &Some(override_royalty),
+    ) {
+        Err(Ok(error)) => assert_eq!(error, crate::error::ContractError::InvalidRoyalty),
+        other => panic!("Expected InvalidRoyalty, got: {:?}", other),
+    }
+    assert_eq!(client.total_supply(), 0); // rejected mint must not have persisted a token
+}
+
+#[test]
+fn test_mint_without_override_falls_back_to_default_royalty() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let user = Address::generate(&env);
+    let token_id = client.mint(
+        &admin,
+        &user,
+        &String::from_str(&env, "ipfs://hash"),
+        &Vec::new(&env),
+        &None,
+    );
+
+    // setup()'s DefaultRoyalty is {recipient: admin, percentage: 500} (5%).
+    let (recipient, amount) = client.get_royalty_info(&token_id, &10_000i128);
+    assert_eq!(recipient, admin);
+    assert_eq!(amount, 500i128);
+}
+
+#[test]
+fn test_mint_royalty_override_rejects_mismatched_recipient_from_plain_minter() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let minter = Address::generate(&env);
+    client.grant_role(&admin, &minter, &crate::types::role::MINTER);
+
+    let user = Address::generate(&env);
+    let attacker_payout = Address::generate(&env);
+    let override_royalty = RoyaltyInfo {
+        recipient: attacker_payout, // diverges from DefaultRoyalty's recipient (admin)
+        percentage: 100,
+    };
+
+    match client.try_mint(
+        &minter,
+        &user,
+        &String::from_str(&env, "ipfs://hash"),
+        &Vec::new(&env),
+        &Some(override_royalty),
+    ) {
+        Err(Ok(error)) => assert_eq!(error, crate::error::ContractError::NotAuthorized),
+        other => panic!("Expected NotAuthorized, got: {:?}", other),
+    }
+    assert_eq!(client.total_supply(), 0);
+}
+
+#[test]
+fn test_mint_royalty_override_allows_matching_recipient_from_plain_minter() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let minter = Address::generate(&env);
+    client.grant_role(&admin, &minter, &crate::types::role::MINTER);
+
+    let user = Address::generate(&env);
+    // A plain minter may still tune the percentage per token, as long as the
+    // recipient matches DefaultRoyalty's own recipient.
+    let override_royalty = RoyaltyInfo {
+        recipient: admin.clone(),
+        percentage: 1_000, // 10%, different from setup()'s 5% default
+    };
+
+    let token_id = client.mint(
+        &minter,
+        &user,
+        &String::from_str(&env, "ipfs://hash"),
+        &Vec::new(&env),
+        &Some(override_royalty),
+    );
+
+    let (recipient, amount) = client.get_royalty_info(&token_id, &10_000i128);
+    assert_eq!(recipient, admin);
+    assert_eq!(amount, 1_000i128);
+}
+
+#[test]
+fn test_mint_royalty_override_allows_mismatched_recipient_from_admin() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let user = Address::generate(&env);
+    let new_recipient = Address::generate(&env);
+    let override_royalty = RoyaltyInfo {
+        recipient: new_recipient.clone(),
+        percentage: 250,
+    };
+
+    // admin has OWNER/ADMIN role from initialize(), so a mismatched
+    // recipient is allowed.
+    let token_id = client.mint(
+        &admin,
+        &user,
+        &String::from_str(&env, "ipfs://hash"),
+        &Vec::new(&env),
+        &Some(override_royalty),
+    );
+
+    let (recipient, amount) = client.get_royalty_info(&token_id, &10_000i128);
+    assert_eq!(recipient, new_recipient);
+    assert_eq!(amount, 250i128);
+}
+
+#[test]
 fn test_freeze_metadata() {
     let env = Env::default();
     env.mock_all_auths();
