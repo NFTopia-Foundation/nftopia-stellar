@@ -14,6 +14,7 @@ use crate::dependency_resolver;
 use crate::security::permission_checker;
 use crate::security::resource_guard;
 use crate::security::validation_engine;
+use crate::state_machine;
 use crate::storage::state_store;
 use crate::utils::error_handler;
 use crate::utils::gas_calculator;
@@ -49,6 +50,7 @@ impl TransactionContract {
             error_reason: None,
             rollback_operations: Vec::new(&env),
             signatures: Vec::new(&env),
+            required_signers: Vec::new(&env),
             metadata,
         };
 
@@ -259,6 +261,7 @@ impl TransactionContract {
                 error_reason: None,
                 rollback_operations: Vec::new(&env),
                 signatures: Vec::new(&env),
+                required_signers: Vec::new(&env),
                 metadata: blueprint.metadata.clone(),
             };
             storage::save_transaction(&env, &tx);
@@ -303,6 +306,16 @@ impl TransactionContract {
         })
     }
 
+    /// Records a signature from `signer` (#738).
+    ///
+    /// `signer.require_auth()` is the actual, cryptographically-enforced
+    /// authorization check — it proves `signer` authorized this exact
+    /// invocation (this `transaction_id`, this `signature` payload) for
+    /// the current ledger, which is strictly stronger than anything a
+    /// manually-verified detached signature could add on top. `signature`
+    /// itself is therefore kept only as an off-chain-supplied audit record
+    /// of what the caller submitted — it is never independently verified
+    /// on-chain, and is not the authorization mechanism.
     pub fn add_signature(
         env: Env,
         transaction_id: u64,
@@ -312,6 +325,14 @@ impl TransactionContract {
         let mut tx = storage::load_transaction(&env, transaction_id)
             .ok_or(TransactionError::TransactionNotFound)?;
         signer.require_auth();
+
+        if state_machine::is_final(&tx.state) {
+            return Err(TransactionError::AlreadyFinalized);
+        }
+
+        if tx.signatures.iter().any(|r| r.signer == signer) {
+            return Err(TransactionError::DuplicateSignature);
+        }
 
         let signature_record = SignatureRecord {
             signer,
@@ -324,12 +345,45 @@ impl TransactionContract {
         Ok(())
     }
 
+    /// Sets the signers `verify_signatures` requires beyond `creator`
+    /// (#738). Creator-only, and only while the transaction can still
+    /// collect signatures (same window as `add_operation`).
+    pub fn set_required_signers(
+        env: Env,
+        transaction_id: u64,
+        signers: Vec<Address>,
+    ) -> Result<(), TransactionError> {
+        let mut tx = storage::load_transaction(&env, transaction_id)
+            .ok_or(TransactionError::TransactionNotFound)?;
+        storage::require_creator_auth(&tx.creator);
+
+        if tx.state != TransactionState::Draft && tx.state != TransactionState::Pending {
+            return Err(TransactionError::InvalidStateTransition);
+        }
+
+        tx.required_signers = signers;
+        storage::save_transaction(&env, &tx);
+        Ok(())
+    }
+
+    /// Checks that every required signer — `creator`, plus every address in
+    /// `required_signers` — has a recorded signature (#738). Previously
+    /// this only checked that `tx.signatures` was non-empty, so a signature
+    /// from *any* address, required or not, satisfied it.
     pub fn verify_signatures(env: Env, transaction_id: u64) -> Result<bool, TransactionError> {
         let tx = storage::load_transaction(&env, transaction_id)
             .ok_or(TransactionError::TransactionNotFound)?;
 
-        if tx.signatures.is_empty() {
+        let has_signed = |addr: &Address| tx.signatures.iter().any(|r| &r.signer == addr);
+
+        if !has_signed(&tx.creator) {
             return Err(TransactionError::SignatureMissing);
+        }
+
+        for required in tx.required_signers.iter() {
+            if !has_signed(&required) {
+                return Err(TransactionError::SignatureMissing);
+            }
         }
 
         Ok(true)

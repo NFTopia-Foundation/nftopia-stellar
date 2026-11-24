@@ -24,4 +24,7 @@ pub enum TransactionError {
     TtlExpired = 14,
     /// An operator-provided configuration (TTL policy / fee ladder) is invalid.
     InvalidConfiguration = 15,
+    /// `add_signature` was called twice for the same signer on the same
+    /// transaction (#738).
+    DuplicateSignature = 16,
 }
