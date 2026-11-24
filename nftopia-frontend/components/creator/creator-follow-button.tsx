@@ -1,9 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation } from "@apollo/client";
 import { Loader2 } from "lucide-react";
 import { useTranslation } from "@/hooks/useTranslation";
+import { isBrowserOnline } from "@/lib/offline-queue/connectivity";
+import { classifyReplayError } from "@/lib/offline-queue/errors";
+import {
+  FOLLOW_STATE_EVENT,
+  FollowStateEventDetail,
+} from "@/lib/offline-queue/optimistic";
+import { useOfflineActionQueue } from "@/lib/offline-queue/store";
 import { useAuthStore } from "@/lib/stores/auth-store";
 import { useStellarWallet } from "@/components/wallet/hooks/useStellarWallet";
 import { WalletModal } from "@/components/wallet/WalletModal";
@@ -33,6 +40,38 @@ export function CreatorFollowButton({
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [isFollowing, setIsFollowing] = useState(initialFollowing);
   const [followerCount, setFollowerCount] = useState(initialFollowerCount);
+  const enqueue = useOfflineActionQueue((state) => state.enqueue);
+
+  // Conflict resolution ("Use server") emits authoritative state; keep the
+  // button in sync with the rest of the app (#663).
+  useEffect(() => {
+    const handleServerState = (event: Event) => {
+      const detail = (event as CustomEvent<FollowStateEventDetail>).detail;
+      if (detail?.creatorId !== creatorId) return;
+      setIsFollowing(detail.following);
+      if (typeof detail.followerCount === "number") {
+        setFollowerCount(detail.followerCount);
+      }
+    };
+    window.addEventListener(FOLLOW_STATE_EVENT, handleServerState);
+    return () => window.removeEventListener(FOLLOW_STATE_EVENT, handleServerState);
+  }, [creatorId]);
+
+  const surfaceConflict = (error: unknown, following: boolean) => {
+    const failure = classifyReplayError(error);
+    if (failure.kind !== "conflict" || !failure.conflict) return;
+    const queue = useOfflineActionQueue.getState();
+    const queued = queue.enqueue({
+      type: "follow",
+      payload: {
+        creatorId,
+        following,
+        previousFollowing: initialFollowing,
+        previousFollowerCount: initialFollowerCount,
+      },
+    });
+    queue.markConflict(queued.id, failure.conflict);
+  };
 
   const [followCreator, followState] = useMutation(FOLLOW_CREATOR_MUTATION, {
     optimisticResponse: {
@@ -47,9 +86,10 @@ export function CreatorFollowButton({
       setIsFollowing(data.followCreator.isFollowing);
       setFollowerCount(data.followCreator.followerCount);
     },
-    onError: () => {
+    onError: (error) => {
       setIsFollowing(initialFollowing);
       setFollowerCount(initialFollowerCount);
+      surfaceConflict(error, true);
     },
   });
 
@@ -68,9 +108,10 @@ export function CreatorFollowButton({
         setIsFollowing(data.unfollowCreator.isFollowing);
         setFollowerCount(data.unfollowCreator.followerCount);
       },
-      onError: () => {
+      onError: (error) => {
         setIsFollowing(initialFollowing);
         setFollowerCount(initialFollowerCount);
+        surfaceConflict(error, false);
       },
     },
   );
@@ -84,15 +125,32 @@ export function CreatorFollowButton({
       return;
     }
 
-    if (isFollowing) {
-      setIsFollowing(false);
-      setFollowerCount((count) => Math.max(0, count - 1));
-      await unfollowCreator({ variables: { creatorId } });
+    const nextFollowing = !isFollowing;
+    const previousCount = followerCount;
+
+    // Optimistic local update, shared by the online and offline paths.
+    setIsFollowing(nextFollowing);
+    setFollowerCount((count) =>
+      nextFollowing ? count + 1 : Math.max(0, count - 1),
+    );
+
+    if (!isBrowserOnline()) {
+      enqueue({
+        type: "follow",
+        payload: {
+          creatorId,
+          following: nextFollowing,
+          previousFollowing: isFollowing,
+          previousFollowerCount: previousCount,
+        },
+      });
       return;
     }
 
-    setIsFollowing(true);
-    setFollowerCount((count) => count + 1);
+    if (!nextFollowing) {
+      await unfollowCreator({ variables: { creatorId } });
+      return;
+    }
     await followCreator({ variables: { creatorId } });
   };
 

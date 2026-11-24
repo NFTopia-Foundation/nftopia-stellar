@@ -4,6 +4,7 @@ extern crate std;
 
 use soroban_sdk::{Address, Env, String, Vec, map, testutils::Address as _, vec};
 
+use crate::error::TransactionError;
 use crate::transaction_core::{TransactionContract, TransactionContractClient};
 use crate::types::{GasOptimizationConfig, RecoveryStrategy, TransactionBlueprint};
 use crate::{Operation, OperationType, ParamType, Parameter, TransactionState};
@@ -231,10 +232,11 @@ fn add_and_verify_signature() {
     let (client, creator) = make_client(&env);
 
     let tx_id = client.create_transaction(&creator, &map![&env], &vec![&env]);
-    let signer = Address::generate(&env);
     let sig_bytes = soroban_sdk::Bytes::from_slice(&env, &[0xde, 0xad, 0xbe, 0xef]);
 
-    client.add_signature(&tx_id, &signer, &sig_bytes);
+    // verify_signatures requires the creator's own signature at minimum
+    // (#738) — a signature from an unrelated address is not enough.
+    client.add_signature(&tx_id, &creator, &sig_bytes);
     let verified = client.verify_signatures(&tx_id);
     assert!(verified);
 }
@@ -248,6 +250,83 @@ fn verify_signatures_panics_when_none_added() {
     let tx_id = client.create_transaction(&creator, &map![&env], &vec![&env]);
     // No signatures added → should panic/err
     let _ = client.verify_signatures(&tx_id);
+}
+
+// ── Signature hardening (#738) ──────────────────────────────────────────────
+
+#[test]
+fn verify_signatures_fails_when_a_non_creator_signature_stands_in() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, creator) = make_client(&env);
+
+    let tx_id = client.create_transaction(&creator, &map![&env], &vec![&env]);
+    let unrelated = Address::generate(&env);
+    let sig_bytes = soroban_sdk::Bytes::from_slice(&env, &[0x01]);
+    client.add_signature(&tx_id, &unrelated, &sig_bytes);
+
+    // The old behavior ("any signature satisfies verify_signatures") is
+    // exactly the bug #738 fixes — the creator never signed, so this must
+    // fail even though a signature exists.
+    assert_eq!(
+        client.try_verify_signatures(&tx_id),
+        Err(Ok(TransactionError::SignatureMissing))
+    );
+}
+
+#[test]
+fn verify_signatures_requires_every_configured_required_signer() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, creator) = make_client(&env);
+
+    let tx_id = client.create_transaction(&creator, &map![&env], &vec![&env]);
+    let cosigner = Address::generate(&env);
+    client.set_required_signers(&tx_id, &vec![&env, cosigner.clone()]);
+
+    let sig_bytes = soroban_sdk::Bytes::from_slice(&env, &[0x02]);
+    client.add_signature(&tx_id, &creator, &sig_bytes);
+
+    // Creator has signed but the configured cosigner hasn't yet.
+    assert_eq!(
+        client.try_verify_signatures(&tx_id),
+        Err(Ok(TransactionError::SignatureMissing))
+    );
+
+    client.add_signature(&tx_id, &cosigner, &sig_bytes);
+    assert!(client.verify_signatures(&tx_id));
+}
+
+#[test]
+fn add_signature_rejects_a_duplicate_from_the_same_signer() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, creator) = make_client(&env);
+
+    let tx_id = client.create_transaction(&creator, &map![&env], &vec![&env]);
+    let sig_bytes = soroban_sdk::Bytes::from_slice(&env, &[0x03]);
+    client.add_signature(&tx_id, &creator, &sig_bytes);
+
+    assert_eq!(
+        client.try_add_signature(&tx_id, &creator, &sig_bytes),
+        Err(Ok(TransactionError::DuplicateSignature))
+    );
+}
+
+#[test]
+fn add_signature_rejects_signing_a_finalized_transaction() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, creator) = make_client(&env);
+
+    let tx_id = client.create_transaction(&creator, &map![&env], &vec![&env]);
+    client.cancel_transaction(&tx_id, &String::from_str(&env, "no longer needed"));
+
+    let sig_bytes = soroban_sdk::Bytes::from_slice(&env, &[0x04]);
+    assert_eq!(
+        client.try_add_signature(&tx_id, &creator, &sig_bytes),
+        Err(Ok(TransactionError::AlreadyFinalized))
+    );
 }
 
 // ── Recovery flow ───────────────────────────────────────────────────────────

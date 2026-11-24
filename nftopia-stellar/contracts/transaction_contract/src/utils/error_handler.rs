@@ -24,6 +24,7 @@ pub fn to_reason_string(env: &Env, err: &TransactionError) -> String {
         TransactionError::CircularDependency => "dependency graph contains a cycle",
         TransactionError::TtlExpired => "state ttl expired before execution",
         TransactionError::InvalidConfiguration => "invalid configuration",
+        TransactionError::DuplicateSignature => "duplicate signature from the same signer",
     };
     String::from_str(env, msg)
 }

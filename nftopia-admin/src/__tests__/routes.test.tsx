@@ -115,4 +115,22 @@ describe('admin app routing (#559)', () => {
 
     expect(screen.queryByRole('navigation', { name: 'Main navigation' })).toBeNull()
   })
+
+  it('redirects an unauthenticated visit to a protected route to /login (#698)', async () => {
+    window.history.pushState({}, '', '/users')
+
+    renderApp(makeStore({ status: 'unauthenticated', error: null, notice: null, pending: false }))
+
+    await waitFor(() => expect(window.location.pathname).toBe('/login'))
+    expect(screen.queryByRole('navigation', { name: 'Main navigation' })).toBeNull()
+  })
+
+  it('redirects an authenticated visit to /login back to /dashboard (#698)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({})))
+    window.history.pushState({}, '', '/login')
+
+    renderApp(makeStore(adminState))
+
+    await waitFor(() => expect(window.location.pathname).toBe('/dashboard'))
+  })
 })

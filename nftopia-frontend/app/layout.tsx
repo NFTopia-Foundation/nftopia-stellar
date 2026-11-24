@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import ExperimentProviderWrapper from '@/lib/experiments/ExperimentProvider';
 import { Toast } from '@/components/ui/toast';
 import UpdateToast from '@/components/ui/UpdateToast';
+import { OfflineQueueManager } from '@/components/offline/OfflineQueueManager';
 
 // ─── SAFE COMPILER SEPARATION ──────────────────────────────────────────
 // Pulling in your isolated TelemetryProvider file with SSR disabled.
@@ -100,6 +101,8 @@ export default function RootLayout({
           <UpdateToast />
           {/* Toast container */}
           <Toast />
+          {/* Offline write queue status + conflict resolution (#663) */}
+          <OfflineQueueManager />
         </ExperimentProviderWrapper>
       </body>
     </html>

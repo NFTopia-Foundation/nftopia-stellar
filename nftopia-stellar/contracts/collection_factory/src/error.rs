@@ -17,4 +17,5 @@ pub enum ContractError {
     InvalidRecipient = 11,
     TokenAlreadyExists = 12,
     MaxCollectionsExceeded = 13,
+    WasmHashNotAllowed = 14,
 }

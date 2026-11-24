@@ -469,6 +469,17 @@ pub struct FeeConfigUpdatedEvent {
     pub timestamp: u64,
 }
 
+/// Emitted by a successful `withdraw_platform_fees` call (#736).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FeeWithdrawnEvent {
+    pub asset: Asset,
+    pub amount: i128,
+    pub recipient: Address,
+    pub caller: Address,
+    pub timestamp: u64,
+}
+
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AdminConfigUpdatedEvent {
@@ -767,6 +778,12 @@ pub fn emit_fee_config_updated(env: &Env, event: FeeConfigUpdatedEvent) {
 pub fn emit_admin_config_updated(env: &Env, event: AdminConfigUpdatedEvent) {
     env.events()
         .publish(("MarketplaceSettlement", symbol_short!("admin_upd")), event);
+}
+
+#[allow(deprecated)]
+pub fn emit_fee_withdrawn(env: &Env, event: FeeWithdrawnEvent) {
+    env.events()
+        .publish(("MarketplaceSettlement", symbol_short!("fee_wdrw")), event);
 }
 
 #[allow(deprecated)]

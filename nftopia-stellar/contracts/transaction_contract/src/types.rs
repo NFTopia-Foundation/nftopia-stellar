@@ -115,6 +115,11 @@ pub struct Transaction {
     pub error_reason: Option<String>,
     pub rollback_operations: Vec<Operation>,
     pub signatures: Vec<SignatureRecord>,
+    /// Additional signers `verify_signatures` requires beyond `creator`
+    /// (#738). `creator` is always required and is never duplicated into
+    /// this list; it starts empty, meaning the minimum case — creator
+    /// only — applies until `set_required_signers` is called.
+    pub required_signers: Vec<Address>,
     pub metadata: Map<String, String>,
 }
 
