@@ -59,6 +59,8 @@ export interface CleanupResult {
 export interface DlqApi {
   getMetrics(): Promise<RetryMetrics>
   listDlq(page: number, limit: number): Promise<DlqPage>
+  getByTransactionId(transactionId: number | string): Promise<DlqEntry[]>
+  getRetry(retryId: string): Promise<DlqEntry | null>
   retryEntry(retryId: string, reason?: string): Promise<DlqEntry>
   bulkRetry(limit: number): Promise<BulkRetryResult>
   cancelRetry(retryId: string): Promise<void>
@@ -146,6 +148,22 @@ export function createDlqApi(fetchImpl: typeof fetch, baseUrl: string = API_BASE
       const query = new URLSearchParams({ page: String(Math.max(1, Math.floor(page))), limit: String(size) })
       const body = unwrapPayload<DlqPage>(await request(`/dlq?${query}`), 'total')
       return { data: body?.data ?? [], page: body?.page ?? page, limit: body?.limit ?? size, total: body?.total ?? 0 }
+    },
+
+    async getByTransactionId(transactionId) {
+      const id = String(transactionId).trim()
+      if (!/^\d+$/.test(id)) throw new DlqApiError(400, 'Transaction id must be numeric')
+      const body = await request<unknown>(`/transaction/${encodeURIComponent(id)}`)
+      const unwrapped = unwrapPayload<unknown[]>(body, 'retryId')
+      return Array.isArray(unwrapped) ? unwrapped as DlqEntry[] : []
+    },
+
+    async getRetry(retryId) {
+      const body = await request<unknown>(`/${encodeURIComponent(retryId)}`)
+      if (!body) return null
+      const candidate = unwrapPayload<DlqEntry>(body, 'retryId')
+      if (!candidate?.retryId) return null
+      return candidate
     },
 
     async retryEntry(retryId, reason) {

@@ -252,7 +252,7 @@
     "description": "Filtra acciones administrativas por actor, acción, entidad y rango de fechas.",
     "empty": "No hay entradas de auditoría que coincidan con estos filtros.",
     "filters": { "admin": "Usuario administrador", "action": "Tipo de acción", "allActions": "Todas las acciones", "entityType": "Tipo de entidad", "entityId": "ID de entidad", "startDate": "Fecha inicial", "endDate": "Fecha final" },
-    "columns": { "created": "Creado", "admin": "Administrador", "action": "Acción", "entityType": "Tipo de entidad", "entityId": "ID de entidad" },
+    "columns": { "created": "Creado", "admin": "Administrador", "action": "Acción", "entityType": "Tipo de entidad", "entityId": "ID de entidad", "ip": "Dirección IP", "userAgent": "Agente de usuario" },
     "pagination": { "label": "Páginas de auditoría", "previous": "Anterior", "next": "Siguiente", "status": "Página {{page}} de {{pages}}" },
     "error": { "load": "No se pudieron cargar los registros de auditoría." }
   },
@@ -274,6 +274,8 @@
     "forbidden": "No tienes acceso a las operaciones de reintento de transacciones.",
     "noError": "Sin error registrado",
     "listTitle": "Cola de mensajes fallidos ({{count}})",
+    "lookup": { "label": "Buscar ID de transacción", "submit": "Buscar", "loading": "Buscando…", "invalid": "El ID de transacción debe ser numérico.", "notFound": "No se encontró ningún reintento para ese ID de transacción." },
+    "detail": { "title": "Detalles de reintento para la transacción #{{tx}}", "explorer": "Ver transacción en Stellar Expert", "entered": "Ingresó", "nextRetry": "Próximo reintento", "attempt": "Intento {{attempt}}" },
     "metrics": {
       "title": "Métricas de reintentos",
       "dlqSize": "En la DLQ",

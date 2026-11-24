@@ -36,7 +36,7 @@ export class AdminController {
   }
 
   @Get('audit-logs')
-  @Roles(UserRole.ADMIN, UserRole.MODERATOR)
+  @Roles(UserRole.ADMIN)
   async listAuditLogs(@Query() query: AuditLogsQueryDto) {
     return this.adminService.listAuditLogs(query);
   }

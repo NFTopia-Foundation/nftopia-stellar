@@ -5,7 +5,8 @@ import { AuditAction } from '../common/audit/audit.service';
 // testnet URL even when STELLAR_HORIZON_URL is undefined (same pattern as
 // bid.service.spec.ts).
 jest.mock('stellar-sdk', () => {
-  const actual = jest.requireActual<typeof import('stellar-sdk')>('stellar-sdk');
+  const actual =
+    jest.requireActual<typeof import('stellar-sdk')>('stellar-sdk');
   return {
     ...actual,
     Horizon: {
@@ -152,9 +153,12 @@ describe('AdminService', () => {
     });
 
     it('returns a null balance for a wallet Horizon cannot resolve (#695)', async () => {
-      const { Horizon } = jest.requireMock<typeof import('stellar-sdk')>('stellar-sdk');
+      const { Horizon } =
+        jest.requireMock<typeof import('stellar-sdk')>('stellar-sdk');
       (Horizon.Server as jest.Mock).mockImplementationOnce(() => ({
-        loadAccount: jest.fn().mockRejectedValue(new Error('account not found')),
+        loadAccount: jest
+          .fn()
+          .mockRejectedValue(new Error('account not found')),
       }));
 
       const user = {
@@ -223,9 +227,9 @@ describe('AdminService', () => {
     it('throws BadRequestException if user is already banned', async () => {
       userRepository.findOne.mockResolvedValue({ id: 'u-1', isBanned: true });
 
-      await expect(
-        service.banUser('admin-1', 'u-1', 'Reason'),
-      ).rejects.toThrow(BadRequestException);
+      await expect(service.banUser('admin-1', 'u-1', 'Reason')).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 

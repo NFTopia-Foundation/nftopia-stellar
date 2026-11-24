@@ -10,6 +10,7 @@ import {
   Platform,
   ActivityIndicator,
   AccessibilityInfo,
+  Linking,
   AppState,
 } from 'react-native';
 import { useRoute, RouteProp } from '@react-navigation/native';
@@ -18,7 +19,85 @@ import { useAssistantStore, ChatMessage } from '@/stores/assistantStore';
 import type { AIUsage } from '@/stores/assistantStore';
 import { useAnalytics } from '@/src/hooks/useAnalytics';
 
-function MessageBubble({ item }: { item: ChatMessage }) {
+export interface StructuredAssistantReference {
+  kind: 'nft' | 'listing';
+  id: string;
+}
+
+export function isSafeExternalUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
+export function extractAssistantReferences(content: string): StructuredAssistantReference[] {
+  const matches = new Map<string, StructuredAssistantReference>();
+  const patterns: Array<[RegExp, 'nft' | 'listing']> = [
+    [/\bNFT(?:\s+ID)?[:/# ]+([a-zA-Z0-9_-]{6,})/gi, 'nft'],
+    [/\/nfts\/([a-zA-Z0-Z_-]{6,})/gi, 'nft'],
+    [/\bListing(?:\s+ID)?[:/# ]+([a-zA-Z0-9_-]{6,})/gi, 'listing'],
+    [/\/listings\/([a-zA-Z0-9_-]{6,})/gi, 'listing'],
+  ];
+  for (const [pattern, kind] of patterns) {
+    for (const match of content.matchAll(pattern)) {
+      const id = match[1];
+      matches.set(`${kind}:${id}`, { kind, id });
+    }
+  }
+  return [...matches.values()].slice(0, 5);
+}
+
+function AssistantLink({ href, children }: { href: string; children: React.ReactNode }) {
+  const open = () => {
+    if (isSafeExternalUrl(href)) void Linking.openURL(href);
+  };
+  return (
+    <Text style={styles.inlineLink} onPress={open} accessibilityRole="link">
+      {children}
+    </Text>
+  );
+}
+
+function MarkdownAssistantText({ content, streaming }: { content: string; streaming: boolean }) {
+  const lines = content.split('\n');
+  return (
+    <View>
+      {lines.map((line, index) => {
+        const heading = line.match(/^#{1,3}\s+(.*)$/);
+        if (heading) return <Text key={index} style={styles.markdownHeading}>{heading[1]}</Text>;
+        const bullet = line.match(/^[-*]\s+(.*)$/);
+        if (bullet) return <Text key={index} style={styles.markdownBullet}>• {bullet[1]}</Text>;
+        const link = line.match(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/);
+        if (link) {
+          const [before, after] = line.split(link[0]);
+          return (
+            <Text key={index} style={styles.bubbleText}>
+              {before}
+              <AssistantLink href={link[2]}>{link[1]}</AssistantLink>
+              {after}
+            </Text>
+          );
+        }
+        const code = line.match(/`([^`]+)`/);
+        if (code) {
+          const [before, after] = line.split(code[0]);
+          return <Text key={index} style={styles.bubbleText}>{before}<Text style={styles.inlineCode}>{code[1]}</Text>{after}</Text>;
+        }
+        const bold = line.match(/\*\*([^*]+)\*\*/);
+        if (bold) {
+          const [before, after] = line.split(bold[0]);
+          return <Text key={index} style={styles.bubbleText}>{before}<Text style={styles.boldText}>{bold[1]}</Text>{after}</Text>;
+        }
+        return <Text key={index} style={styles.bubbleText}>{line || (streaming && index === lines.length - 1 ? '…' : ' ')}</Text>;
+      })}
+    </View>
+  );
+}
+
+export function MessageBubble({ item, navigation }: { item: ChatMessage; navigation?: any }) {
   const isUser = item.role === 'user';
   return (
     <View
@@ -28,9 +107,27 @@ function MessageBubble({ item }: { item: ChatMessage }) {
         item.streaming ? ' (typing)' : ''
       }`}
     >
-      <Text style={[styles.bubbleText, isUser && styles.userBubbleText]}>
-        {item.content || (item.streaming ? '…' : '')}
-      </Text>
+      {isUser ? (
+        <Text style={[styles.bubbleText, styles.userBubbleText]}>{item.content}</Text>
+      ) : (
+        <>
+          <MarkdownAssistantText content={item.content || (item.streaming ? '' : ' ')} streaming={item.streaming === true} />
+          {extractAssistantReferences(item.content).map((reference) => (
+            <TouchableOpacity
+              key={`${reference.kind}:${reference.id}`}
+              style={styles.referenceCard}
+              onPress={() => {
+                if (reference.kind === 'nft') navigation?.navigate('NFTDetail', { nftId: reference.id });
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`Open ${reference.kind} ${reference.id}`}
+            >
+              <Text style={styles.referenceKind}>{reference.kind.toUpperCase()}</Text>
+              <Text style={styles.referenceId} numberOfLines={1}>{reference.id}</Text>
+            </TouchableOpacity>
+          ))}
+        </>
+      )}
       {item.streaming && !item.content ? (
         <ActivityIndicator size="small" color="#6C5CE7" style={{ marginTop: 4 }} />
       ) : null}
@@ -71,10 +168,33 @@ function QuotaIndicator({ usage }: { usage: AIUsage | null }) {
 export default function AssistantScreen({ navigation }: any) {
   const route = useRoute<RouteProp<MainStackParamList, 'Assistant'>>();
   const { track } = useAnalytics();
-  const { messages, isStreaming, error, sendMessage, cancelStream, clearConversation, usage, fetchUsage, fetchHealth, health, isQuotaExhausted } =
-    useAssistantStore();
+  const {
+    messages,
+    isStreaming,
+    error,
+    sendMessage,
+    cancelStream,
+    clearConversation,
+    usage,
+    fetchUsage,
+    fetchHealth,
+    health,
+    isQuotaExhausted,
+    rateLimitRetryAt,
+    rateLimitRemaining,
+  } = useAssistantStore();
   const [input, setInput] = useState('');
+  const [now, setNow] = useState(Date.now());
   const listRef = useRef<FlatList>(null);
+
+  useEffect(() => {
+    if (!rateLimitRetryAt) return;
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [rateLimitRetryAt]);
+
+  const retrySeconds = rateLimitRetryAt ? Math.max(0, Math.ceil((rateLimitRetryAt - now) / 1000)) : 0;
+  const isRateLimited = retrySeconds > 0;
 
   const lastHealthCheck = useRef(0);
   const checkHealthThrottled = () => {
@@ -128,7 +248,7 @@ export default function AssistantScreen({ navigation }: any) {
   const onSend = () => {
     const text = input.trim();
     if (!text) return;
-    if (isQuotaExhausted || health === 'down' || health === 'unconfigured') {
+    if (isQuotaExhausted || isRateLimited || health === 'down' || health === 'unconfigured') {
       return;
     }
     setInput('');
@@ -182,11 +302,17 @@ export default function AssistantScreen({ navigation }: any) {
           ref={listRef}
           data={messages}
           keyExtractor={(m) => m.id}
-          renderItem={({ item }) => <MessageBubble item={item} />}
+          renderItem={({ item }) => <MessageBubble item={item} navigation={navigation} />}
           contentContainerStyle={styles.list}
           accessibilityLabel="Chat messages"
         />
       )}
+
+      {isRateLimited ? (
+        <Text style={styles.rateLimitBanner} accessibilityRole="alert" accessibilityLiveRegion="polite">
+          {`Too many requests. Try again in ${retrySeconds}s.`}{rateLimitRemaining !== null && rateLimitRemaining <= 3 ? ` ${rateLimitRemaining} requests remaining.` : ''}
+        </Text>
+      ) : null}
 
       {error ? (
         <Text style={styles.error} accessibilityRole="alert">
@@ -207,15 +333,21 @@ export default function AssistantScreen({ navigation }: any) {
           onChangeText={setInput}
           placeholder="Ask anything…"
           placeholderTextColor="#888"
-          editable={!isStreaming}
+          editable={!isStreaming && !isRateLimited}
           onSubmitEditing={onSend}
           returnKeyType="send"
           accessibilityLabel="Message input"
         />
         <TouchableOpacity
-          style={[styles.sendBtn, (!input.trim() || isStreaming || isQuotaExhausted || health === 'down' || health === 'unconfigured') && styles.sendDisabled]}
+          style={[
+            styles.sendBtn,
+            (!input.trim() || isStreaming || isQuotaExhausted || isRateLimited || health === 'down' || health === 'unconfigured') &&
+              styles.sendDisabled,
+          ]}
           onPress={onSend}
-          disabled={!input.trim() || isStreaming || isQuotaExhausted || health === 'down' || health === 'unconfigured'}
+          disabled={
+            !input.trim() || isStreaming || isQuotaExhausted || isRateLimited || health === 'down' || health === 'unconfigured'
+          }
           accessibilityRole="button"
           accessibilityLabel="Send message"
         >
@@ -283,7 +415,16 @@ const styles = StyleSheet.create({
   userBubble: { alignSelf: 'flex-end', backgroundColor: '#6C5CE7' },
   assistantBubble: { alignSelf: 'flex-start', backgroundColor: '#1e1e28' },
   bubbleText: { color: '#e8e8ef', fontSize: 15, lineHeight: 21 },
+  markdownHeading: { color: '#fff', fontSize: 17, fontWeight: '700', marginVertical: 4 },
+  markdownBullet: { color: '#e8e8ef', fontSize: 15, lineHeight: 21, marginVertical: 1 },
+  inlineLink: { color: '#8ea4ff', textDecorationLine: 'underline' },
+  inlineCode: { color: '#ffd866', fontFamily: 'monospace', backgroundColor: '#272733' },
+  boldText: { color: '#fff', fontWeight: '700' },
+  referenceCard: { marginTop: 8, borderWidth: 1, borderColor: '#3c3c50', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 },
+  referenceKind: { color: '#9da8ff', fontSize: 10, fontWeight: '700' },
+  referenceId: { color: '#fff', fontSize: 13, marginTop: 2 },
   userBubbleText: { color: '#fff' },
+  rateLimitBanner: { color: '#ffd7a8', backgroundColor: '#ffa5001a', paddingHorizontal: 16, paddingVertical: 8, fontSize: 13 },
   healthBanner: { color: '#ffb3b3', backgroundColor: '#ff6b6b1a', paddingHorizontal: 16, paddingVertical: 10, fontSize: 13 },
   error: { color: '#ff6b6b', paddingHorizontal: 16, marginBottom: 4 },
   streamingHint: { color: '#6C5CE7', paddingHorizontal: 16, marginBottom: 4, fontSize: 12 },

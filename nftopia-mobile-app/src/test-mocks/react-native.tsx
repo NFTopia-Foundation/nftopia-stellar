@@ -18,6 +18,7 @@ export const ScrollView = 'RNScrollView';
 export const FlatList = 'RNFlatList';
 export const Image = 'RNImage';
 export const RefreshControl = 'RNRefreshControl';
+export const KeyboardAvoidingView = 'RNKeyboardAvoidingView';
 export const AppState = {
   currentState: 'active',
   addEventListener: jest.fn(() => ({ remove: jest.fn() })),

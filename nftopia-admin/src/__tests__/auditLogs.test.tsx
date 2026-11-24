@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import '../i18n'
@@ -23,7 +23,10 @@ const store: AuthStore = {
   handleUnauthorized: vi.fn(),
 }
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
 
 describe('audit log filters', () => {
   it('maps actor, action, entity and date filters into the request and URL', async () => {
@@ -53,5 +56,35 @@ describe('audit log filters', () => {
       expect(mapped).toContain('startDate=2026-01-01T00%3A00%3A00.000Z')
       expect(mapped).toContain('endDate=2026-01-31T23%3A59%3A59.999Z')
     })
+  })
+
+  it('renders IP, user agent, and links the target entity to its admin view (#767)', async () => {
+    vi.mocked(useAuth).mockReturnValue({ state, store })
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({
+      data: {
+        logs: [{
+          id: 'log-1',
+          adminId: '11111111-1111-1111-1111-111111111111',
+          action: 'BAN_USER',
+          entityType: 'user',
+          entityId: '22222222-2222-2222-2222-222222222222',
+          createdAt: '2026-01-01T00:00:00Z',
+          ipAddress: '127.0.0.1',
+          userAgent: 'Test Agent',
+        }],
+        total: 1,
+      },
+    })))
+
+    render(
+      <MemoryRouter initialEntries={['/audit-logs']}>
+        <AuthContext.Provider value={store}><AuditLogsPage /></AuthContext.Provider>
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => expect(screen.getByText('BAN_USER')).toBeTruthy())
+    expect(screen.getByText('127.0.0.1')).toBeTruthy()
+    expect(screen.getByText('Test Agent')).toBeTruthy()
+    expect(screen.getByRole('link', { name: '22222222-2222-2222-2222-222222222222' }).getAttribute('href')).toContain('/users')
   })
 })

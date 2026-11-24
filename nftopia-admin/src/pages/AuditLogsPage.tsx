@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { API_BASE_URL } from '../auth/authApi'
 import { createAuthorizedFetch } from '../auth/authorizedFetch'
@@ -16,6 +16,7 @@ interface AuditLog {
   entityId?: string
   createdAt: string
   ipAddress?: string
+  userAgent?: string
 }
 
 interface AuditPage {
@@ -88,12 +89,37 @@ export default function AuditLogsPage() {
   }, [load])
 
   const adminOptions = [...new Set(logs.map((log) => log.adminId).filter(Boolean))]
+
+  // Links the target entity to its admin view (#767) where one exists —
+  // a user or a collection — falling back to the raw id otherwise.
+  const targetLink = (entry: AuditLog) => {
+    if (!entry.entityId) return '—'
+    const entity = entry.entityType?.toLowerCase()
+    if (entity === 'user') {
+      return (
+        <Link to={`/users?selected=${encodeURIComponent(entry.entityId)}`} className="text-cyan-300 hover:underline">
+          {entry.entityId}
+        </Link>
+      )
+    }
+    if (entity === 'collection') {
+      return (
+        <Link to={`/collections?selected=${encodeURIComponent(entry.entityId)}`} className="text-cyan-300 hover:underline">
+          {entry.entityId}
+        </Link>
+      )
+    }
+    return entry.entityId
+  }
+
   const columns: Column<AuditLog>[] = [
     { key: 'createdAt', header: t('auditLogs.columns.created'), sortable: true },
     { key: 'adminId', header: t('auditLogs.columns.admin'), sortable: true },
     { key: 'action', header: t('auditLogs.columns.action'), sortable: true },
     { key: 'entityType', header: t('auditLogs.columns.entityType'), sortable: true },
-    { key: 'entityId', header: t('auditLogs.columns.entityId') },
+    { key: 'entityId', header: t('auditLogs.columns.entityId'), render: (entry) => targetLink(entry) },
+    { key: 'ipAddress', header: t('auditLogs.columns.ip') },
+    { key: 'userAgent', header: t('auditLogs.columns.userAgent') },
   ]
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 

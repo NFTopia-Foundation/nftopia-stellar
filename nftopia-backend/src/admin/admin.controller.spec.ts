@@ -26,10 +26,18 @@ describe('AdminController', () => {
 
   describe('listUsers', () => {
     it('calls adminService.listUsers with the query DTO', async () => {
-      const mockResult = { users: [{ id: 'user-1', username: 'alice' }], total: 1 };
+      const mockResult = {
+        users: [{ id: 'user-1', username: 'alice' }],
+        total: 1,
+      };
       adminService.listUsers.mockResolvedValue(mockResult);
 
-      const query = { search: 'alice', status: 'active' as const, limit: 10, offset: 0 };
+      const query = {
+        search: 'alice',
+        status: 'active' as const,
+        limit: 10,
+        offset: 0,
+      };
       const result = await controller.listUsers(query);
 
       expect(adminService.listUsers).toHaveBeenCalledWith(query);
@@ -52,7 +60,9 @@ describe('AdminController', () => {
         offset: 0,
       };
 
-      await expect(controller.listAuditLogs(query)).resolves.toEqual(mockResult);
+      await expect(controller.listAuditLogs(query)).resolves.toEqual(
+        mockResult,
+      );
       expect(adminService.listAuditLogs).toHaveBeenCalledWith(query);
     });
   });
@@ -98,7 +108,10 @@ describe('AdminController', () => {
 
   describe('unbanUser', () => {
     it('calls adminService.unbanUser with adminId, userId, ip and userAgent', async () => {
-      adminService.unbanUser.mockResolvedValue({ id: 'user-1', isBanned: false });
+      adminService.unbanUser.mockResolvedValue({
+        id: 'user-1',
+        isBanned: false,
+      });
 
       const result = await controller.unbanUser('user-1', user, req);
 

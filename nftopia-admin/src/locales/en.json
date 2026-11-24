@@ -267,7 +267,7 @@
     "description": "Filter administrative actions by actor, action, entity, and date range.",
     "empty": "No audit entries match these filters.",
     "filters": { "admin": "Admin user", "action": "Action type", "allActions": "All actions", "entityType": "Entity type", "entityId": "Entity ID", "startDate": "Start date", "endDate": "End date" },
-    "columns": { "created": "Created", "admin": "Admin", "action": "Action", "entityType": "Entity type", "entityId": "Entity ID" },
+    "columns": { "created": "Created", "admin": "Admin", "action": "Action", "entityType": "Entity type", "entityId": "Entity ID", "ip": "IP address", "userAgent": "User agent" },
     "pagination": { "label": "Audit log pages", "previous": "Previous", "next": "Next", "status": "Page {{page}} of {{pages}}" },
     "error": { "load": "Unable to load audit logs." }
   },
@@ -289,6 +289,8 @@
     "forbidden": "You don't have access to transaction retry operations.",
     "noError": "No error recorded",
     "listTitle": "Dead-letter queue ({{count}})",
+    "lookup": { "label": "Look up transaction ID", "submit": "Look up", "loading": "Looking up…", "invalid": "Transaction ID must be numeric.", "notFound": "No retry record found for that transaction ID." },
+    "detail": { "title": "Retry details for transaction #{{tx}}", "explorer": "View transaction in Stellar Expert", "entered": "Entered", "nextRetry": "Next retry", "attempt": "Attempt {{attempt}}" },
     "metrics": {
       "title": "Retry metrics",
       "dlqSize": "In DLQ",
