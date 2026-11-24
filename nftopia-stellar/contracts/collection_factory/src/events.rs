@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, Env, contractevent};
+use soroban_sdk::{Address, BytesN, Env, contractevent};
 
 #[contractevent]
 #[derive(Clone, Debug)]
@@ -64,6 +64,20 @@ pub struct CreatorLimitExceededAttempt {
 #[derive(Clone, Debug)]
 pub struct CollectionCountReset {
     pub creator: Address,
+}
+
+// New Event Structs for Issue #737
+
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct WasmHashAllowed {
+    pub wasm_hash: BytesN<32>,
+}
+
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct WasmHashDisallowed {
+    pub wasm_hash: BytesN<32>,
 }
 
 /* Emission Helpers */
@@ -149,4 +163,14 @@ pub fn emit_creator_limit_exceeded_attempt(env: &Env, creator: Address, current_
 
 pub fn emit_collection_count_reset(env: &Env, creator: Address) {
     CollectionCountReset { creator }.publish(env);
+}
+
+// New Emission Helpers for Issue #737
+
+pub fn emit_wasm_hash_allowed(env: &Env, wasm_hash: BytesN<32>) {
+    WasmHashAllowed { wasm_hash }.publish(env);
+}
+
+pub fn emit_wasm_hash_disallowed(env: &Env, wasm_hash: BytesN<32>) {
+    WasmHashDisallowed { wasm_hash }.publish(env);
 }
