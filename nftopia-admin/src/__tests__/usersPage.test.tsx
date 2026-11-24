@@ -202,6 +202,7 @@ describe('UserDetailModal Component', () => {
         walletAddress: 'GBTYZX24756QJ2KGLRQLA725PQ2FUV3I54P67B46Z3W3R3Q5B6N7T8S9',
         walletProvider: 'Freighter',
         isPrimary: true,
+        balance: '1234.5678900',
       },
     ],
     activitySummary: {
@@ -266,6 +267,29 @@ describe('UserDetailModal Component', () => {
     // so more than one match is expected.
     expect(screen.getAllByText(sampleDetail.user.walletAddress!).length).toBeGreaterThan(0)
     expect(screen.getByText('View on Stellar.expert')).toBeDefined()
+    // The balance (#695) shows once in the primary-wallet card and once in
+    // the linked-wallets row below it, same dual-render as the address.
+    expect(screen.getAllByText('1234.5679 XLM').length).toBeGreaterThan(0)
+  })
+
+  it('shows "Balance unavailable" when a wallet has no resolvable balance', () => {
+    const detailWithoutBalance: UserDetailData = {
+      ...sampleDetail,
+      wallets: [{ ...sampleDetail.wallets[0], balance: null }],
+    }
+    render(
+      <UserDetailModal
+        open={true}
+        userId="usr-999"
+        detail={detailWithoutBalance}
+        onClose={vi.fn()}
+        onBanClick={vi.fn()}
+        onUnbanClick={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByText(/Stellar Wallet/i))
+    expect(screen.getAllByText('Balance unavailable').length).toBeGreaterThan(0)
   })
 
   it('renders activity summary counters', () => {

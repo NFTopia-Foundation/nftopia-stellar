@@ -8,6 +8,8 @@ export interface UserWalletItem {
   isPrimary?: boolean
   createdAt?: string
   lastUsedAt?: string
+  /** Native XLM balance (#695); null when the account is unfunded or Horizon was unreachable. */
+  balance?: string | null
 }
 
 export interface UserAuditItem {
@@ -61,6 +63,13 @@ export interface UserDetailModalProps {
   onBanClick: (user: UserDetailData['user']) => void
   onUnbanClick: (user: UserDetailData['user']) => void
   unbanning?: boolean
+}
+
+/** Formats a raw Horizon balance string for display (#695); null/undefined means unknown. */
+function formatXlmBalance(balance: string | null | undefined): string {
+  if (balance == null) return 'Balance unavailable'
+  const parsed = Number(balance)
+  return Number.isFinite(parsed) ? `${parsed.toFixed(4)} XLM` : 'Balance unavailable'
 }
 
 /**
@@ -325,6 +334,12 @@ function UserDetailModalContent({
                         <span className="text-xs text-cyan-300 font-medium">{user.walletProvider || 'Stellar Wallet'}</span>
                       </div>
                       <p className="mt-2 font-mono text-xs text-slate-200 break-all">{user.walletAddress}</p>
+                      <p className="mt-1 text-sm font-semibold text-cyan-200">
+                        {formatXlmBalance(
+                          detail?.wallets.find((w) => w.walletAddress === user.walletAddress)
+                            ?.balance,
+                        )}
+                      </p>
                       <div className="mt-3 flex items-center gap-3">
                         <button
                           type="button"
@@ -366,6 +381,7 @@ function UserDetailModalContent({
                               </span>
                             )}
                             <p className="mt-0.5 font-mono text-slate-400 break-all">{w.walletAddress}</p>
+                            <p className="mt-0.5 font-medium text-cyan-300">{formatXlmBalance(w.balance)}</p>
                           </div>
                           <a
                             href={explorerUrl(w.walletAddress, 'account')}
