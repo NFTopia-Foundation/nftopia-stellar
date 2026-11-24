@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { streamChatMessage, sendChatMessage } from '@/src/services/ai/aiChat.service';
+import apiClient from '@/lib/api/sample';
 
 export const ASSISTANT_STORAGE_KEY = 'assistant-storage';
 export const ASSISTANT_STORE_VERSION = 1;
@@ -16,12 +17,33 @@ export interface ChatMessage {
   streaming?: boolean;
 }
 
-export interface AssistantState {
+export interface UsageWindow {
+  totalTokens: number;
+  estimatedCostUsd: number;
+  cap: number;
+  remaining: number;
+  spendCapUsd: number | null;
+  spendRemaining: number | null;
+  percentUsed: number;
+  approachingCap: boolean;
+  resetsAt: string;
+}
+
+export interface AIUsage {
+  daily: UsageWindow;
+  monthly: UsageWindow;
+  hasOverride: boolean;
+}
+
+interface AssistantState {
   messages: ChatMessage[];
   sessionId: string | null;
   isStreaming: boolean;
   error: string | null;
   abortController: AbortController | null;
+  usage: AIUsage | null;
+  isQuotaExhausted: boolean;
+  fetchUsage: () => Promise<void>;
   sendMessage: (text: string) => Promise<void>;
   cancelStream: () => void;
   clearConversation: () => void;
@@ -39,6 +61,19 @@ export const useAssistantStore = create<AssistantState>()(
       isStreaming: false,
       error: null,
       abortController: null,
+      usage: null,
+      isQuotaExhausted: false,
+
+      fetchUsage: async () => {
+        try {
+          const usage = await apiClient.getAIUsage();
+          const isQuotaExhausted = usage.daily.remaining === 0 || usage.monthly.remaining === 0;
+          set({ usage, isQuotaExhausted });
+        } catch (err) {
+          // Silently fail usage fetch - non-critical
+          console.error('Failed to fetch AI usage:', err);
+        }
+      },
 
       cancelStream: () => {
         const { abortController } = get();
@@ -99,6 +134,8 @@ export const useAssistantStore = create<AssistantState>()(
                 m.id === assistantId ? { ...m, streaming: false } : m,
               ),
             }));
+            // Refresh usage after successful message
+            get().fetchUsage();
           },
           onError: (error) => {
             if (controller?.signal.aborted) return;
@@ -110,11 +147,20 @@ export const useAssistantStore = create<AssistantState>()(
                   (/chat/i.test(error.message) ||
                     !/nft|user|listing|order|collection|token/i.test(error.message))));
 
+            let errorMessage = error.message;
+            // Check if it's a quota-exhausted error
+            if (error.message.includes('AI_DAILY_TOKEN_CAP_REACHED') ||
+                error.message.includes('AI_MONTHLY_TOKEN_CAP_REACHED') ||
+                error.message.includes('AI_DAILY_SPEND_CAP_REACHED') ||
+                error.message.includes('AI_MONTHLY_SPEND_CAP_REACHED')) {
+              errorMessage = 'You have reached your AI chat quota. Please try again later.';
+            }
+
             set((s) => ({
               isStreaming: false,
               abortController: null,
               sessionId: isSessionNotFound ? null : s.sessionId,
-              error: error.message,
+              error: errorMessage,
               messages: s.messages.map((m) =>
                 m.id === assistantId
                   ? {
@@ -124,11 +170,13 @@ export const useAssistantStore = create<AssistantState>()(
                         m.content ||
                         (isSessionNotFound
                           ? 'This chat session has expired. Please send your message again to start a new session.'
-                          : `Sorry, something went wrong: ${error.message}`),
+                          : errorMessage),
                     }
                   : m,
               ),
             }));
+            // Refresh usage on error to show updated quota
+            get().fetchUsage();
           },
         });
 
@@ -171,6 +219,8 @@ export const useAssistantStore = create<AssistantState>()(
           isStreaming: false,
           error: null,
           abortController: null,
+          usage: null,
+          isQuotaExhausted: false,
         };
       },
     },

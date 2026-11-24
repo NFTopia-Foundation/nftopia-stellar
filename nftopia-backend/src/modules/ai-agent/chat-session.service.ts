@@ -11,6 +11,7 @@ import { In, LessThan, Repository } from 'typeorm';
 import { ChatSession } from './entities/chat-session.entity';
 import { ChatMessage } from './entities/chat-message.entity';
 import { ChatTurnDto } from './dto/chat-request.dto';
+import { redactPii } from './pii-redaction';
 
 export interface LoadedChatSession {
   session: ChatSession;
@@ -216,6 +217,11 @@ export class ChatSessionService {
   /**
    * Persists both turns of a completed exchange, bumps updatedAt, and prunes
    * older messages if the session message cap is exceeded.
+   *
+   * Content is PII-redacted (#646) before it's written — the caller already
+   * completed the live request/response with the original text by the time
+   * this runs, so redaction here never touches what was sent to Anthropic
+   * or shown to the user, only what lands in chat_messages.
    */
   async appendExchange(
     sessionId: string,
@@ -227,12 +233,12 @@ export class ChatSessionService {
         this.messageRepo.create({
           sessionId,
           role: 'user',
-          content: userMessage,
+          content: redactPii(userMessage),
         }),
         this.messageRepo.create({
           sessionId,
           role: 'assistant',
-          content: assistantReply,
+          content: redactPii(assistantReply),
         }),
       ]);
       await this.sessionRepo.update(sessionId, { updatedAt: new Date() });

@@ -106,6 +106,31 @@
         "createdBy": "Erstellt von",
         "ownedBy": "Im Besitz von",
         "viewDetails": "Details anzeigen"
+      },
+      "presets": {
+        "nameLabel": "Name der Vorlage",
+        "namePlaceholder": "Diese Filter benennen",
+        "save": "Aktuelle Filter speichern",
+        "listLabel": "Gespeicherte Filtervorlagen",
+        "choose": "Gespeicherte Vorlage wählen",
+        "none": "Keine gespeicherten Vorlagen",
+        "apply": "Vorlage anwenden",
+        "delete": "Vorlage löschen",
+        "saved": "„{{name}}“ gespeichert",
+        "applied": "„{{name}}“ angewendet",
+        "deleted": "„{{name}}“ gelöscht",
+        "errors": {
+          "emptyName": "Gib einen Namen für diese Vorlage ein.",
+          "noFilters": "Lege mindestens einen Filter fest, bevor du eine Vorlage speicherst.",
+          "limitReached": "Du kannst bis zu {{max}} Vorlagen speichern. Lösche eine, um eine neue zu speichern.",
+          "storageUnavailable": "Vorlagen können in diesem Browser gerade nicht gespeichert werden. Das Filtern funktioniert weiterhin."
+        }
+      },
+      "priceRange": {
+        "group": "Preisspanne",
+        "minThumb": "Schieberegler für Mindestpreis",
+        "maxThumb": "Schieberegler für Höchstpreis",
+        "invalid": "Der Mindestpreis darf nicht über dem Höchstpreis liegen."
       }
     },
     "profile": {
@@ -134,6 +159,7 @@
     "creatorProfile": {
       "verified": "Verifiziert",
       "followers": "Follower",
+      "following": "Folge ich",
       "nftsCreated": "NFTs",
       "volume": "Volumen",
       "tabNfts": "NFTs",
@@ -159,6 +185,7 @@
       "edit": "Bearbeiten",
       "view": "Anzeigen",
       "close": "Schließen",
+      "dismiss": "Verwerfen",
       "confirm": "Bestätigen",
       "back": "Zurück",
       "next": "Weiter",
@@ -408,5 +435,18 @@
         "failedToCreate": "Erstellung der Sammlung fehlgeschlagen"
       },
       "success": "Sammlung erfolgreich erstellt!"
-    }
+    },
+  "pushNotifications": {
+    "promptTitle": "Push-Benachrichtigungen aktivieren",
+    "promptBody": "Erhalte Benachrichtigungen zu neuen Geboten, Verkäufen und Followern – auch wenn NFTopia nicht geöffnet ist.",
+    "notNow": "Nicht jetzt",
+    "enable": "Aktivieren",
+    "enabling": "Wird aktiviert...",
+    "subscribeError": "Push-Benachrichtigungen konnten nicht aktiviert werden. Bitte versuche es erneut.",
+    "settingsTitle": "Push-Benachrichtigungen",
+    "settingsDescription": "Erhalte Benachrichtigungen zu Geboten, Verkäufen und Followern, auch wenn dieser Tab geschlossen ist.",
+    "settingsToggleOn": "Push-Benachrichtigungen sind aktiviert",
+    "settingsToggleOff": "Push-Benachrichtigungen sind deaktiviert",
+    "unsupported": "Push-Benachrichtigungen werden von diesem Browser nicht unterstützt."
   }
+}

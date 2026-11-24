@@ -373,4 +373,185 @@ describe('AiChatRateLimitGuard', () => {
       expect(res.setHeader).toHaveBeenCalledWith('X-RateLimit-Limit', '5');
     });
   });
+
+  describe('per-user admin overrides (#751)', () => {
+    /** In-memory stand-in for AiUsageService's override store. */
+    let overrideStore: Map<string, Partial<Record<ToolSetName, number>>>;
+    let overrides: { getRateLimitPointsOverride: jest.Mock };
+    let overrideLimiters: Map<string, jest.Mocked<RateLimiterClient>>;
+    let limiterFactory: jest.Mock;
+    let overrideGuard: AiChatRateLimitGuard;
+
+    beforeEach(() => {
+      overrideStore = new Map();
+      overrides = {
+        getRateLimitPointsOverride: jest.fn(
+          (userId: string, toolSet: ToolSetName) =>
+            Promise.resolve(overrideStore.get(userId)?.[toolSet] ?? null),
+        ),
+      };
+      overrideLimiters = new Map();
+      limiterFactory = jest.fn((toolSet: ToolSetName, points: number) => {
+        const cacheKey = `${toolSet}:${points}`;
+        let limiter = overrideLimiters.get(cacheKey);
+        if (!limiter) {
+          limiter = {
+            consume: jest.fn().mockResolvedValue({
+              remainingPoints: points - 1,
+              msBeforeNext: 0,
+            }),
+          };
+          overrideLimiters.set(cacheKey, limiter);
+        }
+        return limiter;
+      });
+      marketplaceLimiter.consume.mockResolvedValue({
+        remainingPoints: 19,
+        msBeforeNext: 0,
+      });
+      copilotLimiter.consume.mockResolvedValue({
+        remainingPoints: 4,
+        msBeforeNext: 0,
+      });
+
+      overrideGuard = new AiChatRateLimitGuard(
+        limiters,
+        config as unknown as ConfigService,
+        reflector as unknown as Reflector,
+        overrides,
+        limiterFactory,
+      );
+    });
+
+    it('gives a user with no override the env default limit', async () => {
+      const { context, res } = makeContext({ user: { userId: 'user-1' } });
+
+      await expect(overrideGuard.canActivate(context)).resolves.toBe(true);
+
+      expect(overrides.getRateLimitPointsOverride).toHaveBeenCalledWith(
+        'user-1',
+        'marketplace-assistant',
+      );
+      expect(marketplaceLimiter.consume).toHaveBeenCalledWith('user:user-1', 1);
+      expect(limiterFactory).not.toHaveBeenCalled();
+      expect(res.setHeader).toHaveBeenCalledWith('X-RateLimit-Limit', '20');
+    });
+
+    it('consumes an overridden user against their own budget and reports it in X-RateLimit-Limit', async () => {
+      overrideStore.set('power-user', { 'marketplace-assistant': 100 });
+      const { context, res } = makeContext({ user: { userId: 'power-user' } });
+
+      await expect(overrideGuard.canActivate(context)).resolves.toBe(true);
+
+      expect(limiterFactory).toHaveBeenCalledWith('marketplace-assistant', 100);
+      const limiter = overrideLimiters.get('marketplace-assistant:100')!;
+      expect(limiter.consume).toHaveBeenCalledWith('user:power-user', 1);
+      expect(marketplaceLimiter.consume).not.toHaveBeenCalled();
+      expect(res.setHeader).toHaveBeenCalledWith('X-RateLimit-Limit', '100');
+      expect(res.setHeader).toHaveBeenCalledWith('X-RateLimit-Remaining', '99');
+    });
+
+    it('reports the overridden limit on a 429 too', async () => {
+      overrideStore.set('power-user', { 'marketplace-assistant': 3 });
+      limiterFactory.mockReturnValueOnce({
+        consume: jest
+          .fn()
+          .mockRejectedValue({ remainingPoints: 0, msBeforeNext: 2000 }),
+      });
+      const { context, res } = makeContext({ user: { userId: 'power-user' } });
+
+      await expect(overrideGuard.canActivate(context)).rejects.toBeInstanceOf(
+        HttpException,
+      );
+      expect(res.setHeader).toHaveBeenCalledWith('X-RateLimit-Limit', '3');
+      expect(res.setHeader).toHaveBeenCalledWith('X-RateLimit-Remaining', '0');
+    });
+
+    it('only applies an override to the tool set it was set for', async () => {
+      overrideStore.set('power-user', { 'marketplace-assistant': 100 });
+      const { context, res } = makeContext({
+        user: { userId: 'power-user' },
+        toolSet: 'creator-copilot',
+      });
+
+      await overrideGuard.canActivate(context);
+
+      expect(copilotLimiter.consume).toHaveBeenCalledWith('user:power-user', 1);
+      expect(limiterFactory).not.toHaveBeenCalled();
+      expect(res.setHeader).toHaveBeenCalledWith('X-RateLimit-Limit', '5');
+    });
+
+    it('does not let one user’s override affect another user', async () => {
+      overrideStore.set('power-user', { 'marketplace-assistant': 100 });
+      const { context, res } = makeContext({ user: { userId: 'regular' } });
+
+      await overrideGuard.canActivate(context);
+
+      expect(marketplaceLimiter.consume).toHaveBeenCalledWith(
+        'user:regular',
+        1,
+      );
+      expect(res.setHeader).toHaveBeenCalledWith('X-RateLimit-Limit', '20');
+    });
+
+    it('restores the env default once the override is deleted', async () => {
+      overrideStore.set('power-user', { 'marketplace-assistant': 100 });
+      const first = makeContext({ user: { userId: 'power-user' } });
+      await overrideGuard.canActivate(first.context);
+      expect(first.res.setHeader).toHaveBeenCalledWith(
+        'X-RateLimit-Limit',
+        '100',
+      );
+
+      overrideStore.delete('power-user');
+      const second = makeContext({ user: { userId: 'power-user' } });
+      await overrideGuard.canActivate(second.context);
+
+      expect(second.res.setHeader).toHaveBeenCalledWith(
+        'X-RateLimit-Limit',
+        '20',
+      );
+      expect(marketplaceLimiter.consume).toHaveBeenCalledWith(
+        'user:power-user',
+        1,
+      );
+    });
+
+    it('falls back to the default budget when the override lookup fails', async () => {
+      overrides.getRateLimitPointsOverride.mockRejectedValueOnce(
+        new Error('db down'),
+      );
+      const { context, res } = makeContext({ user: { userId: 'user-1' } });
+
+      await expect(overrideGuard.canActivate(context)).resolves.toBe(true);
+
+      expect(marketplaceLimiter.consume).toHaveBeenCalledWith('user:user-1', 1);
+      expect(res.setHeader).toHaveBeenCalledWith('X-RateLimit-Limit', '20');
+    });
+
+    it('never looks up overrides for anonymous (IP-keyed) requests', async () => {
+      const { context } = makeContext({ ip: '203.0.113.5' });
+
+      await overrideGuard.canActivate(context);
+
+      expect(overrides.getRateLimitPointsOverride).not.toHaveBeenCalled();
+      expect(marketplaceLimiter.consume).toHaveBeenCalledWith(
+        'ip:203.0.113.5',
+        1,
+      );
+    });
+
+    it('uses the default limiter when the override equals the default budget', async () => {
+      overrideStore.set('power-user', { 'marketplace-assistant': 20 });
+      const { context } = makeContext({ user: { userId: 'power-user' } });
+
+      await overrideGuard.canActivate(context);
+
+      expect(limiterFactory).not.toHaveBeenCalled();
+      expect(marketplaceLimiter.consume).toHaveBeenCalledWith(
+        'user:power-user',
+        1,
+      );
+    });
+  });
 });

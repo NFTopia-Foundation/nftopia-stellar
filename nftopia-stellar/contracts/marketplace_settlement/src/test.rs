@@ -1,5 +1,7 @@
 #![cfg(test)]
 
+extern crate std;
+
 use crate::{
     atomic_swap::{AtomicSwapEngine, EscrowManager, SwapState},
     error::{SettlementError, SwapTimeoutError},
@@ -599,6 +601,111 @@ fn test_create_trade_empty_nfts_fails() {
         .is_err());
 }
 
+/// Builds a funded (accepted) trade of one NFT each way, each NFT backed by
+/// its own `MockNft` instance with a real, stateful `owner_of`/`transfer` —
+/// unlike `MockEscrowNft`, `MockNft::transfer` actually asserts the caller
+/// owns the token and moves it, so a test can verify ownership genuinely
+/// changed, not just that the trade's own status field flipped (#552).
+fn new_funded_trade(
+    env: &Env,
+    client: &MarketplaceSettlementClient<'static>,
+) -> (u64, Address, Address, Address, Address) {
+    use crate::types::{NFTItem, RoyaltyDistribution};
+
+    let initiator = Address::generate(env);
+    let counterparty = Address::generate(env);
+    let creator = Address::generate(env);
+    let dummy = RoyaltyDistribution {
+        creator_address: creator.clone(),
+        creator_percentage: 500,
+        seller_address: creator.clone(),
+        seller_percentage: 9000,
+        platform_address: creator.clone(),
+        platform_percentage: 500,
+        total_amount: 0,
+        amounts: soroban_sdk::Map::new(env),
+    };
+
+    let initiator_nft = env.register(MockNft, ());
+    MockNftClient::new(env, &initiator_nft).set_owner(&initiator);
+    let counterparty_nft = env.register(MockNft, ());
+    MockNftClient::new(env, &counterparty_nft).set_owner(&counterparty);
+
+    let mut i_nfts = soroban_sdk::Vec::new(env);
+    i_nfts.push_back(NFTItem {
+        nft_address: initiator_nft.clone(),
+        token_id: 1,
+        royalty_info: dummy.clone(),
+    });
+    let mut c_nfts = soroban_sdk::Vec::new(env);
+    c_nfts.push_back(NFTItem {
+        nft_address: counterparty_nft.clone(),
+        token_id: 1,
+        royalty_info: dummy,
+    });
+
+    let trade_id = client.create_trade(&initiator, &None, &i_nfts, &c_nfts, &3600u64);
+    client.accept_trade(&trade_id, &counterparty);
+
+    (
+        trade_id,
+        initiator,
+        counterparty,
+        initiator_nft,
+        counterparty_nft,
+    )
+}
+
+#[test]
+fn test_execute_trade_transfers_nft_ownership() {
+    let (env, _cid, client, _admin) = new_env();
+    let (trade_id, initiator, counterparty, initiator_nft, counterparty_nft) =
+        new_funded_trade(&env, &client);
+
+    client.execute_trade(&trade_id, &initiator);
+
+    // The whole point of #552: ownership on each NFT contract actually
+    // changed, not just the trade's own status field.
+    assert_eq!(
+        MockNftClient::new(&env, &initiator_nft).owner_of(&1),
+        counterparty,
+    );
+    assert_eq!(
+        MockNftClient::new(&env, &counterparty_nft).owner_of(&1),
+        initiator,
+    );
+}
+
+#[test]
+fn test_execute_trade_fails_without_leaving_executed_but_untransferred_state() {
+    let (env, cid, client, _admin) = new_env();
+    let (trade_id, initiator, counterparty, initiator_nft, counterparty_nft) =
+        new_funded_trade(&env, &client);
+
+    // Simulate the initiator no longer actually owning the NFT they staked —
+    // e.g. transferred it away through some other path after staking it here.
+    let someone_else = Address::generate(&env);
+    MockNftClient::new(&env, &initiator_nft).set_owner(&someone_else);
+
+    assert!(client.try_execute_trade(&trade_id, &initiator).is_err());
+
+    // Neither side's NFT moved, and the trade is still `Funded`, not
+    // `Executed` — a failed transfer must never leave the two inconsistent.
+    assert_eq!(
+        MockNftClient::new(&env, &initiator_nft).owner_of(&1),
+        someone_else,
+    );
+    assert_eq!(
+        MockNftClient::new(&env, &counterparty_nft).owner_of(&1),
+        counterparty,
+    );
+    env.as_contract(&cid, || {
+        let trade =
+            crate::storage::transaction_store::TradeTransactionStore::get(&env, trade_id).unwrap();
+        assert_eq!(trade.state, crate::types::TransactionState::Funded);
+    });
+}
+
 // ─── Bundle ───────────────────────────────────────────────────────────────────
 
 #[test]
@@ -750,6 +857,37 @@ fn test_cleanup_expired_commitments() {
     client.cleanup_expired_commitments();
 }
 
+#[test]
+fn test_initiate_dispute_rejects_oversized_evidence_uri() {
+    let (env, _cid, client, _admin) = new_env();
+    let initiator = Address::generate(&env);
+    let arbitrator = Address::generate(&env);
+    client.register_arbitrator(&arbitrator, &50u64);
+    let reason = Bytes::from_slice(&env, b"purchase issue");
+    let oversized_uri = Bytes::from_slice(&env, &[b'x'; 513]);
+
+    assert_contract_err(
+        client.try_initiate_dispute(&1, &reason, &Some(oversized_uri), &initiator),
+        SettlementError::InvalidAmount,
+    );
+}
+
+#[test]
+fn test_initiate_dispute_accepts_well_formed_evidence_uri() {
+    let (env, _cid, client, _admin) = new_env();
+    let initiator = Address::generate(&env);
+    let arbitrator = Address::generate(&env);
+    client.register_arbitrator(&arbitrator, &50u64);
+    let reason = Bytes::from_slice(&env, b"purchase issue");
+    let evidence_uri = Bytes::from_slice(&env, b"ipfs://bafybeigdyrzt");
+
+    let dispute_id = client.initiate_dispute(&1, &reason, &Some(evidence_uri.clone()), &initiator);
+    assert_eq!(
+        client.get_dispute(&dispute_id).evidence_uri,
+        Some(evidence_uri)
+    );
+}
+
 // ─── Rate Limiter ────────────────────────────────────────────────────────────
 
 #[test]
@@ -891,6 +1029,194 @@ fn count_events(env: &Env, topic: Symbol) -> u32 {
     count
 }
 
+fn public_method_names(source: &str) -> std::vec::Vec<&str> {
+    source
+        .lines()
+        .filter_map(|line| {
+            line.trim()
+                .strip_prefix("pub fn ")
+                .and_then(|declaration| declaration.split('(').next())
+        })
+        .collect()
+}
+
+fn method_source<'a>(source: &'a str, name: &str) -> &'a str {
+    let mut remaining = source;
+    while let Some(start) = remaining.find("pub fn ") {
+        let after_prefix = start + "pub fn ".len();
+        let declaration = &remaining[after_prefix..];
+        let name_end = declaration.find('(').unwrap();
+        let method_name = &declaration[..name_end];
+        if method_name == name {
+            let body_start = name_end + declaration[name_end..].find('{').unwrap();
+            let mut depth = 0u32;
+            for (offset, byte) in declaration[body_start..].bytes().enumerate() {
+                match byte {
+                    b'{' => depth += 1,
+                    b'}' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            return &declaration[..=body_start + offset];
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            panic!("Unclosed method body for {name}");
+        }
+        remaining = &declaration[name_end + 1..];
+    }
+    panic!("Missing method {name}");
+}
+
+#[test]
+fn test_initiate_dispute_rejects_unsupported_evidence_uri_scheme() {
+    let (env, _cid, client, _admin) = new_env();
+    let initiator = Address::generate(&env);
+    let reason = Bytes::from_slice(&env, b"purchase issue");
+    let evidence_uri = Bytes::from_slice(&env, b"file://private-evidence");
+
+    assert_contract_err(
+        client.try_initiate_dispute(&1, &reason, &Some(evidence_uri), &initiator),
+        SettlementError::InvalidAmount,
+    );
+}
+#[test]
+fn entrypoint_guard_audit() {
+    const SETTLEMENT_MUTATING: &[&str] = &[
+        "initialize",
+        "add_supported_asset",
+        "remove_supported_asset",
+        "pause_contract",
+        "unpause_contract",
+        "schedule_pause",
+        "cancel_scheduled_pause",
+        "execute_scheduled_pause",
+        "create_sale",
+        "execute_sale",
+        "create_auction",
+        "place_bid",
+        "reveal_bid",
+        "end_auction",
+        "cancel_auction_with_refund",
+        "withdraw_losing_bid",
+        "create_trade",
+        "accept_trade",
+        "execute_trade",
+        "create_bundle",
+        "cancel_transaction",
+        "initiate_dispute",
+        "vote_on_dispute",
+        "execute_dispute_resolution",
+        "force_resolve_dispute",
+        "resolve_dispute_timeout",
+        "submit_oracle_resolution",
+        "register_arbitration_oracle",
+        "register_arbitrator",
+        "update_arbitrator_reputation",
+        "reseed_arbitrator_selection",
+        "add_dispute_admin",
+        "remove_dispute_admin",
+        "update_dispute_config",
+        "emergency_withdraw",
+        "update_fee_config",
+        "withdraw_platform_fees",
+        "update_rate_limit",
+        "cleanup_expired_commitments",
+        "cleanup_expired_swaps",
+        "expire_swap",
+        "reclaim_expired_escrow",
+        "update_swap_timeout_config",
+        "add_allowed_nft_contract",
+        "remove_allowed_nft_contract",
+        "add_allowed_token_contract",
+        "remove_allowed_token_contract",
+        "block_address",
+        "unblock_address",
+        "update_block_reason",
+        "set_native_xlm_sac",
+    ];
+    const SETTLEMENT_READ_ONLY: &[&str] = &[
+        "get_supported_assets",
+        "is_paused",
+        "is_module_paused",
+        "get_pause_state",
+        "get_scheduled_pause_info",
+        "is_timelock_active",
+        "get_timelock_remaining",
+        "get_paused_modules",
+        "dispute_oracle_payload",
+        "get_arbitration_oracle",
+        "get_dispute_admins",
+        "is_dispute_admin",
+        "get_dispute",
+        "get_dispute_config",
+        "get_rate_limit_config",
+        "get_sale",
+        "get_auction",
+        "get_dutch_auction_price",
+        "get_accumulated_fees",
+        "get_user_volume",
+        "get_swap_timeout_config",
+        "get_atomic_swap",
+        "get_swap_time_remaining",
+        "is_nft_allowed",
+        "is_token_allowed",
+        "is_blocked",
+        "get_blocked_addresses",
+        "get_block_record",
+        "get_native_xlm_sac",
+        "version",
+        "get_version",
+    ];
+    const SWAP_MUTATING: &[&str] = &[
+        "set_timeout_config",
+        "initialize_swap",
+        "deposit_to_escrow",
+        "execute_swap",
+        "execute_sale_swap",
+        "cancel_swap",
+        "expire_swap",
+        "cleanup_expired_swaps",
+        "reclaim_expired_escrow",
+        "settle_dispute_escrow",
+        "emergency_withdraw",
+        "release_escrow",
+    ];
+    const SWAP_READ_ONLY: &[&str] = &[
+        "is_terminal",
+        "timeout_config",
+        "validate_timeout_config",
+        "is_expired",
+        "is_expiry_confirmed",
+        "time_remaining",
+        "get_swap_by_transaction",
+        "check_escrow_balance",
+        "get_escrow_holdings",
+    ];
+
+    let settlement = include_str!("settlement_core.rs");
+    let mut classified_settlement = [SETTLEMENT_MUTATING, SETTLEMENT_READ_ONLY].concat();
+    let mut actual_settlement = public_method_names(settlement);
+    classified_settlement.sort_unstable();
+    actual_settlement.sort_unstable();
+    assert_eq!(actual_settlement, classified_settlement);
+
+    for name in SETTLEMENT_MUTATING {
+        assert!(
+            method_source(settlement, name).contains("ReentrancyGuard::execute"),
+            "mutating settlement entrypoint {name} is not guarded"
+        );
+    }
+
+    let swaps = include_str!("atomic_swap.rs");
+    let mut classified_swaps = [SWAP_MUTATING, SWAP_READ_ONLY].concat();
+    let mut actual_swaps = public_method_names(swaps);
+    classified_swaps.sort_unstable();
+    actual_swaps.sort_unstable();
+    assert_eq!(actual_swaps, classified_swaps);
+}
+
 /// A sale with its backing atomic swap, using mocks that accept escrow transfers.
 fn new_swap_env() -> (
     Env,
@@ -917,22 +1243,16 @@ fn new_swap_env() -> (
     (env, cid, client, seller, nft, currency, transaction_id)
 }
 
-/// Deposit both sides of the swap so it reaches `Ready` with real escrow holdings.
+/// Deposit the buyer-side payment; `create_sale` already escrows the seller NFT.
 fn fund_swap(
     env: &Env,
     cid: &Address,
     seller: &Address,
-    nft: &Address,
+    _nft: &Address,
     currency: &Asset,
     transaction_id: u64,
 ) {
-    let nft_asset = Asset::Token(TokenAsset {
-        contract: nft.clone(),
-        symbol: Symbol::new(env, "NFT"),
-    });
     env.as_contract(cid, || {
-        AtomicSwapEngine::deposit_to_escrow(env, transaction_id, seller, &nft_asset, 1, true)
-            .unwrap();
         AtomicSwapEngine::deposit_to_escrow(
             env,
             transaction_id,
@@ -942,6 +1262,78 @@ fn fund_swap(
             false,
         )
         .unwrap();
+    });
+}
+
+fn deposit_sale_payment(
+    env: &Env,
+    cid: &Address,
+    seller: &Address,
+    currency: &Asset,
+    transaction_id: u64,
+) {
+    env.as_contract(cid, || {
+        AtomicSwapEngine::deposit_to_escrow(
+            env,
+            transaction_id,
+            seller,
+            currency,
+            SALE_PRICE,
+            false,
+        )
+        .unwrap();
+    });
+}
+
+#[test]
+fn test_escrow_balance_tracks_partial_and_full_release() {
+    let (env, cid, _client, seller, _nft, currency, transaction_id) = new_swap_env();
+    let recipient = Address::generate(&env);
+    deposit_sale_payment(&env, &cid, &seller, &currency, transaction_id);
+
+    env.as_contract(&cid, || {
+        assert_eq!(
+            EscrowManager::check_escrow_balance(&env, transaction_id, &currency),
+            Ok(SALE_PRICE)
+        );
+        EscrowManager::release_escrow(&env, transaction_id, &recipient, &currency, 400_000)
+            .unwrap();
+        assert_eq!(
+            EscrowManager::check_escrow_balance(&env, transaction_id, &currency),
+            Ok(SALE_PRICE - 400_000)
+        );
+        EscrowManager::release_escrow(
+            &env,
+            transaction_id,
+            &recipient,
+            &currency,
+            SALE_PRICE - 400_000,
+        )
+        .unwrap();
+        assert_eq!(
+            EscrowManager::check_escrow_balance(&env, transaction_id, &currency),
+            Ok(0)
+        );
+    });
+}
+
+#[test]
+fn test_escrow_rejects_a_second_full_release() {
+    let (env, cid, _client, seller, _nft, currency, transaction_id) = new_swap_env();
+    let recipient = Address::generate(&env);
+    deposit_sale_payment(&env, &cid, &seller, &currency, transaction_id);
+
+    env.as_contract(&cid, || {
+        EscrowManager::release_escrow(&env, transaction_id, &recipient, &currency, SALE_PRICE)
+            .unwrap();
+        assert_eq!(
+            EscrowManager::release_escrow(&env, transaction_id, &recipient, &currency, SALE_PRICE,),
+            Err(SettlementError::InsufficientFunds)
+        );
+        assert_eq!(
+            EscrowManager::check_escrow_balance(&env, transaction_id, &currency),
+            Ok(0)
+        );
     });
 }
 
@@ -965,6 +1357,12 @@ fn test_check_escrow_balance_returns_deposited_amount() {
         .unwrap();
     assert_eq!(balance, SALE_PRICE);
 
+    // check_escrow_balance reports a *fungible* balance; NFT holdings are always
+    // excluded, since their `amount` is a token_id, not a quantity, and
+    // release_escrow's own release loop likewise never touches NFT holdings. If
+    // this counted the NFT's token_id as "available" fungible balance, a caller
+    // could pass release_escrow's `amount > available` guard using balance that
+    // doesn't actually exist as fungible holdings to release.
     let nft_asset = Asset::Token(TokenAsset {
         contract: nft.clone(),
         symbol: Symbol::new(&env, "NFT"),
@@ -974,7 +1372,7 @@ fn test_check_escrow_balance_returns_deposited_amount() {
             EscrowManager::check_escrow_balance(&env, txid, &nft_asset)
         })
         .unwrap();
-    assert_eq!(nft_balance, 1);
+    assert_eq!(nft_balance, 0);
 }
 
 #[test]

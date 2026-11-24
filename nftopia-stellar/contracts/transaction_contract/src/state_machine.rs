@@ -8,7 +8,25 @@ use crate::types::TransactionState;
 /// contracts, so deadlines are always compared in ledger space.
 pub const DEADLINE_SAFETY_MARGIN_LEDGERS: u64 = 10;
 
-// Validate state transitions for the transaction lifecycle.
+/// Validate a state transition for the transaction lifecycle.
+///
+/// Allowed transitions (every other `(from, to)` pair, including a state to
+/// itself, returns [`TransactionError::InvalidStateTransition`]):
+///
+/// | From                | Allowed targets                         |
+/// |---------------------|-----------------------------------------|
+/// | `Draft`             | `Pending`, `Executing`, `Cancelled`     |
+/// | `Pending`           | `Executing`, `Cancelled`                |
+/// | `Executing`         | `Completed`, `Failed`, `PartiallyComplete` |
+/// | `Failed`            | `Pending` (retry), `RolledBack`, `Cancelled` |
+/// | `PartiallyComplete` | `RolledBack`, `Cancelled`               |
+/// | `Completed`         | none (final)                            |
+/// | `Cancelled`         | none (final)                            |
+/// | `RolledBack`        | none (final)                            |
+///
+/// The final states are exactly those reported by [`is_final`]. Nothing can
+/// return to `Draft`. `test_state_machine.rs` checks this table against all
+/// 64 pairs, so a change here must update the test too.
 pub fn validate_transition(
     from: &TransactionState,
     to: &TransactionState,

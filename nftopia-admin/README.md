@@ -26,8 +26,9 @@ At the moment, this app is a clean React + Vite + Tailwind foundation rather tha
 4. [Quick Start](#-quick-start)
 5. [Available Scripts](#-available-scripts)
 6. [Authentication](#-authentication)
-7. [Transaction Retries (DLQ)](#-transaction-retries-dlq)
-8. [Recommended Next Modules](#-recommended-next-modules)
+7. [API Client & Data Fetching](#-api-client--data-fetching)
+8. [Transaction Retries (DLQ)](#-transaction-retries-dlq)
+9. [Recommended Next Modules](#-recommended-next-modules)
 
 ## 🎯 Purpose
 
@@ -101,6 +102,40 @@ The whole app sits behind a login screen. Operators sign in with their NFTopia e
 - **Logout** clears the stored token, the in-memory user and the expiry timer, then returns to the login screen.
 - **Expiry:** a timer fires at the token's `exp`, and the token is re-checked whenever the tab becomes visible again. An expired, malformed or non-admin stored token is discarded, and the login screen shows "Your session has expired".
 - **Invalid tokens:** API calls made through `createAuthorizedFetch` (in `src/auth/authorizedFetch.ts`) attach the bearer token. Any `401` response ends the session the same way.
+
+## 🔌 API Client & Data Fetching
+
+Every screen should fetch data through the shared layer in `src/lib/api/`
+rather than hand-rolling `fetch` calls, so auth-header attachment and
+401-handling are never reimplemented per screen:
+
+- **`useApiClient()`** returns the authorized `fetch` instance
+  (`createAuthorizedFetch` bound to the current auth store) — use this
+  directly for a one-off request or a mutation.
+- **`useAuthorizedQuery<T>(queryKey, path, options?)`** wraps that client in
+  a [TanStack Query](https://tanstack.com/query) `useQuery` call: `path` is
+  relative to `VITE_API_URL`, a non-2xx response throws `ApiRequestError`
+  (with `.status`), and a `401` has already ended the session (same as any
+  other authorized call) by the time the error surfaces — callers don't
+  need to special-case it.
+- The shared `QueryClient` (`src/lib/queryClient.ts`) is mounted once in
+  `src/main.tsx`; new screens don't need their own provider.
+
+```ts
+const { data, isLoading, error } = useAuthorizedQuery<{ users: User[] }>(
+  ['users', page],
+  `/admin/users?limit=15&offset=${(page - 1) * 15}`,
+)
+```
+
+`UsersPage.tsx` predates this layer and still manages its own
+fetch/loading state directly — it's a reasonable reference for the
+response-unwrapping pattern (the backend wraps payloads as `{ data: {...} }`
+or `{ data: { success, data } }`), but new screens should build on
+`useAuthorizedQuery` instead of copying its manual `useState`/`useEffect`
+approach.
+
+Tests: `src/__tests__/useAuthorizedQuery.test.tsx`.
 
 ## 🔁 Transaction Retries (DLQ)
 

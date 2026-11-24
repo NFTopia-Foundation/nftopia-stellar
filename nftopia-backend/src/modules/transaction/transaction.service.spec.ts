@@ -77,7 +77,7 @@ describe('TransactionService', () => {
   };
 
   const configService = {
-    get: jest.fn((key: string) => {
+    get: jest.fn((key: string): unknown => {
       if (key === 'TRANSACTION_GAS_CEILING') return 1_000_000;
       if (key === 'TRANSACTION_BATCH_MAX_SIZE') return 50;
       return undefined;
@@ -238,21 +238,125 @@ describe('TransactionService', () => {
     expect(result.state).toBe(TransactionState.ROLLED_BACK);
   });
 
-  it('estimates gas for a transaction', async () => {
-    const tx = createMockTransaction({
-      id: 4,
-      contractTxId: '404',
-      state: TransactionState.PENDING,
+  describe('estimateGas caching', () => {
+    beforeEach(() => {
+      transactionRepo.save.mockImplementation((tx) => Promise.resolve(tx));
+      txContract.getTransactionStatus.mockResolvedValue('pending');
+      txContract.getTransactionEvents.mockResolvedValue([]);
     });
 
-    transactionRepo.findOne.mockResolvedValue(tx);
-    txContract.getTransactionStatus.mockResolvedValue('pending');
-    txContract.getTransactionEvents.mockResolvedValue([]);
-    txContract.estimateTransactionGas.mockResolvedValue(12345);
+    it('estimates gas on cache miss, caches the result, and returns cachedAt/expiresAt', async () => {
+      const tx = createMockTransaction({
+        id: 4,
+        contractTxId: '404',
+        state: TransactionState.PENDING,
+      });
 
-    const result = await service.estimateGas(4, 'buyer-1');
+      transactionRepo.findOne.mockResolvedValue(tx);
+      txContract.getTransactionStatus.mockResolvedValue('pending');
+      txContract.getTransactionEvents.mockResolvedValue([]);
+      txContract.estimateTransactionGas.mockResolvedValue(12345);
+      cacheManager.get.mockResolvedValue(null);
 
-    expect(result.estimatedGas).toBe(12345);
+      const result = await service.estimateGas(4, 'buyer-1');
+
+      expect(txContract.estimateTransactionGas).toHaveBeenCalledWith(404);
+      expect(cacheManager.get).toHaveBeenCalledWith('tx-gas-estimate:4:404');
+      expect(cacheManager.set).toHaveBeenCalled();
+      const setCall = cacheManager.set.mock.calls[0] as [
+        string,
+        { estimatedGas: number; cachedAt: string; expiresAt: string },
+        number,
+      ];
+      expect(setCall[0]).toBe('tx-gas-estimate:4:404');
+      expect(setCall[1].estimatedGas).toBe(12345);
+      expect(typeof setCall[1].cachedAt).toBe('string');
+      expect(typeof setCall[1].expiresAt).toBe('string');
+      expect(setCall[2]).toBe(30000);
+
+      expect(result.id).toBe(4);
+      expect(result.contractTxId).toBe('404');
+      expect(result.estimatedGas).toBe(12345);
+      expect(typeof result.cachedAt).toBe('string');
+      expect(typeof result.expiresAt).toBe('string');
+      expect(new Date(result.cachedAt).getTime()).toBeLessThanOrEqual(
+        new Date(result.expiresAt).getTime(),
+      );
+    });
+
+    it('returns cached estimate on cache hit without calling contract', async () => {
+      const tx = createMockTransaction({
+        id: 4,
+        contractTxId: '404',
+        state: TransactionState.PENDING,
+      });
+
+      transactionRepo.findOne.mockResolvedValue(tx);
+      const cachedData = {
+        estimatedGas: 8888,
+        cachedAt: '2026-11-20T00:00:00.000Z',
+        expiresAt: '2026-11-20T00:00:30.000Z',
+      };
+      cacheManager.get.mockResolvedValue(cachedData);
+
+      const result = await service.estimateGas(4, 'buyer-1');
+
+      expect(cacheManager.get).toHaveBeenCalledWith('tx-gas-estimate:4:404');
+      expect(txContract.estimateTransactionGas).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        id: 4,
+        contractTxId: '404',
+        estimatedGas: 8888,
+        cachedAt: '2026-11-20T00:00:00.000Z',
+        expiresAt: '2026-11-20T00:00:30.000Z',
+      });
+    });
+
+    it('uses configurable TTL from configService when set', async () => {
+      const tx = createMockTransaction({
+        id: 4,
+        contractTxId: '404',
+        state: TransactionState.PENDING,
+      });
+
+      transactionRepo.findOne.mockResolvedValue(tx);
+      txContract.estimateTransactionGas.mockResolvedValue(12345);
+      cacheManager.get.mockResolvedValue(null);
+      configService.get.mockImplementation((key: string) => {
+        if (key === 'TRANSACTION_GAS_ESTIMATE_TTL_SECONDS') return 15;
+        return undefined;
+      });
+
+      await service.estimateGas(4, 'buyer-1');
+
+      expect(cacheManager.set).toHaveBeenCalledWith(
+        'tx-gas-estimate:4:404',
+        expect.any(Object),
+        15000,
+      );
+    });
+
+    it('invalidates cached gas estimate when transaction state changes', async () => {
+      const tx = createMockTransaction({
+        id: 8,
+        contractTxId: '808',
+        state: TransactionState.PENDING,
+        buyerId: 'buyer-1',
+        sellerId: 'seller-1',
+      });
+
+      transactionRepo.findOne.mockResolvedValue({ ...tx });
+      txContract.getTransactionStatus.mockResolvedValue('pending');
+      txContract.getTransactionEvents.mockResolvedValue([]);
+      txContract.cancelTransaction.mockResolvedValue(undefined);
+      transactionRepo.save.mockImplementation((saved) =>
+        Promise.resolve({ ...saved }),
+      );
+
+      await service.cancel(8, 'buyer-1', { reason: 'user cancelled' });
+
+      expect(cacheManager.del).toHaveBeenCalledWith('tx-gas-estimate:8:808');
+    });
   });
 
   it('adds signatures to operation results', async () => {

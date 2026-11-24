@@ -4,8 +4,10 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ApolloProvider, ApolloClient, NormalizedCacheObject } from '@apollo/client';
 import AppNavigator from './navigation/AppNavigator';
+// AppLayout (app/_layout.tsx) already renders the canonical ToastContainer
+// (src/components/Toast.tsx, backed by stores/toastStore.ts) internally —
+// see docs/directory-conventions.md (#549).
 import AppLayout from './app/_layout';
-import ToastProvider from './components/Toast';
 import { ConnectivityBanner } from './src/components/ConnectivityBanner';
 import { NetworkStatusManager } from './src/components/NetworkStatusManager';
 import { SessionManager } from './src/components/SessionManager';
@@ -50,7 +52,6 @@ export default function App() {
                 <BackupReminderManager />
                 <ConnectivityBanner />
                 <AppNavigator />
-                <ToastProvider />
               </SafeAreaView>
             </AppLockManager>
           </AppLayout>

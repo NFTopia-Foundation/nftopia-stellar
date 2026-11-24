@@ -4,6 +4,8 @@ import {
   IsOptional,
   IsString,
   IsISO8601,
+  Max,
+  Min,
 } from 'class-validator';
 
 export class CreateAuctionDto {
@@ -36,4 +38,15 @@ export class CreateAuctionDto {
   @IsISO8601()
   @IsNotEmpty()
   endTime: string;
+
+  /**
+   * Override of the platform-wide minimum bid increment (#652), as a
+   * fraction of the current highest bid (e.g. 0.1 = 10%). Omit to use the
+   * platform default.
+   */
+  @IsNumber()
+  @IsOptional()
+  @Min(0.0001)
+  @Max(1)
+  minBidIncrementPct?: number;
 }

@@ -1,33 +1,62 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { emitCtaClicked, CTA_PLACEMENTS } from "@/lib/telemetry/navigation-instrumentation";
 import { useTranslation } from "@/hooks/useTranslation";
 import { useDebounce } from "@/hooks/useDebounce";
+import { useAuthStore } from "@/lib/stores/auth-store";
+import { PriceRangeSlider } from "./PriceRangeSlider";
+import { FilterPresets } from "./FilterPresets";
+import {
+  derivePriceBounds,
+  formatPriceParam,
+  parsePrice,
+  type PriceRange,
+} from "@/lib/marketplace/price-range";
 
-export function MarketplaceFilters() {
+interface MarketplaceFiltersProps {
+  /** Prices of the listings currently loaded, used to size the price slider (#753). */
+  listingPrices?: ReadonlyArray<number | string | null | undefined>;
+}
+
+export function MarketplaceFilters({ listingPrices = [] }: MarketplaceFiltersProps = {}) {
   const { t } = useTranslation();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const userId = useAuthStore((state: { user?: { id?: string } | null }) => state.user?.id ?? null);
 
   const [search, setSearch] = useState(searchParams.get("search") || "");
   const debouncedSearch = useDebounce(search, 300);
   const sortBy = searchParams.get("sortBy") || "newest";
   const minPrice = searchParams.get("minPrice") || "";
   const maxPrice = searchParams.get("maxPrice") || "";
+  const currentQuery = searchParams.toString();
 
+  // Latest URL state for effects that should only fire on their own trigger.
+  const latest = useRef({ searchParams, pathname, router });
+  latest.current = { searchParams, pathname, router };
+
+  // Push the debounced search term into the URL — only when it actually
+  // differs, so applying a preset or clearing filters isn't overwritten by a
+  // stale local search value.
   useEffect(() => {
-    const params = new URLSearchParams(searchParams.toString());
+    const { searchParams: sp, pathname: path, router: r } = latest.current;
+    if (debouncedSearch === (sp.get("search") || "")) return;
+    const params = new URLSearchParams(sp.toString());
     if (debouncedSearch) {
       params.set("search", debouncedSearch);
     } else {
       params.delete("search");
     }
-    router.replace(`${pathname}?${params.toString()}`);
-  }, [debouncedSearch, pathname, router, searchParams]);
+    r.replace(`${path}?${params.toString()}`);
+  }, [debouncedSearch]);
+
+  const replaceParams = (params: URLSearchParams) => {
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname);
+  };
 
   const updateFilter = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -36,13 +65,40 @@ export function MarketplaceFilters() {
     } else {
       params.delete(key);
     }
-    router.replace(`${pathname}?${params.toString()}`);
+    replaceParams(params);
+  };
+
+  const commitPriceRange = (range: PriceRange) => {
+    const params = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of [
+      ["minPrice", formatPriceParam(range.min)],
+      ["maxPrice", formatPriceParam(range.max)],
+    ] as const) {
+      if (value) params.set(key, value);
+      else params.delete(key);
+    }
+    replaceParams(params);
+  };
+
+  const applyPreset = (query: string) => {
+    const params = new URLSearchParams(query);
+    setSearch(params.get("search") || "");
+    replaceParams(params);
   };
 
   const clearFilters = () => {
     setSearch("");
     router.replace(pathname);
   };
+
+  const priceBounds = useMemo(
+    () =>
+      derivePriceBounds(listingPrices, {
+        min: parsePrice(minPrice),
+        max: parsePrice(maxPrice),
+      }),
+    [listingPrices, minPrice, maxPrice],
+  );
 
   return (
     <div className="flex flex-col gap-4 mb-8">
@@ -66,31 +122,18 @@ export function MarketplaceFilters() {
           />
         </label>
 
-        <div className="flex gap-2 items-center">
-          <label>
-            <span className="sr-only">Minimum price</span>
-            <input
-              type="number"
-              aria-label="Minimum price"
-              placeholder="Min Price"
-              value={minPrice}
-              onChange={(e) => updateFilter("minPrice", e.target.value)}
-              className="bg-[#1E1A45] border border-purple-900/30 rounded-full px-4 py-2 text-sm text-white focus:outline-none focus:border-purple-500 w-24"
-            />
-          </label>
-          <span className="text-gray-400">-</span>
-          <label>
-            <span className="sr-only">Maximum price</span>
-            <input
-              type="number"
-              aria-label="Maximum price"
-              placeholder="Max Price"
-              value={maxPrice}
-              onChange={(e) => updateFilter("maxPrice", e.target.value)}
-              className="bg-[#1E1A45] border border-purple-900/30 rounded-full px-4 py-2 text-sm text-white focus:outline-none focus:border-purple-500 w-24"
-            />
-          </label>
-        </div>
+        <PriceRangeSlider
+          minValue={minPrice}
+          maxValue={maxPrice}
+          bounds={priceBounds}
+          onCommit={commitPriceRange}
+          labels={{
+            group: t("marketplace.priceRange.group"),
+            minThumb: t("marketplace.priceRange.minThumb"),
+            maxThumb: t("marketplace.priceRange.maxThumb"),
+            invalid: t("marketplace.priceRange.invalid"),
+          }}
+        />
 
         <label>
           <span className="sr-only">Sort marketplace results</span>
@@ -107,6 +150,8 @@ export function MarketplaceFilters() {
           </select>
         </label>
       </div>
+
+      <FilterPresets userId={userId} currentQuery={currentQuery} onApply={applyPreset} />
     </div>
   );
 }

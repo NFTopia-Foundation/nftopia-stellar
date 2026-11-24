@@ -1,7 +1,9 @@
+import { useCallback } from 'react';
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
-import { PreferencesStore } from './types';
+import { PreferencesStore, DisplaySettings } from './types';
+import { formatCurrencyAmount } from '../currency';
 
 const initialState = {
   theme: {
@@ -23,7 +25,7 @@ const initialState = {
     showPrice: true,
     showCreator: true,
     showLikes: true,
-    currency: 'STRK' as const,
+    currency: 'XLM' as const,
   },
   language: 'en',
   timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -158,7 +160,19 @@ export const usePreferencesStore = create<PreferencesStore>()(
       })),
       {
         name: 'nftopia-preferences',
-        version: 1,
+        version: 2,
+        // v1 -> v2: the default/display currency used to be the stale
+        // Starknet-era 'STRK' (with 'ETH' also a leftover option) — coerce
+        // any already-persisted value from either to the new default so
+        // existing users don't keep a currency that's no longer a valid
+        // option (#660).
+        migrate: (persistedState, version) => {
+          const state = persistedState as { display?: { currency?: string } };
+          if (version < 2 && state?.display && state.display.currency !== 'USD') {
+            state.display.currency = 'XLM';
+          }
+          return state as typeof initialState;
+        },
         onRehydrateStorage: () => (state) => {
           state?.setHydrated(true);
         },
@@ -195,6 +209,30 @@ export const useNotifications = () => {
 export const useDisplaySettings = () => {
   const { display, setDisplay } = usePreferencesStore();
   return { display, setDisplay };
+};
+
+/**
+ * The hook balance/price-displaying components should use (#660) instead
+ * of hardcoding a unit: reads the global currency preference and exposes a
+ * `format` helper that converts an amount already denominated in XLM into
+ * that preference's display form.
+ */
+export const useDisplayCurrency = () => {
+  const currency = usePreferencesStore((state) => state.display.currency);
+  const setDisplay = usePreferencesStore((state) => state.setDisplay);
+
+  const setCurrency = useCallback(
+    (next: DisplaySettings['currency']) => setDisplay({ currency: next }),
+    [setDisplay]
+  );
+
+  const format = useCallback(
+    (amountXlm: number | string | null | undefined) =>
+      formatCurrencyAmount(amountXlm, currency),
+    [currency]
+  );
+
+  return { currency, setCurrency, format };
 };
 
 export const useFavorites = () => {
