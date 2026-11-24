@@ -34,6 +34,7 @@ jest.mock('@/src/services/ai/aiChat.service', () => ({
 jest.mock('@/lib/api/sample', () => ({
   __esModule: true,
   default: {
+    getAIHealth: jest.fn(),
     getAIUsage: jest.fn().mockResolvedValue({
       daily: { remaining: 100 },
       monthly: { remaining: 100 },
@@ -45,6 +46,7 @@ jest.mock('@/lib/api/sample', () => ({
 
 import { useAssistantStore, ASSISTANT_STORAGE_KEY } from '../assistantStore';
 import { streamChatMessage, sendChatMessage } from '@/src/services/ai/aiChat.service';
+import apiClient from '@/lib/api/sample';
 
 const mockedStreamChatMessage = streamChatMessage as jest.MockedFunction<typeof streamChatMessage>;
 const mockedSendChatMessage = sendChatMessage as jest.MockedFunction<typeof sendChatMessage>;
@@ -67,6 +69,28 @@ describe('assistantStore persistence and lifecycle', () => {
       abortController: null,
     });
     await flushPromises();
+  });
+
+  describe('AI health', () => {
+    it('stores healthy and unavailable health states', async () => {
+      (apiClient.getAIHealth as jest.Mock).mockResolvedValueOnce({ status: 'up', timestamp: '2026-01-01T00:00:00Z' });
+      await getStore().fetchHealth();
+      expect(getStore().health).toBe('up');
+
+      (apiClient.getAIHealth as jest.Mock).mockResolvedValueOnce({ status: 'down', timestamp: '2026-01-01T00:00:01Z' });
+      await getStore().fetchHealth();
+      expect(getStore().health).toBe('down');
+
+      (apiClient.getAIHealth as jest.Mock).mockResolvedValueOnce({ status: 'unconfigured', timestamp: '2026-01-01T00:00:02Z' });
+      await getStore().fetchHealth();
+      expect(getStore().health).toBe('unconfigured');
+    });
+
+    it('gracefully keeps chat non-blocking on health fetch error', async () => {
+      (apiClient.getAIHealth as jest.Mock).mockRejectedValueOnce(new Error('Network unavailable'));
+      await getStore().fetchHealth();
+      expect(getStore().health).toBe('unknown');
+    });
   });
 
   describe('message sending and persistence', () => {

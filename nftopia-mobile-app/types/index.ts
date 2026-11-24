@@ -364,7 +364,7 @@ export interface Auction {
   currency: string;
   startTime: string;
   endTime: string;
-  status: 'active' | 'ending_soon' | 'ended' | 'cancelled';
+  status: 'active' | 'ending_soon' | 'ended' | 'settled' | 'cancelled';
   bidCount: number;
   topBidder?: string;
   isWatched: boolean;

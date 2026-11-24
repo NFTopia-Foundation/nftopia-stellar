@@ -387,6 +387,14 @@ class ApiClient {
     }
   }
 
+  // AI Health API
+  async getAIHealth(): Promise<{
+    status: 'up' | 'down' | 'unconfigured';
+    timestamp: string;
+  }> {
+    return this.request('/ai/health');
+  }
+
   // AI Usage API
   async getAIUsage(): Promise<{
     daily: {

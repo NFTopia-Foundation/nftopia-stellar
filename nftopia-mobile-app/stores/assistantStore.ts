@@ -35,6 +35,8 @@ export interface AIUsage {
   hasOverride: boolean;
 }
 
+export type AIHealthStatus = 'unknown' | 'up' | 'down' | 'unconfigured';
+
 interface AssistantState {
   messages: ChatMessage[];
   sessionId: string | null;
@@ -43,6 +45,8 @@ interface AssistantState {
   abortController: AbortController | null;
   usage: AIUsage | null;
   isQuotaExhausted: boolean;
+  health: AIHealthStatus;
+  fetchHealth: () => Promise<void>;
   fetchUsage: () => Promise<void>;
   sendMessage: (text: string) => Promise<void>;
   cancelStream: () => void;
@@ -63,6 +67,18 @@ export const useAssistantStore = create<AssistantState>()(
       abortController: null,
       usage: null,
       isQuotaExhausted: false,
+      health: 'unknown',
+
+      fetchHealth: async () => {
+        try {
+          const health = await apiClient.getAIHealth();
+          set({ health: health.status });
+        } catch (err) {
+          // A transport failure is unknown, so it doesn't falsely block chat.
+          console.error('Failed to fetch AI health:', err);
+          set({ health: 'unknown' });
+        }
+      },
 
       fetchUsage: async () => {
         try {
@@ -175,8 +191,9 @@ export const useAssistantStore = create<AssistantState>()(
                   : m,
               ),
             }));
-            // Refresh usage on error to show updated quota
+            // Refresh usage and availability after a failed send.
             get().fetchUsage();
+            get().fetchHealth();
           },
         });
 
