@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { useAuth } from './auth/useAuth'
 import { AppShell } from './components/AppShell'
+import { ProtectedRoute } from './components/ProtectedRoute'
 import { canManageDlq } from './dlq/access'
 import LoginPage from './pages/LoginPage'
 
@@ -12,7 +13,8 @@ const UsersPage = lazy(() => import('./pages/UsersPage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 const ContentFlagsQueuePage = lazy(() => import('./pages/ContentFlagsQueuePage'))
 const TransactionRetryPage = lazy(() => import('./pages/TransactionRetryPage'))
-const AuditLogPage = lazy(() => import('./pages/AuditLogPage'))
+const AiUsagePage = lazy(() => import('./pages/AiUsagePage'))
+const AuditLogsPage = lazy(() => import('./pages/AuditLogsPage'))
 
 /** Minimal loading indicator shown during lazy-page suspense. */
 function PageSpinner() {
@@ -23,29 +25,53 @@ function PageSpinner() {
   )
 }
 
-function App() {
+/**
+ * `/login` itself isn't behind ProtectedRoute (that would redirect right
+ * back here forever) — once already authenticated, it instead redirects
+ * away, so a stale bookmark or back-navigation to /login doesn't strand an
+ * authenticated user looking at the login form.
+ */
+function LoginRoute() {
   const { state } = useAuth()
 
-  if (state.status !== 'authenticated') {
-    return <LoginPage />
+  if (state.status === 'authenticated') {
+    return <Navigate to="/dashboard" replace />
   }
+
+  return <LoginPage />
+}
+
+function App() {
+  const { state } = useAuth()
+  // canManageDlq(undefined) is false, so this stays false — and the route
+  // below stays unregistered — for an unauthenticated visitor exactly like
+  // it did before ProtectedRoute moved the auth check off this component.
+  const dlqAllowed = canManageDlq(state.status === 'authenticated' ? state.user.role : undefined)
 
   return (
     <BrowserRouter>
       <Suspense fallback={<PageSpinner />}>
         <Routes>
+          <Route path="/login" element={<LoginRoute />} />
           {/* All authenticated routes render inside the AppShell */}
-          <Route element={<AppShell />}>
+          <Route
+            element={
+              <ProtectedRoute>
+                <AppShell />
+              </ProtectedRoute>
+            }
+          >
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/users" element={<UsersPage />} />
             <Route path="/collections" element={<CollectionsPage />} />
             <Route path="/content-flags" element={<ContentFlagsQueuePage />} />
             {/* Operationally sensitive: registered only for roles allowed to manage the DLQ */}
-            {canManageDlq(state.user.role) ? (
+            {dlqAllowed ? (
               <Route path="/transaction-retry" element={<TransactionRetryPage />} />
             ) : null}
-            <Route path="/audit-log" element={<AuditLogPage />} />
+            <Route path="/ai-usage" element={<AiUsagePage />} />
+            <Route path="/audit-logs" element={<AuditLogsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             {/* Catch-all: redirect unknown paths back to dashboard */}
             <Route path="*" element={<Navigate to="/dashboard" replace />} />

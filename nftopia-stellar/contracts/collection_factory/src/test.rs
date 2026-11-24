@@ -1,9 +1,13 @@
 use crate::collection::{NftCollection, NftCollectionClient};
+use crate::error::ContractError;
 use crate::factory::{CollectionFactory, CollectionFactoryClient};
+use crate::storage::DataKey;
 use crate::types::CollectionConfig;
 use soroban_sdk::TryFromVal;
 use soroban_sdk::testutils::Events;
-use soroban_sdk::{Address, Env, String, Symbol, Vec, symbol_short, testutils::Address as _};
+use soroban_sdk::{
+    Address, BytesN, Env, String, Symbol, Vec, symbol_short, testutils::Address as _,
+};
 
 #[test]
 fn test_factory_logic() {
@@ -808,4 +812,127 @@ fn test_get_collections_by_factory() {
     // In a real scenario, collections would be deployed via factory.create_collection
     let collections = factory_client.get_collections_by_factory();
     assert_eq!(collections.len(), 0); // No collections deployed through factory in this test
+}
+
+// ─── create_collection admin/wasm-hash hardening (#737) ────────────────────
+
+fn sample_config(env: &Env, recipient: Address) -> CollectionConfig {
+    CollectionConfig {
+        name: String::from_str(env, "Hardened NFT"),
+        symbol: String::from_str(env, "HNFT"),
+        description: String::from_str(env, "Hardening test"),
+        base_uri: String::from_str(env, "https://hardened.example/"),
+        max_supply: Some(10),
+        is_public_mint: true,
+        royalty_percentage: 250,
+        royalty_recipient: recipient,
+    }
+}
+
+#[test]
+fn test_create_collection_rejects_a_wasm_hash_not_on_the_allowlist() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let fee_asset = Address::generate(&env);
+    let factory_id = env.register(CollectionFactory, ());
+    let factory_client = CollectionFactoryClient::new(&env, &factory_id);
+    factory_client.initialize(&admin, &fee_asset);
+
+    let creator = Address::generate(&env);
+    let config = sample_config(&env, creator.clone());
+    let unapproved_hash = BytesN::from_array(&env, &[7u8; 32]);
+    let salt = BytesN::from_array(&env, &[1u8; 32]);
+
+    // The wasm-hash allowlist check runs before deploy_v2, so this is
+    // reachable and testable without a compiled collection .wasm.
+    let result = factory_client.try_create_collection(&creator, &unapproved_hash, &salt, &config);
+    assert_eq!(result, Err(Ok(ContractError::WasmHashNotAllowed)));
+}
+
+#[test]
+fn test_allow_wasm_hash_then_disallow_it() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let fee_asset = Address::generate(&env);
+    let factory_id = env.register(CollectionFactory, ());
+    let factory_client = CollectionFactoryClient::new(&env, &factory_id);
+    factory_client.initialize(&admin, &fee_asset);
+
+    let wasm_hash = BytesN::from_array(&env, &[9u8; 32]);
+    assert!(!factory_client.is_wasm_hash_allowed(&wasm_hash));
+
+    factory_client.allow_wasm_hash(&wasm_hash);
+    assert!(factory_client.is_wasm_hash_allowed(&wasm_hash));
+
+    factory_client.disallow_wasm_hash(&wasm_hash);
+    assert!(!factory_client.is_wasm_hash_allowed(&wasm_hash));
+}
+
+#[test]
+fn test_collection_init_from_factory_makes_creator_the_admin_not_factory_admin() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let factory_admin = Address::generate(&env);
+    let creator = Address::generate(&env);
+    let factory_id = env.register(CollectionFactory, ());
+    let collection_id = env.register(NftCollection, ());
+    let collection_client = NftCollectionClient::new(&env, &collection_id);
+
+    // Mirrors exactly what create_collection's invoke_contract call now
+    // passes (#737): creator first, factory address second. As with the
+    // other factory/collection tests above, the deploy_v2 step itself
+    // isn't exercised here (no compiled collection .wasm in a native unit
+    // test run) — this calls NftCollection::init with the same arguments
+    // create_collection constructs.
+    let config = sample_config(&env, creator.clone());
+    collection_client.init(&creator, &factory_id, &config);
+
+    let stored_admin: Address = env.as_contract(&collection_id, || {
+        env.storage()
+            .instance()
+            .get(&DataKey::FactoryAdmin)
+            .unwrap()
+    });
+    assert_eq!(stored_admin, creator);
+    assert_ne!(stored_admin, factory_admin);
+}
+
+#[test]
+#[should_panic(expected = "HostError: Error(Auth, InvalidAction)")]
+fn test_factory_admin_cannot_pause_a_collection_it_did_not_create() {
+    use soroban_sdk::IntoVal;
+    use soroban_sdk::testutils::{MockAuth, MockAuthInvoke};
+
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let factory_admin = Address::generate(&env);
+    let creator = Address::generate(&env);
+    let factory_id = env.register(CollectionFactory, ());
+    let collection_id = env.register(NftCollection, ());
+    let collection_client = NftCollectionClient::new(&env, &collection_id);
+
+    let config = sample_config(&env, creator.clone());
+    collection_client.init(&creator, &factory_id, &config);
+
+    // set_pause does `FactoryAdmin.require_auth()` on the stored admin,
+    // which is `creator` after the #737 fix. Mocking auth only for
+    // factory_admin (never creator) must fail — the factory's own admin
+    // has no special standing over a collection it did not create.
+    collection_client
+        .mock_auths(&[MockAuth {
+            address: &factory_admin,
+            invoke: &MockAuthInvoke {
+                contract: &collection_client.address,
+                fn_name: "set_pause",
+                args: (true,).into_val(&env),
+                sub_invokes: &[],
+            },
+        }])
+        .set_pause(&true);
 }

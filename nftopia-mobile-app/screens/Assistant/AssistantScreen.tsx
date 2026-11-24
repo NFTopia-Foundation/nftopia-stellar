@@ -11,11 +11,13 @@ import {
   ActivityIndicator,
   AccessibilityInfo,
   Linking,
+  AppState,
 } from 'react-native';
 import { useRoute, RouteProp } from '@react-navigation/native';
 import { MainStackParamList } from '@/navigation/MainNavigator';
 import { useAssistantStore, ChatMessage } from '@/stores/assistantStore';
 import type { AIUsage } from '@/stores/assistantStore';
+import { useAnalytics } from '@/src/hooks/useAnalytics';
 
 export interface StructuredAssistantReference {
   kind: 'nft' | 'listing';
@@ -165,8 +167,22 @@ function QuotaIndicator({ usage }: { usage: AIUsage | null }) {
 
 export default function AssistantScreen({ navigation }: any) {
   const route = useRoute<RouteProp<MainStackParamList, 'Assistant'>>();
-  const { messages, isStreaming, error, sendMessage, cancelStream, clearConversation, usage, fetchUsage, isQuotaExhausted, rateLimitRetryAt, rateLimitRemaining } =
-    useAssistantStore();
+  const { track } = useAnalytics();
+  const {
+    messages,
+    isStreaming,
+    error,
+    sendMessage,
+    cancelStream,
+    clearConversation,
+    usage,
+    fetchUsage,
+    fetchHealth,
+    health,
+    isQuotaExhausted,
+    rateLimitRetryAt,
+    rateLimitRemaining,
+  } = useAssistantStore();
   const [input, setInput] = useState('');
   const [now, setNow] = useState(Date.now());
   const listRef = useRef<FlatList>(null);
@@ -180,10 +196,30 @@ export default function AssistantScreen({ navigation }: any) {
   const retrySeconds = rateLimitRetryAt ? Math.max(0, Math.ceil((rateLimitRetryAt - now) / 1000)) : 0;
   const isRateLimited = retrySeconds > 0;
 
-  // Fetch usage data on mount
+  const lastHealthCheck = useRef(0);
+  const checkHealthThrottled = () => {
+    const now = Date.now();
+    if (now - lastHealthCheck.current < 30_000) return;
+    lastHealthCheck.current = now;
+    void fetchHealth();
+  };
+
+  useEffect(() => {
+    track('ai_chat_opened');
+  }, [track]);
+
+  // Fetch usage and availability on mount.
   useEffect(() => {
     fetchUsage();
-  }, [fetchUsage]);
+    checkHealthThrottled();
+  }, [fetchUsage, fetchHealth]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') checkHealthThrottled();
+    });
+    return () => subscription.remove();
+  }, [fetchHealth]);
 
   // Context-aware initialization for future use
   useEffect(() => {
@@ -212,7 +248,7 @@ export default function AssistantScreen({ navigation }: any) {
   const onSend = () => {
     const text = input.trim();
     if (!text) return;
-    if (isQuotaExhausted || isRateLimited) {
+    if (isQuotaExhausted || isRateLimited || health === 'down' || health === 'unconfigured') {
       return;
     }
     setInput('');
@@ -247,6 +283,12 @@ export default function AssistantScreen({ navigation }: any) {
           <Text style={styles.clear}>Clear</Text>
         </TouchableOpacity>
       </View>
+
+      {health === 'down' || health === 'unconfigured' ? (
+        <Text style={styles.healthBanner} accessibilityRole="alert">
+          {health === 'unconfigured' ? 'AI assistant is not configured.' : 'AI assistant is temporarily unavailable.'}
+        </Text>
+      ) : null}
 
       {messages.length === 0 ? (
         <View style={styles.empty} accessibilityRole="text">
@@ -297,9 +339,15 @@ export default function AssistantScreen({ navigation }: any) {
           accessibilityLabel="Message input"
         />
         <TouchableOpacity
-          style={[styles.sendBtn, (!input.trim() || isStreaming || isQuotaExhausted || isRateLimited) && styles.sendDisabled]}
+          style={[
+            styles.sendBtn,
+            (!input.trim() || isStreaming || isQuotaExhausted || isRateLimited || health === 'down' || health === 'unconfigured') &&
+              styles.sendDisabled,
+          ]}
           onPress={onSend}
-          disabled={!input.trim() || isStreaming || isQuotaExhausted || isRateLimited}
+          disabled={
+            !input.trim() || isStreaming || isQuotaExhausted || isRateLimited || health === 'down' || health === 'unconfigured'
+          }
           accessibilityRole="button"
           accessibilityLabel="Send message"
         >
@@ -377,6 +425,7 @@ const styles = StyleSheet.create({
   referenceId: { color: '#fff', fontSize: 13, marginTop: 2 },
   userBubbleText: { color: '#fff' },
   rateLimitBanner: { color: '#ffd7a8', backgroundColor: '#ffa5001a', paddingHorizontal: 16, paddingVertical: 8, fontSize: 13 },
+  healthBanner: { color: '#ffb3b3', backgroundColor: '#ff6b6b1a', paddingHorizontal: 16, paddingVertical: 10, fontSize: 13 },
   error: { color: '#ff6b6b', paddingHorizontal: 16, marginBottom: 4 },
   streamingHint: { color: '#6C5CE7', paddingHorizontal: 16, marginBottom: 4, fontSize: 12 },
   inputRow: {

@@ -1,5 +1,15 @@
-import { IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import {
+  IsEnum,
+  IsInt,
+  IsISO8601,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  Min,
+} from 'class-validator';
 import { Transform, Type } from 'class-transformer';
+import { AuditAction } from '../../common/audit/audit-log.entity';
 
 export class AuditLogsQueryDto {
   @IsOptional()
@@ -7,8 +17,8 @@ export class AuditLogsQueryDto {
   adminId?: string;
 
   @IsOptional()
-  @IsString()
-  action?: string;
+  @IsEnum(AuditAction)
+  action?: AuditAction;
 
   @IsOptional()
   @IsString()
@@ -19,11 +29,11 @@ export class AuditLogsQueryDto {
   entityId?: string;
 
   @IsOptional()
-  @IsString()
+  @IsISO8601()
   startDate?: string;
 
   @IsOptional()
-  @IsString()
+  @IsISO8601()
   endDate?: string;
 
   @IsOptional()
@@ -34,7 +44,7 @@ export class AuditLogsQueryDto {
   limit?: number;
 
   @IsOptional()
-  @Transform(({ value }) => value === undefined ? 0 : Number(value))
+  @Transform(({ value }) => (value === undefined ? 0 : Number(value)))
   @IsInt()
   @Min(0)
   offset?: number;

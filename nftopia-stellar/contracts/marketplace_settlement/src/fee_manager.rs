@@ -1,7 +1,7 @@
 use crate::error::SettlementError;
 use crate::events::{
-    emit_fee_config_initialized, emit_platform_fees_collected, FeeConfigInitializedEvent,
-    PlatformFeesCollectedEvent,
+    emit_fee_config_initialized, emit_fee_withdrawn, emit_platform_fees_collected,
+    FeeConfigInitializedEvent, FeeWithdrawnEvent, PlatformFeesCollectedEvent,
 };
 use crate::types::{Asset, FeeConfig, VolumeTier};
 use crate::utils::math_utils;
@@ -105,20 +105,25 @@ impl FeeManager {
         Ok(())
     }
 
-    /// Withdraw accumulated platform fees
+    /// Withdraw accumulated platform fees (#736).
+    ///
+    /// Single authorization model: the contract admin withdraws to a
+    /// `recipient` of their choosing. Authorization is the caller's job —
+    /// `settlement_core::withdraw_platform_fees` already checks `admin`
+    /// against `AdminConfig.admin` before calling this — so this function
+    /// does not re-check `admin` against `fee_config.fee_recipient` itself.
+    /// The old inner check required those two to be the same address,
+    /// which meant a deployment that ever set a `fee_recipient` distinct
+    /// from the admin key (e.g. a dedicated treasury address) could never
+    /// withdraw at all: no caller could simultaneously equal both.
+    /// `fee_recipient` remains a config/reporting field; it is not an
+    /// authorization gate for this call.
     pub fn withdraw_platform_fees(
         env: &Env,
         asset: &Asset,
         recipient: &Address,
         admin: &Address,
     ) -> Result<i128, SettlementError> {
-        let fee_config = Self::get_fee_config(env)?;
-
-        // Check admin authorization
-        if fee_config.fee_recipient != *admin {
-            return Err(SettlementError::Unauthorized);
-        }
-
         let mut accumulated_fees: Map<Asset, i128> = env
             .storage()
             .instance()
@@ -131,7 +136,18 @@ impl FeeManager {
             return Err(SettlementError::InsufficientFunds);
         }
 
-        // Transfer fees to recipient
+        // Effects before interactions: zero the balance *before* the
+        // external transfer, so a reentrant call sees it already drained
+        // rather than the pre-withdrawal amount. If `transfer_tokens`
+        // below returns `Err`, this write (like every other storage write
+        // made during this invocation) is rolled back by Soroban along
+        // with the whole transaction, so there is nothing to manually
+        // restore on failure.
+        accumulated_fees.set(asset.clone(), 0);
+        env.storage()
+            .instance()
+            .set(&ACCUMULATED_FEES, &accumulated_fees);
+
         crate::utils::asset_utils::transfer_tokens(
             asset,
             &env.current_contract_address(),
@@ -140,11 +156,16 @@ impl FeeManager {
             env,
         )?;
 
-        // Reset accumulated fees
-        accumulated_fees.set(asset.clone(), 0);
-        env.storage()
-            .instance()
-            .set(&ACCUMULATED_FEES, &accumulated_fees);
+        emit_fee_withdrawn(
+            env,
+            FeeWithdrawnEvent {
+                asset: asset.clone(),
+                amount,
+                recipient: recipient.clone(),
+                caller: admin.clone(),
+                timestamp: env.ledger().timestamp(),
+            },
+        );
 
         Ok(amount)
     }

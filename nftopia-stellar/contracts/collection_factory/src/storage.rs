@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, contracttype};
+use soroban_sdk::{Address, BytesN, contracttype};
 
 #[derive(Clone)]
 #[contracttype]
@@ -13,6 +13,9 @@ pub enum DataKey {
 
     MaxCollectionsPerCreator,
     CreatorCollectionCount(Address),
+    /// Collection WASM hashes an admin has approved for `create_collection`
+    /// (#737). Presence of the key means allowed; absence means not.
+    AllowedWasmHash(BytesN<32>),
 
     // Collection Keys
     CollectionConfig,

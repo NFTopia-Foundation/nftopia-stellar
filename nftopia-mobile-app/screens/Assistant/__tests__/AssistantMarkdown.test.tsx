@@ -7,6 +7,7 @@ const mockAssistantState: any = {
   messages: [], isStreaming: false, error: null, sendMessage: jest.fn(), cancelStream: jest.fn(),
   clearConversation: jest.fn(), usage: null, fetchUsage: jest.fn(), isQuotaExhausted: false,
   rateLimitRetryAt: null, rateLimitRemaining: null,
+  fetchHealth: jest.fn(), health: 'up',
 };
 
 jest.mock('@react-navigation/native', () => ({

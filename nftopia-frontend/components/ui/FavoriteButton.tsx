@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Heart } from "lucide-react";
 import { useFavorites } from "@/lib/stores/preferences-store";
+import { useOfflineWrite } from "@/hooks/useOfflineWrite";
 import { telemetry } from "@/lib/telemetry";
 import { EVENT_NAMES } from "@/lib/telemetry/events";
 import { cn } from "@/lib/utils";
@@ -30,7 +31,8 @@ export function FavoriteButton({
   count,
   onToggle,
 }: FavoriteButtonProps) {
-  const { isFavorite, toggleFavorite, isHydrated } = useFavorites();
+  const { isFavorite, isHydrated } = useFavorites();
+  const { submit } = useOfflineWrite();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -44,8 +46,21 @@ export function FavoriteButton({
       e.preventDefault();
       e.stopPropagation();
 
-      toggleFavorite(id, itemType);
       const newFavoriteState = !active;
+      // Applies the optimistic update immediately; queued for ordered replay
+      // when offline (#663).
+      void submit({
+        type: "favorite",
+        payload: {
+          itemType,
+          itemId: id,
+          favorited: newFavoriteState,
+          previousFavorited: active,
+          ...(name ? { label: name } : {}),
+        },
+      }).catch((error) => {
+        console.error("Favorite update failed:", error);
+      });
 
       // Track telemetry
       try {
@@ -68,7 +83,7 @@ export function FavoriteButton({
         onToggle(newFavoriteState);
       }
     },
-    [id, itemType, name, active, toggleFavorite, onToggle]
+    [id, itemType, name, active, submit, onToggle]
   );
 
   // Icon Sizing

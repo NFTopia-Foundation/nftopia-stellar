@@ -13,7 +13,49 @@ import {
 import { useAuctionStore } from '@/stores/auctionStore';
 import apiClient from '@/lib/api/sample';
 import { haptics } from '@/lib/haptics';
+import ConfirmationDialog from '@/components/wallet/ConfirmationDialog';
+import { StellarWalletService } from '@/src/services/stellar/wallet.service';
+import { useWalletStore } from '@/stores/walletStore';
+import { useAuthStore } from '@/stores/authStore';
 import { Auction, Bid } from '@/types';
+
+export type AuctionOutcome = 'won' | 'lost' | 'reserve_not_met' | 'seller_sold' | 'seller_unsold' | 'awaiting_settlement';
+
+export function shouldPollAuction(auction: Auction | null): boolean {
+  return Boolean(auction && auction.status !== 'settled' && auction.status !== 'cancelled');
+}
+
+export function deriveAuctionOutcome(
+  auction: Auction,
+  bidHistory: Bid[],
+  currentUserId?: string,
+): AuctionOutcome {
+  const ended = auction.status === 'ended' || auction.status === 'settled' || new Date(auction.endTime).getTime() <= Date.now();
+  if (!ended) return 'awaiting_settlement';
+  const highest = bidHistory.find((bid) => bid.isWinning) ?? bidHistory[0];
+  const reserve = auction.reservePrice ? Number(auction.reservePrice) : null;
+
+  if (auction.status === 'settled') {
+    if (!highest) {
+      if (currentUserId && auction.creatorId === currentUserId) return 'seller_unsold';
+      return 'reserve_not_met';
+    }
+    if (reserve !== null && Number(highest.amount) < reserve) return 'reserve_not_met';
+    if (currentUserId && auction.creatorId === currentUserId) return 'seller_sold';
+    if (highest && currentUserId && highest.bidderId === currentUserId) return 'won';
+    if (highest) return 'lost';
+  }
+
+  if (auction.status === 'settled' && !highest) {
+    if (currentUserId && auction.creatorId === currentUserId) return 'seller_unsold';
+  }
+  if (auction.status === 'ended') {
+    if (reserve !== null && (!highest || Number(highest.amount) < reserve)) return 'reserve_not_met';
+    return 'awaiting_settlement';
+  }
+  if (currentUserId && auction.creatorId === currentUserId) return 'seller_unsold';
+  return 'awaiting_settlement';
+}
 
 function CountdownTimer({ endTime }: { endTime: string }) {
   const [remaining, setRemaining] = useState('');
@@ -49,7 +91,11 @@ export default function AuctionDetailScreen({ route, navigation }: any) {
   const { currentAuction, bidHistory, loading, placeBid, toggleWatch, fetchAuctionById, fetchBidHistory, watchedAuctions } = useAuctionStore();
   const [bidAmount, setBidAmount] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [estimatedFee, setEstimatedFee] = useState('0.00001');
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const network = useWalletStore((state) => state.network);
+  const currentUser = useAuthStore((state) => state.user);
 
   useEffect(() => {
     fetchAuctionById(auctionId);
@@ -57,17 +103,33 @@ export default function AuctionDetailScreen({ route, navigation }: any) {
   }, [auctionId]);
 
   useEffect(() => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    const shouldPoll = shouldPollAuction(currentAuction);
+    if (!shouldPoll) return;
     pollRef.current = setInterval(() => {
       fetchAuctionById(auctionId);
+      fetchBidHistory(auctionId);
     }, 15000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [auctionId]);
+  }, [auctionId, currentAuction?.status, currentAuction?.endTime]);
+
+  const openBidConfirmation = async () => {
+    if (!currentAuction) return;
+    setConfirmVisible(true);
+    try {
+      const estimate = await new StellarWalletService(undefined, network).estimateFee(['Manage Offer']);
+      setEstimatedFee(estimate.totalFeeXlm);
+    } catch {
+      setEstimatedFee('0.00001');
+    }
+  };
 
   const handleBid = async () => {
     if (!currentAuction) return;
     setSubmitting(true);
     try {
       await placeBid(auctionId, bidAmount);
+      setConfirmVisible(false);
       setBidAmount('');
       haptics.success();
       Alert.alert('Success', 'Your bid has been placed!');
@@ -93,7 +155,12 @@ export default function AuctionDetailScreen({ route, navigation }: any) {
 
   const minBid = (parseFloat(currentAuction.currentPrice) + 0.1).toFixed(2);
   const isWatched = watchedAuctions.includes(auctionId);
-  const isEnded = new Date(currentAuction.endTime).getTime() <= Date.now();
+  const isEnded = new Date(currentAuction.endTime).getTime() <= Date.now() || currentAuction.status === 'ended' || currentAuction.status === 'settled';
+  const outcome = deriveAuctionOutcome(currentAuction, bidHistory, currentUser?.id);
+  const bidNumber = Number(bidAmount);
+  const currentPriceNumber = Number(currentAuction.currentPrice);
+  const increment = Number.isFinite(bidNumber) && Number.isFinite(currentPriceNumber) ? bidNumber - currentPriceNumber : 0;
+  const largeJump = Number.isFinite(bidNumber) && Number.isFinite(currentPriceNumber) && currentPriceNumber > 0 && bidNumber > currentPriceNumber * 5;
 
   return (
     <ScrollView style={styles.container} refreshControl={<RefreshControl refreshing={loading} onRefresh={() => fetchAuctionById(auctionId)} tintColor="#6C5CE7" />}>
@@ -133,7 +200,24 @@ export default function AuctionDetailScreen({ route, navigation }: any) {
 
         {isEnded ? (
           <View style={styles.endedBanner}>
-            <Text style={styles.endedText}>Auction has ended</Text>
+            {outcome === 'won' ? (
+              <>
+                <Text style={styles.endedText}>You won this auction</Text>
+                <TouchableOpacity style={styles.outcomeAction} onPress={() => navigation.navigate('NFTDetail', { nftId: currentAuction.nftId })}>
+                  <Text style={styles.outcomeActionText}>View in your collection</Text>
+                </TouchableOpacity>
+              </>
+            ) : outcome === 'lost' ? (
+              <Text style={styles.endedText}>You were outbid. This auction was won by another bidder.</Text>
+            ) : outcome === 'reserve_not_met' ? (
+              <Text style={styles.endedText}>Reserve not met. The auction did not sell.</Text>
+            ) : outcome === 'seller_sold' ? (
+              <Text style={styles.endedText}>Sold. Your auction has settled.</Text>
+            ) : outcome === 'seller_unsold' ? (
+              <Text style={styles.endedText}>Unsold. The reserve was not met or there were no bids.</Text>
+            ) : (
+              <Text style={styles.endedText}>Auction ended. Awaiting settlement.</Text>
+            )}
           </View>
         ) : (
           <View style={styles.bidSection}>
@@ -149,7 +233,7 @@ export default function AuctionDetailScreen({ route, navigation }: any) {
               />
               <TouchableOpacity
                 style={[styles.bidButton, submitting && styles.bidButtonDisabled]}
-                onPress={handleBid}
+                onPress={openBidConfirmation}
                 disabled={submitting || !bidAmount || parseFloat(bidAmount) < parseFloat(minBid)}
               >
                 <Text style={styles.bidButtonText}>{submitting ? '...' : 'Place Bid'}</Text>
@@ -157,6 +241,24 @@ export default function AuctionDetailScreen({ route, navigation }: any) {
             </View>
           </View>
         )}
+
+      <ConfirmationDialog
+        visible={confirmVisible}
+        title="Confirm bid"
+        message={`Review your bid for ${currentAuction.nftName}.`}
+        confirmLabel={submitting ? 'Submitting...' : 'Confirm bid'}
+        confirmDisabled={submitting}
+        onCancel={() => { if (!submitting) setConfirmVisible(false); }}
+        onConfirm={handleBid}
+      >
+        <View style={styles.confirmDetails}>
+          <Text style={styles.confirmText}>Bid amount: {bidAmount} {currentAuction.currency}</Text>
+          <Text style={styles.confirmText}>Current highest bid: {currentAuction.currentPrice} {currentAuction.currency}</Text>
+          <Text style={styles.confirmText}>Increment: {increment.toFixed(2)} {currentAuction.currency}</Text>
+          <Text style={styles.confirmText}>Estimated network fee: {estimatedFee} XLM</Text>
+          {largeJump ? <Text style={styles.largeJumpWarning}>Warning: this bid is more than 5x the current price.</Text> : null}
+        </View>
+      </ConfirmationDialog>
 
         <TouchableOpacity style={styles.watchButton} onPress={handleWatch}>
           <Text style={styles.watchIcon}>{isWatched ? '🔔 Watching' : '🔕 Watch'}</Text>
@@ -219,7 +321,12 @@ const styles = StyleSheet.create({
   watchButton: { marginTop: 12, padding: 12, borderRadius: 10, backgroundColor: '#F0F0F0', alignItems: 'center' },
   watchIcon: { fontSize: 14 },
   endedBanner: { marginTop: 16, padding: 16, backgroundColor: '#FFE0E0', borderRadius: 12, alignItems: 'center' },
-  endedText: { fontSize: 16, fontWeight: '600', color: '#E17055' },
+  endedText: { fontSize: 16, fontWeight: '600', color: '#E17055', textAlign: 'center' },
+  outcomeAction: { marginTop: 10, backgroundColor: '#6C5CE7', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
+  outcomeActionText: { color: '#FFFFFF', fontWeight: '600' },
+  confirmDetails: { marginBottom: 16, gap: 6 },
+  confirmText: { color: '#666', fontSize: 14 },
+  largeJumpWarning: { color: '#E17055', backgroundColor: '#FFE0E0', padding: 10, borderRadius: 8, fontWeight: '700', marginTop: 6 },
   historySection: { marginTop: 24 },
   historyTitle: { fontSize: 18, fontWeight: '600', color: '#1A1A1A', marginBottom: 12 },
   noBids: { fontSize: 14, color: '#999', textAlign: 'center', padding: 20 },

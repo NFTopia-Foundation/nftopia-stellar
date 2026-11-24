@@ -26,10 +26,18 @@ describe('AdminController', () => {
 
   describe('listUsers', () => {
     it('calls adminService.listUsers with the query DTO', async () => {
-      const mockResult = { users: [{ id: 'user-1', username: 'alice' }], total: 1 };
+      const mockResult = {
+        users: [{ id: 'user-1', username: 'alice' }],
+        total: 1,
+      };
       adminService.listUsers.mockResolvedValue(mockResult);
 
-      const query = { search: 'alice', status: 'active' as const, limit: 10, offset: 0 };
+      const query = {
+        search: 'alice',
+        status: 'active' as const,
+        limit: 10,
+        offset: 0,
+      };
       const result = await controller.listUsers(query);
 
       expect(adminService.listUsers).toHaveBeenCalledWith(query);
@@ -38,11 +46,23 @@ describe('AdminController', () => {
   });
 
   describe('listAuditLogs', () => {
-    it('delegates paging and filters to AdminService', async () => {
-      const query = { adminId: '11111111-1111-1111-1111-111111111111', action: 'BAN_USER', limit: 50, offset: 0 };
-      const result = { logs: [], total: 0, limit: 50, offset: 0 };
-      adminService.listAuditLogs.mockResolvedValue(result);
-      await expect(controller.listAuditLogs(query)).resolves.toEqual(result);
+    it('passes validated audit filters to the admin service', async () => {
+      const mockResult = { logs: [], total: 0, limit: 50, offset: 0 };
+      adminService.listAuditLogs.mockResolvedValue(mockResult);
+      const query = {
+        adminId: '11111111-1111-1111-1111-111111111111',
+        action: 'BAN_USER' as never,
+        entityType: 'user',
+        entityId: '22222222-2222-2222-2222-222222222222',
+        startDate: '2026-01-01T00:00:00.000Z',
+        endDate: '2026-01-31T23:59:59.999Z',
+        limit: 50,
+        offset: 0,
+      };
+
+      await expect(controller.listAuditLogs(query)).resolves.toEqual(
+        mockResult,
+      );
       expect(adminService.listAuditLogs).toHaveBeenCalledWith(query);
     });
   });
@@ -88,7 +108,10 @@ describe('AdminController', () => {
 
   describe('unbanUser', () => {
     it('calls adminService.unbanUser with adminId, userId, ip and userAgent', async () => {
-      adminService.unbanUser.mockResolvedValue({ id: 'user-1', isBanned: false });
+      adminService.unbanUser.mockResolvedValue({
+        id: 'user-1',
+        isBanned: false,
+      });
 
       const result = await controller.unbanUser('user-1', user, req);
 

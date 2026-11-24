@@ -25,6 +25,18 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
   multiRemove: jest.fn(),
 }));
 
+const mockAnalyticsTrack = jest.fn();
+const mockAnalyticsHasConsent = jest.fn(() => true);
+
+jest.mock('@/src/analytics/analytics.service', () => ({
+  analyticsService: {
+    track: (...args: unknown[]) => {
+      if (mockAnalyticsHasConsent()) mockAnalyticsTrack(...args);
+    },
+    hasConsent: mockAnalyticsHasConsent,
+  },
+}));
+
 jest.mock('@/src/services/ai/aiChat.service', () => {
   class MockChatRequestError extends Error {
     status: number;
@@ -48,6 +60,7 @@ jest.mock('@/src/services/ai/aiChat.service', () => {
 jest.mock('@/lib/api/sample', () => ({
   __esModule: true,
   default: {
+    getAIHealth: jest.fn(),
     getAIUsage: jest.fn().mockResolvedValue({
       daily: { remaining: 100 },
       monthly: { remaining: 100 },
@@ -59,6 +72,7 @@ jest.mock('@/lib/api/sample', () => ({
 
 import { useAssistantStore, ASSISTANT_STORAGE_KEY } from '../assistantStore';
 import { streamChatMessage, sendChatMessage, ChatRequestError } from '@/src/services/ai/aiChat.service';
+import apiClient from '@/lib/api/sample';
 
 const mockedStreamChatMessage = streamChatMessage as jest.MockedFunction<typeof streamChatMessage>;
 const mockedSendChatMessage = sendChatMessage as jest.MockedFunction<typeof sendChatMessage>;
@@ -72,6 +86,7 @@ const flushPromises = () => new Promise((resolve) => setTimeout(resolve, 10));
 describe('assistantStore persistence and lifecycle', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockAnalyticsHasConsent.mockReturnValue(true);
     Object.keys(asyncStorageStore).forEach((k) => delete asyncStorageStore[k]);
     useAssistantStore.setState({
       messages: [],
@@ -105,6 +120,28 @@ describe('assistantStore persistence and lifecycle', () => {
       useAssistantStore.setState({ rateLimitRetryAt: Date.now() - 1 });
       await getStore().sendMessage('Send again');
       expect(mockedStreamChatMessage.mock.calls.length).toBe(callsBefore + 1);
+    });
+  });
+
+  describe('AI health', () => {
+    it('stores healthy and unavailable health states', async () => {
+      (apiClient.getAIHealth as jest.Mock).mockResolvedValueOnce({ status: 'up', timestamp: '2026-01-01T00:00:00Z' });
+      await getStore().fetchHealth();
+      expect(getStore().health).toBe('up');
+
+      (apiClient.getAIHealth as jest.Mock).mockResolvedValueOnce({ status: 'down', timestamp: '2026-01-01T00:00:01Z' });
+      await getStore().fetchHealth();
+      expect(getStore().health).toBe('down');
+
+      (apiClient.getAIHealth as jest.Mock).mockResolvedValueOnce({ status: 'unconfigured', timestamp: '2026-01-01T00:00:02Z' });
+      await getStore().fetchHealth();
+      expect(getStore().health).toBe('unconfigured');
+    });
+
+    it('gracefully keeps chat non-blocking on health fetch error', async () => {
+      (apiClient.getAIHealth as jest.Mock).mockRejectedValueOnce(new Error('Network unavailable'));
+      await getStore().fetchHealth();
+      expect(getStore().health).toBe('unknown');
     });
   });
 
@@ -233,6 +270,53 @@ describe('assistantStore persistence and lifecycle', () => {
       // streaming flag must be reset to false so UI doesn't spin forever
       expect(state.messages[1].streaming).toBe(false);
       expect(state.isStreaming).toBe(false);
+    });
+  });
+
+  describe('AI chat analytics', () => {
+    it('tracks privacy-safe sent and completed events', async () => {
+      let capturedHandlers: any;
+      mockedStreamChatMessage.mockImplementation((_message, _sessionId, handlers) => {
+        capturedHandlers = handlers;
+        return new AbortController();
+      });
+
+      await getStore().sendMessage('Hello');
+      capturedHandlers.onDone();
+
+      expect(mockAnalyticsTrack).toHaveBeenCalledWith('ai_chat_message_sent', { message_length_bucket: '1-20' });
+      expect(mockAnalyticsTrack).toHaveBeenCalledWith('ai_chat_reply_completed', expect.objectContaining({ latency_ms: expect.any(Number) }));
+      expect(JSON.stringify(mockAnalyticsTrack.mock.calls)).not.toContain('Hello');
+    });
+
+    it('tracks cancellation and clear events', () => {
+      useAssistantStore.setState({ isStreaming: true, abortController: new AbortController() });
+      getStore().cancelStream();
+      getStore().clearConversation();
+
+      expect(mockAnalyticsTrack).toHaveBeenCalledWith('ai_chat_stream_cancelled', {});
+      expect(mockAnalyticsTrack).toHaveBeenCalledWith('ai_chat_cleared', {});
+    });
+
+    it('categorizes errors without message content', () => {
+      let capturedHandlers: any;
+      mockedStreamChatMessage.mockImplementation((_message, _sessionId, handlers) => {
+        capturedHandlers = handlers;
+        return new AbortController();
+      });
+
+      useAssistantStore.setState({ messages: [], sessionId: null });
+      getStore().sendMessage('Quota test');
+      capturedHandlers.onError(new Error('AI_DAILY_TOKEN_CAP_REACHED'));
+
+      expect(mockAnalyticsTrack).toHaveBeenCalledWith('ai_chat_error', { error_category: 'quota' });
+      expect(JSON.stringify(mockAnalyticsTrack.mock.calls)).not.toContain('Quota test');
+    });
+
+    it('respects analytics consent opt-out', () => {
+      mockAnalyticsHasConsent.mockReturnValue(false);
+      getStore().clearConversation();
+      expect(mockAnalyticsTrack).not.toHaveBeenCalled();
     });
   });
 

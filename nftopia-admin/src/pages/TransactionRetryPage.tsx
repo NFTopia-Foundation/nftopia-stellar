@@ -13,7 +13,7 @@ import {
   type DlqEntry,
   type RetryMetrics,
 } from '../dlq/dlqApi'
-import { bucketByDay, bulkRetryPhrase, cleanupPhrase, recentActivity } from '../dlq/dlqStats'
+import { bucketByDay, bulkRetryPhrase, cleanupPhrase, normalizeFailureReason, recentActivity, type FailureReasonCategory } from '../dlq/dlqStats'
 import { formatUtc } from '../dlq/format'
 import { explorerUrl } from '../utils/explorerUrl'
 
@@ -56,6 +56,7 @@ export default function TransactionRetryPage() {
   const [lookupEntry, setLookupEntry] = useState<DlqEntry | null>(null)
   const [lookupLoading, setLookupLoading] = useState(false)
   const [lookupError, setLookupError] = useState<string | null>(null)
+  const [selectedReason, setSelectedReason] = useState<FailureReasonCategory | null>(null)
 
   const describe = useCallback(
     (error: unknown) => (error instanceof DlqApiError ? error.message : t('dlq.error.network')),
@@ -298,7 +299,10 @@ export default function TransactionRetryPage() {
           metrics={metrics}
           trend={bucketByDay(sample, Date.now())}
           recent={recentActivity(sample)}
+          reasonEntries={sample}
           sampleSize={sample.length}
+          selectedReason={selectedReason}
+          onReasonSelect={setSelectedReason}
         />
       ) : loading ? (
         <p className="text-sm text-slate-400">{t('dlq.loading')}</p>
@@ -307,7 +311,7 @@ export default function TransactionRetryPage() {
       <div className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold text-white">{t('dlq.listTitle', { count: total })}</h2>
         <DlqTable
-          entries={entries}
+          entries={selectedReason ? entries.filter((entry) => normalizeFailureReason(entry.lastError) === selectedReason) : entries}
           busy={submitting}
           onRetry={(entry) => open({ kind: 'retry', entry })}
           onCancel={(entry) => open({ kind: 'cancel', entry })}

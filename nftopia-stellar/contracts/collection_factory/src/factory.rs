@@ -32,6 +32,27 @@ impl CollectionFactory {
         env.storage().instance().set(&DataKey::FeeAsset, &fee_asset);
     }
 
+    /// Deploys a new collection contract and initializes it (#737).
+    ///
+    /// Factory -> collection handshake: `NftCollection::init` takes
+    /// `(admin, factory_address, config)`. `admin` is passed as `creator`
+    /// — the caller who authorized and will own this collection — not the
+    /// factory's own `FactoryAdmin`. Passing `FactoryAdmin` here was a bug:
+    /// it made the factory's single operator the admin of every collection
+    /// ever deployed through it, leaving the creator with no control
+    /// (minting, pausing, royalties) over a collection they paid to create.
+    /// `factory_address` (this contract's own address) is a legitimate,
+    /// separate back-reference: the collection stores it under
+    /// `DataKey::FactoryAddress` purely so `is_fact`/`get_factory` can
+    /// later confirm which factory deployed it — it is never used as an
+    /// authorization credential, so it is unaffected by this fix.
+    ///
+    /// `wasm_hash` must be on the admin-approved allowlist
+    /// (`allow_wasm_hash`/`disallow_wasm_hash`) — an arbitrary caller-
+    /// supplied hash would let anyone deploy_v2 any WASM they like through
+    /// this factory, have it recorded as a "real" collection
+    /// (`CollectionInfo`, `emit_collection_created`), and potentially fake
+    /// `is_fact`/`verify_factory_origin` to pass for a hostile contract.
     pub fn create_collection(
         env: Env,
         creator: Address,
@@ -41,11 +62,13 @@ impl CollectionFactory {
     ) -> Result<Address, ContractError> {
         creator.require_auth();
 
-        let admin: Address = env
+        if !env
             .storage()
             .instance()
-            .get(&DataKey::FactoryAdmin)
-            .unwrap();
+            .has(&DataKey::AllowedWasmHash(wasm_hash.clone()))
+        {
+            return Err(ContractError::WasmHashNotAllowed);
+        }
 
         // Check creator boundaries
         let current_creator_count: u32 = env
@@ -99,13 +122,14 @@ impl CollectionFactory {
             .with_address(creator.clone(), salt)
             .deploy_v2(wasm_hash, constructor_args);
 
-        // Initialize the collection
+        // Initialize the collection: the creator is the collection's admin
+        // (#737), not FactoryAdmin — see the doc comment above.
         env.invoke_contract::<()>(
             &collection_address,
             &soroban_sdk::symbol_short!("init"),
             soroban_sdk::vec![
                 &env,
-                admin.into_val(&env),
+                creator.clone().into_val(&env),
                 env.current_contract_address().into_val(&env),
                 config.clone().into_val(&env)
             ],
@@ -209,6 +233,42 @@ impl CollectionFactory {
         env.storage()
             .instance()
             .set(&DataKey::FactoryFee, &fee_amount);
+    }
+
+    /// Approves a collection WASM hash for `create_collection` (#737).
+    pub fn allow_wasm_hash(env: Env, wasm_hash: BytesN<32>) {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::FactoryAdmin)
+            .unwrap();
+        admin.require_auth();
+
+        env.storage()
+            .instance()
+            .set(&DataKey::AllowedWasmHash(wasm_hash.clone()), &true);
+        events::emit_wasm_hash_allowed(&env, wasm_hash);
+    }
+
+    /// Revokes a previously approved collection WASM hash (#737).
+    pub fn disallow_wasm_hash(env: Env, wasm_hash: BytesN<32>) {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::FactoryAdmin)
+            .unwrap();
+        admin.require_auth();
+
+        env.storage()
+            .instance()
+            .remove(&DataKey::AllowedWasmHash(wasm_hash.clone()));
+        events::emit_wasm_hash_disallowed(&env, wasm_hash);
+    }
+
+    pub fn is_wasm_hash_allowed(env: Env, wasm_hash: BytesN<32>) -> bool {
+        env.storage()
+            .instance()
+            .has(&DataKey::AllowedWasmHash(wasm_hash))
     }
 
     pub fn reset_creator_collection_count(env: Env, creator: Address) {

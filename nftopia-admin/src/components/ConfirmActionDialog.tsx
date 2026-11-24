@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { confirmationMatches } from '../dlq/dlqStats'
+import { useFocusTrap } from './useFocusTrap'
 
 export interface ConfirmActionDialogProps {
   open: boolean
@@ -23,10 +24,14 @@ export interface ConfirmActionDialogProps {
 }
 
 /**
- * Modal that gates an operational action behind an explicit confirmation.
- * Mounted only while open, so the typed text starts empty for each action.
- * The phrase is compared on every render: if it changes (say the bulk count is
- * edited), text typed for the old one stops matching and must be retyped.
+ * The shared confirm dialog for destructive admin actions (#700): a title,
+ * a description, and confirm/cancel, with an optional typed-phrase gate and
+ * extra inputs for actions that need them (a reason, a bulk count, …).
+ * Mounted only while open, so the typed text starts empty for each action,
+ * and so that mount/unmount lines up with `useFocusTrap`'s focus-in /
+ * restore-focus-on-close. The phrase is compared on every render: if it
+ * changes (say the bulk count is edited), text typed for the old one stops
+ * matching and must be retyped.
  */
 export default function ConfirmActionDialog({ open, ...props }: ConfirmActionDialogProps) {
   if (!open) return null
@@ -49,9 +54,12 @@ function ConfirmActionDialogForm({
   const { t } = useTranslation()
   const [typed, setTyped] = useState('')
   const phraseOk = phrase === undefined || confirmationMatches(typed, phrase)
+  const containerRef = useFocusTrap<HTMLDivElement>()
 
   return (
     <div
+      ref={containerRef}
+      tabIndex={-1}
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"

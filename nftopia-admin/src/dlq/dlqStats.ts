@@ -34,6 +34,40 @@ export interface DayBucket {
   count: number
 }
 
+export type FailureReasonCategory = 'timeout' | 'insufficient_balance' | 'contract_error' | 'rpc_unavailable' | 'other'
+
+export interface FailureReasonGroup {
+  reason: FailureReasonCategory
+  count: number
+  share: number
+}
+
+/** Normalizes variable DLQ error text into one of the operator-facing failure categories. */
+export function normalizeFailureReason(lastError: string | null | undefined): FailureReasonCategory {
+  const text = (lastError ?? '')
+    .toLowerCase()
+    .replace(/\b[gm][a-z2-7]{20,}\b/gi, 'address')
+    .replace(/\b(?:0x)?[a-f0-9]{16,}\b/gi, 'id')
+    .replace(/\d+(?:\.\d+)?/g, 'n')
+  if (/timeout|timed out|deadline exceeded|etimedout/.test(text)) return 'timeout'
+  if (/insufficient (?:balance|funds)|not enough (?:balance|funds)|underfunded/.test(text)) return 'insufficient_balance'
+  if (/contract.*(?:error|code)|(?:error|code).*contract|op_[a-z_]+|host function error/.test(text)) return 'contract_error'
+  if (/rpc unavailable|rpc.*(?:down|unavailable|offline)|econnrefused|bad gateway|service unavailable|network unreachable/.test(text)) return 'rpc_unavailable'
+  return 'other'
+}
+
+/** Groups a DLQ sample by normalized reason, largest group first. */
+export function groupFailureReasons(entries: DlqEntry[]): FailureReasonGroup[] {
+  const counts = new Map<FailureReasonCategory, number>()
+  for (const entry of entries) {
+    const reason = normalizeFailureReason(entry.lastError)
+    counts.set(reason, (counts.get(reason) ?? 0) + 1)
+  }
+  const total = entries.length
+  return [...counts.entries()].map(([reason, count]) => ({ reason, count, share: total ? count / total : 0 }))
+    .sort((a, b) => b.count - a.count || a.reason.localeCompare(b.reason))
+}
+
 /**
  * Counts entries per UTC day over the last `days` days, oldest first, with
  * empty days included so the chart has no gaps.

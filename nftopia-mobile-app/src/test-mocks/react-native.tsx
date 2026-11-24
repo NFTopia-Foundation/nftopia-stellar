@@ -16,8 +16,13 @@ export const TextInput = 'RNTextInput';
 export const Modal = 'RNModal';
 export const ScrollView = 'RNScrollView';
 export const FlatList = 'RNFlatList';
-export const AppState = { currentState: 'active', addEventListener: jest.fn(() => ({ remove: jest.fn() })) };
+export const Image = 'RNImage';
+export const RefreshControl = 'RNRefreshControl';
 export const KeyboardAvoidingView = 'RNKeyboardAvoidingView';
+export const AppState = {
+  currentState: 'active',
+  addEventListener: jest.fn(() => ({ remove: jest.fn() })),
+};
 
 /** Minimal stand-in: no actual animation, `.start()` fires its callback synchronously so tests don't need fake timers. */
 export const Animated = {
