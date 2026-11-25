@@ -17,8 +17,11 @@ export class AiUsageRecord {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'user_id', type: 'uuid' })
-  userId: string;
+  @Column({ name: 'user_id', type: 'uuid', nullable: true })
+  userId: string | null;
+
+  @Column({ name: 'tool_set', type: 'varchar', length: 50, default: 'chat' })
+  toolSet: string;
 
   @Column({ type: 'varchar', length: 100 })
   model: string;

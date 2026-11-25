@@ -35,6 +35,10 @@ describe('AiModerationProcessor (#527)', () => {
     alertExhausted: jest.fn(),
   };
 
+  const aiUsageService = {
+    recordUsage: jest.fn().mockResolvedValue(undefined),
+  };
+
   const configService = {
     get: jest.fn(),
   };
@@ -127,6 +131,7 @@ describe('AiModerationProcessor (#527)', () => {
       contentFlagService as unknown as ContentFlagService,
       prometheusService as unknown as PrometheusService,
       moderationAlertService as unknown as ModerationAlertService,
+      aiUsageService as never,
       configService as never,
     );
   });
