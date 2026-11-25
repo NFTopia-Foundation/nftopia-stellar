@@ -15,6 +15,7 @@ export enum EmailType {
   BID_NOTIFICATION = 'bid_notification',
   AUCTION_WON = 'auction_won',
   MODERATION_EXHAUSTED_ALERT = 'moderation_exhausted_alert',
+  AI_PLATFORM_SPEND_ALERT = 'ai_platform_spend_alert',
 }
 
 export enum EmailStatus {

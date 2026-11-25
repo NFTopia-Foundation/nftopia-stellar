@@ -44,6 +44,12 @@ export interface UsageSummary {
   hasOverride: boolean;
 }
 
+export interface PlatformUsageAggregate {
+  toolSet: string;
+  totalTokens: number;
+  estimatedCostUsd: number;
+}
+
 export interface SetCapOverrideParams {
   dailyTokenCap?: number | null;
   monthlyTokenCap?: number | null;
@@ -153,10 +159,11 @@ export class AiUsageService implements AiChatRateLimitOverrideLookup {
    * response path.
    */
   async recordUsage(
-    userId: string,
+    userId: string | null,
     model: string,
     inputTokens: number,
     outputTokens: number,
+    toolSet = 'chat',
   ): Promise<void> {
     try {
       const totalTokens = inputTokens + outputTokens;
@@ -169,6 +176,7 @@ export class AiUsageService implements AiChatRateLimitOverrideLookup {
       await this.usageRepo.save(
         this.usageRepo.create({
           userId,
+          toolSet,
           model,
           inputTokens,
           outputTokens,
@@ -181,6 +189,27 @@ export class AiUsageService implements AiChatRateLimitOverrideLookup {
         `Failed to record AI usage for user ${userId}: ${(err as Error).message}`,
       );
     }
+  }
+
+  async getPlatformSpend(since: Date): Promise<PlatformUsageAggregate[]> {
+    const rows = await this.usageRepo
+      .createQueryBuilder('r')
+      .select('r.toolSet', 'toolSet')
+      .addSelect('COALESCE(SUM(r.totalTokens), 0)', 'totalTokens')
+      .addSelect('COALESCE(SUM(r.estimatedCostUsd), 0)', 'estimatedCostUsd')
+      .where('r.createdAt >= :since', { since })
+      .groupBy('r.toolSet')
+      .getRawMany<{
+        toolSet: string;
+        totalTokens: string;
+        estimatedCostUsd: string;
+      }>();
+
+    return rows.map((row) => ({
+      toolSet: row.toolSet,
+      totalTokens: Number(row.totalTokens ?? 0),
+      estimatedCostUsd: Number(row.estimatedCostUsd ?? 0),
+    }));
   }
 
   /**

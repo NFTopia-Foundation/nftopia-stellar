@@ -3,6 +3,7 @@ import {
   Registry,
   Counter,
   Histogram,
+  Gauge,
   collectDefaultMetrics,
 } from 'prom-client';
 
@@ -84,6 +85,13 @@ const aiModerationJobsProcessedTotal = new Counter({
 const aiModerationJobsExhaustedTotal = new Counter({
   name: 'ai_moderation_jobs_exhausted_total',
   help: 'Total number of ai-moderation jobs that exhausted all retry attempts',
+  registers: [registry],
+});
+
+const aiPlatformSpendUsd = new Gauge({
+  name: 'ai_platform_spend_usd',
+  help: 'Estimated aggregate AI spend in USD for the current reporting window',
+  labelNames: ['window', 'tool_set'],
   registers: [registry],
 });
 
@@ -266,6 +274,18 @@ export class PrometheusService {
       this.logger.warn(
         `Failed to increment ai_moderation_jobs_exhausted_total: ${error}`,
       );
+    }
+  }
+
+  setAiPlatformSpendUsd(
+    window: 'daily' | 'monthly',
+    toolSet: string,
+    value: number,
+  ): void {
+    try {
+      aiPlatformSpendUsd.set({ window, tool_set: toolSet }, value);
+    } catch (error) {
+      this.logger.warn(`Failed to set ai_platform_spend_usd: ${error}`);
     }
   }
 

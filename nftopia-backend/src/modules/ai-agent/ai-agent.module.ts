@@ -36,6 +36,7 @@ import { AiModerationProcessor } from './ai-moderation.processor';
 import { EmailModule } from '../email/email.module';
 import { ModerationAlertService } from './moderation-alert.service';
 import { AiChatStreamRegistryService } from './ai-chat-stream-registry.service';
+import { AiPlatformSpendService } from './ai-platform-spend.service';
 
 @Module({
   imports: [
@@ -80,6 +81,7 @@ import { AiChatStreamRegistryService } from './ai-chat-stream-registry.service';
     ContentFlagService,
     PromptInjectionService,
     AiChatStreamRegistryService,
+    AiPlatformSpendService,
   ],
   controllers: [AiAgentController],
   exports: [AiAgentService, AiUsageService],

@@ -185,6 +185,30 @@ export class EmailService {
     );
   }
 
+  async sendAiPlatformSpendAlertEmail(
+    to: string | undefined,
+    window: string,
+    threshold: number,
+    spend: number,
+    rows: Array<{ toolSet: string; estimatedCostUsd: number }>,
+  ): Promise<void> {
+    if (!to) return;
+    const { html, text } = this.templateService.render('ai-platform-spend-alert', {
+      window,
+      threshold: threshold.toFixed(2),
+      spend: spend.toFixed(2),
+      breakdown: rows.map((row) => `${row.toolSet}: $${row.estimatedCostUsd.toFixed(2)}`).join(', '),
+    });
+    await this.enqueue(
+      EmailType.AI_PLATFORM_SPEND_ALERT,
+      to,
+      `AI ${window} spend threshold crossed`,
+      html,
+      text,
+      { window, threshold, spend, rows },
+    );
+  }
+
   private async enqueue(
     type: EmailType,
     to: string,

@@ -7,6 +7,7 @@ import type { Job } from 'bull';
 import Anthropic from '@anthropic-ai/sdk';
 import type { BetaMessage } from '@anthropic-ai/sdk/resources/beta/messages';
 import { ConfigService } from '@nestjs/config';
+import { AiUsageService } from './ai-usage.service';
 import { StellarNft } from '../../nft/entities/stellar-nft.entity';
 import { ContentFlagService } from './content-flag.service';
 import { ModerationAlertService } from './moderation-alert.service';
@@ -58,6 +59,7 @@ export class AiModerationProcessor {
     private readonly contentFlagService: ContentFlagService,
     private readonly prometheusService: PrometheusService,
     private readonly moderationAlertService: ModerationAlertService,
+    private readonly aiUsageService: AiUsageService,
     private readonly configService: ConfigService,
   ) {}
 
@@ -93,6 +95,7 @@ export class AiModerationProcessor {
     this.logger.log(
       `tool=${toolName} durationMs=${durationMs} result=${resultSummary}`,
     );
+
   };
 
   @Process(MODERATE_LISTING_JOB)
@@ -174,6 +177,14 @@ export class AiModerationProcessor {
     this.logger.log(
       `Moderation call for listing=${listingId} used ` +
         `${response.usage.input_tokens}+${response.usage.output_tokens} tokens.`,
+    );
+
+    void this.aiUsageService.recordUsage(
+      null,
+      'claude-opus-5',
+      response.usage.input_tokens,
+      response.usage.output_tokens,
+      'moderation',
     );
 
     const toolUseBlock = response.content.find(

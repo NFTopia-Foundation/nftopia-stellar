@@ -14,7 +14,9 @@ describe('AiUsageService', () => {
     addSelect: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
+    groupBy: jest.fn().mockReturnThis(),
     getRawOne: jest.fn(),
+    getRawMany: jest.fn(),
   };
 
   const usageRepo = {
@@ -64,6 +66,7 @@ describe('AiUsageService', () => {
       totalTokens: '0',
       estimatedCostUsd: '0',
     });
+    queryBuilder.getRawMany.mockResolvedValue([]);
     overrideRepo.findOne.mockResolvedValue(null);
     overrideRepo.delete.mockResolvedValue(undefined);
 
@@ -87,6 +90,14 @@ describe('AiUsageService', () => {
       expect(usageRepo.save).toHaveBeenCalled();
     });
 
+    it('records system usage with its tool-set attribution', async () => {
+      await service.recordUsage(null, 'claude-opus-5', 10, 5, 'moderation');
+
+      expect(usageRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: null, toolSet: 'moderation' }),
+      );
+    });
+
     it('computes cost from both input and output tokens', async () => {
       await service.recordUsage(
         'user-1',
@@ -107,6 +118,21 @@ describe('AiUsageService', () => {
       await expect(
         service.recordUsage('user-1', 'claude-opus-5', 100, 50),
       ).resolves.toBeUndefined();
+    });
+  });
+
+  describe('getPlatformSpend', () => {
+    it('aggregates spend by tool set and normalizes database decimals', async () => {
+      queryBuilder.getRawMany.mockResolvedValue([
+        { toolSet: 'chat', totalTokens: '120', estimatedCostUsd: '0.123456' },
+        { toolSet: 'moderation', totalTokens: '30', estimatedCostUsd: '0.045000' },
+      ]);
+
+      await expect(service.getPlatformSpend(new Date('2026-11-25T00:00:00Z'))).resolves.toEqual([
+        { toolSet: 'chat', totalTokens: 120, estimatedCostUsd: 0.123456 },
+        { toolSet: 'moderation', totalTokens: 30, estimatedCostUsd: 0.045 },
+      ]);
+      expect(queryBuilder.groupBy).toBeDefined();
     });
   });
 
