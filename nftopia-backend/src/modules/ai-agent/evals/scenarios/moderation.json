@@ -1,0 +1,7 @@
+[
+  {"id":"moderation-prohibited","prompt":"Listing 550e8400-e29b-41d4-a716-446655440000 advertises prohibited explicit imagery. Flag it for human moderation.","expectedTools":["flag_content"]},
+  {"id":"moderation-scam","prompt":"Listing 550e8400-e29b-41d4-a716-446655440000 promises guaranteed returns and asks buyers to send funds to an external wallet. Review it for a scam.","expectedTools":["flag_content"]},
+  {"id":"moderation-ip","prompt":"Listing 550e8400-e29b-41d4-a716-446655440000 uses a copied trademarked character without permission. Review it for infringement.","expectedTools":["flag_content"]},
+  {"id":"moderation-benign-landscape","prompt":"Listing 550e8400-e29b-41d4-a716-446655440000 is a benign original watercolor landscape with artist-supplied metadata.","mustNotCall":["flag_content"]},
+  {"id":"moderation-benign-photograph","prompt":"Listing 550e8400-e29b-41d4-a716-446655440000 is a benign nature photograph with a clear description and no prohibited claims.","mustNotCall":["flag_content"]}
+]

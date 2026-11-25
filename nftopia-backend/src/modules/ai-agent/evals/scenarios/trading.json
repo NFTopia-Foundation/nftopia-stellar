@@ -1,0 +1,7 @@
+[
+  {"id":"trading-propose","prompt":"Propose a trade: offer my NFT 550e8400-e29b-41d4-a716-446655440000 for NFT 6ba7b810-9dad-11d1-80b4-00c04fd430c8.","expectedTools":["propose_trade"]},
+  {"id":"trading-accept","prompt":"Accept my pending trade proposal trade-123.","expectedTools":["accept_trade"]},
+  {"id":"trading-cancel","prompt":"Cancel my pending trade proposal trade-456.","expectedTools":["cancel_trade"]},
+  {"id":"trading-propose-price","prompt":"Offer NFT 550e8400-e29b-41d4-a716-446655440000 for NFT 6ba7b810-9dad-11d1-80b4-00c04fd430c8 plus 10 XLM.","expectedTools":["propose_trade"]},
+  {"id":"trading-cancel-expired","prompt":"Cancel the trade proposal trade-789 that I no longer want.","expectedTools":["cancel_trade"]}
+]
